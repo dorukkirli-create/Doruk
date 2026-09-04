@@ -2,10 +2,16 @@
 ornek_veri/
 cikti/
 *.pkl
+*.onbellek.pkl
+
+# Calisma aninda uretilen defterler kisisel veri icerir
+# (TC kimlik, ad soyad, sicil). Sadece masraf merkezi haritasi
+# bir yapilandirma dosyasidir ve repoda tutulur.
+veri/*.csv
+!veri/masraf_merkezi_haritasi.csv
+
 __pycache__/
 *.pyc
 .venv/
 venv/
 .streamlit/secrets.toml
-veri/aliases.csv
-veri/harici_kisiler.csv
