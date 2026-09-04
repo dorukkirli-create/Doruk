@@ -1,0 +1,11 @@
+# Gercek personel ve fatura verisi asla repoya girmez
+ornek_veri/
+cikti/
+*.pkl
+__pycache__/
+*.pyc
+.venv/
+venv/
+.streamlit/secrets.toml
+veri/aliases.csv
+veri/harici_kisiler.csv
