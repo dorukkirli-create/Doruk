@@ -63,6 +63,8 @@ KOLONLAR: tuple[tuple[str, str, int], ...] = (
     ("Tutar", "sayi", 13),
     ("Para Birimi", "metin", 10),
     ("Kaynak Dosyadaki Santiye", "metin", 24),
+    ("Evrak / Fatura No", "metin", 22),
+    ("Mail Konusu", "metin", 40),
     ("Durum", "metin", 12),
     ("Uyarilar", "metin", 70),
 )
@@ -72,9 +74,11 @@ KOLONLAR: tuple[tuple[str, str, int], ...] = (
 #: sonra ne kadar, en sonda kalite isaretleri.
 MAHSUP_KOLONLARI: tuple[tuple[str, str, int], ...] = (
     ("Fatura / Kaynak Dosya", "metin", 34),
+    # Sirket PROJEDEN ONCE gelir: muhasebe once tuzel kisiyi, sonra o tuzel
+    # kisinin altindaki projeyi okur. Kaynagi 1C listesindeki 'Firm 2'dir.
+    ("Sirket", "metin", 16),
     ("Masraf Merkezi Kodu", "metin", 22),
     ("Masraf Merkezi Adi", "metin", 34),
-    ("Sirket", "metin", 18),
     ("Gider Tipi", "metin", 13),
     ("Paylasim", "metin", 20),
     ("Tutar", "sayi", 14),
@@ -118,6 +122,8 @@ MAHSUP_RENKLERI: dict[str, str] = {
     "tamam": "#E2EFDA",
     "uyari": "#FFF2CC",
     "engel": "#FCE4D6",
+    # Sirket kirilimindeki ust seviye satirlar
+    "baslik": "#D6E4F0",
 }
 
 #: Duruma gore satir arka plan renkleri.
@@ -181,6 +187,7 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
     """Bir ``Sonuc`` kaydini KOLONLAR sirasina gore degerlere cevirir."""
     satir = sonuc.satir
     eslesme = sonuc.eslesme
+    ek = satir.ek if isinstance(satir.ek, dict) else {}
     return [
         _metin(Path(satir.kaynak_dosya).name if satir.kaynak_dosya else ""),
         satir.satir_no,
@@ -209,6 +216,10 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
         satir.tutar,
         _metin(satir.para_birimi),
         _metin(satir.masraf_merkezi_kaynak),
+        # Denetim izi: bir satir sorgulandiginda hangi belgeye ait oldugu
+        # gorulsun. Eslestirmede KULLANILMAZ, sadece raporlanir.
+        _metin(ek.get("evrak_no") or ek.get("fatura_no")),
+        _metin(ek.get("mail_konusu")),
         _metin(sonuc.durum),
         " | ".join(str(u) for u in (sonuc.uyarilar or [])),
     ]
@@ -493,9 +504,9 @@ def mahsup_satir_degerleri(satir: Any, fatura_toplami: float) -> list[Any]:
     pay = (satir.tutar / fatura_toplami * 100.0) if fatura_toplami else 0.0
     return [
         satir.kaynak,
+        satir.sirket or "(sirket yok)",
         satir.masraf_merkezi,
         satir.masraf_merkezi_adi or "",
-        satir.sirket or "",
         satir.gider_tipi,
         satir.pay_notu or "",
         round(satir.tutar, 2),
@@ -595,6 +606,90 @@ def _sutun_harfi(indeks: int) -> str:
     return harfler
 
 
+SIRKET_KOLONLARI: tuple[tuple[str, str, int], ...] = (
+    ("Sirket / Proje", "metin", 42),
+    ("Seviye", "metin", 10),
+    ("Masraf Merkezi Kodu", "metin", 22),
+    ("Tutar", "sayi", 15),
+    ("Para Birimi", "metin", 10),
+    ("Pay %", "sayi", 10),
+    ("Satir", "tamsayi", 8),
+    ("Kisi", "tamsayi", 8),
+    ("Durum", "metin", 26),
+)
+
+
+def _sirket_ozeti_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
+    """'Sirket Kirilimi' sayfasi: tuzel kisi ustte, projeleri altinda.
+
+    Muhasebenin okuma sirasi budur. Sirket satirlari koyu, proje satirlari
+    girintili yazilir; boylece tek bakista hangi projenin hangi sirkete ait
+    oldugu gorulur.
+    """
+    if not hasattr(tablo, "sirket_ozeti"):
+        return
+    degerler: list[list[Any]] = []
+    renkler: list[str] = []
+    for grup in tablo.sirket_ozeti():
+        degerler.append([
+            grup["sirket"], "SIRKET", "",
+            grup["tutar"], grup["para_birimi"], grup["pay_yuzde"],
+            grup["satir_sayisi"], grup["kisi_sayisi"], "",
+        ])
+        renkler.append("baslik")
+        for proje in grup["projeler"]:
+            uyari = "" if proje["haritada_var"] else "HARITADA TANIMLI DEGIL"
+            degerler.append([
+                "    " + str(proje["masraf_merkezi_adi"] or proje["masraf_merkezi"]),
+                "proje", proje["masraf_merkezi"],
+                proje["tutar"], grup["para_birimi"], proje["pay_yuzde"],
+                proje["satir_sayisi"], proje["kisi_sayisi"], uyari,
+            ])
+            renkler.append("tamam" if proje["haritada_var"] else "uyari")
+    _tablo_yaz(
+        calisma, "Sirket Kirilimi", SIRKET_KOLONLARI, degerler, renkler, bicimler,
+        bos_mesaj="(Dagitilacak satir yok)",
+    )
+
+
+def _harita_onerisi_yaz(calisma: Any, oneriler: Any, bicimler: "_Bicimler") -> None:
+    """'Harita Onerileri' sayfasi: haritaya eklenecek satirlar, hazir halde."""
+    from masraf.harita_onerisi import ONERI_BASLIKLARI, oneri_satir_degerleri
+
+    degerler = [oneri_satir_degerleri(o) for o in (oneriler or [])]
+    sayfa = _tablo_yaz(
+        calisma, "Harita Onerileri", ONERI_BASLIKLARI, degerler,
+        ["uyari"] * len(degerler), bicimler,
+        bos_mesaj="(Butun gorev yerleri haritada tanimli. Yapilacak bir sey yok.)",
+    )
+    satir = len(degerler) + 3
+    sayfa.write_string(satir, 0, "Bu sayfa ne icin", bicimler.bolum)
+    satir += 1
+    for metin in (
+        "Asagidaki gorev yerleri masraf merkezi haritasinda tanimli degil. Kod "
+        "onlari metin olarak tasidi ve isaretledi; finans koduna cevrilmeden "
+        "muhasebeye gitmemeliler.",
+        "SIRKET sutunu 1C personel listesindeki 'Firm 2' kolonundan gelir. "
+        "Haritadaki mevcut satirlarla ayni sozlugu kullanir (RHI, UST LUGA, "
+        "RSS, RC, BSK), bu yuzden guvenilir.",
+        "ONERILEN KOD bir baslangic degeridir, finansin onayina tabidir. "
+        "Kendi kodunuzu kullanin.",
+        "Eklemek icin: veri\\masraf_merkezi_haritasi.csv dosyasini acin ve her "
+        "satir icin su bicimde bir satir ekleyin:",
+        "    gorev_yeri,masraf_merkezi_kodu,masraf_merkezi_adi,sirket,aktif",
+        "Bir kez eklemek yeterlidir; sonraki aylarda otomatik cozulur.",
+    ):
+        sayfa.write_string(satir, 0, metin, bicimler.ozet_metin)
+        satir += 1
+    if degerler:
+        satir += 1
+        sayfa.write_string(satir, 0, "Yapistirmaya hazir satirlar", bicimler.bolum)
+        satir += 1
+        for o in oneriler:
+            sayfa.write_string(satir, 0, o.csv_satiri(), bicimler.ozet_metin)
+            satir += 1
+
+
 def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
     """'Mahsuplasma' ve 'Kontrol' sayfalarini yazar."""
     fatura_toplami: dict[tuple[str, str], float] = {}
@@ -676,6 +771,7 @@ def excel_yaz(
     yol: str,
     ozet: dict,
     mahsup: Any = None,
+    harita_onerileri: Any = None,
 ) -> str:
     """Sonuclari bicimlendirilmis cok sayfali Excel dosyasina yazar.
 
@@ -702,6 +798,9 @@ def excel_yaz(
         bicimler = _Bicimler(calisma)
         if mahsup is not None:
             _mahsuplasma_yaz(calisma, mahsup, bicimler)
+            _sirket_ozeti_yaz(calisma, mahsup, bicimler)
+        if harita_onerileri is not None:
+            _harita_onerisi_yaz(calisma, harita_onerileri, bicimler)
         _sayfa_yaz(calisma, "Sonuc", list(sonuclar), bicimler)
         _sayfa_yaz(
             calisma, "Incele", [s for s in sonuclar if s.durum == DURUM_INCELE], bicimler

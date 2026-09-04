@@ -443,3 +443,48 @@ class ParolaKorumaliTest(unittest.TestCase):
             metin = Path(gecici) / "not.txt"
             metin.write_text("merhaba", encoding="utf-8")
             self.assertFalse(_parola_korumali_mi(metin))
+
+
+class SirketKirilimiTest(unittest.TestCase):
+    """Tuzel kisi (1C 'Firm 2') ustte, projeleri altinda.
+
+    Muhasebenin okuma sirasi budur: once hangi sirkete, sonra o sirketin
+    hangi projesine.
+    """
+
+    def test_sirket_altinda_projeler_toplaniyor(self):
+        s = [
+            sonuc(gider(satir_no=1, tutar=100.0), merkez="GPP", sirket="UST LUGA"),
+            sonuc(gider(satir_no=2, tutar=50.0, kisi="B KISI"), merkez="UL-RESHET",
+                  sirket="UST LUGA"),
+            sonuc(gider(satir_no=3, tutar=30.0, kisi="C KISI"), merkez="RC-ONE-TOWER",
+                  sirket="RC"),
+        ]
+        ozet = mahsuplasma_uret(s).sirket_ozeti()
+        self.assertEqual([g["sirket"] for g in ozet], ["UST LUGA", "RC"])
+        ustluga = ozet[0]
+        self.assertAlmostEqual(ustluga["tutar"], 150.0, places=2)
+        self.assertEqual({p["masraf_merkezi"] for p in ustluga["projeler"]},
+                         {"GPP", "UL-RESHET"})
+
+    def test_proje_paylari_sirket_icinde_yuze_tamamlanir(self):
+        s = [sonuc(gider(satir_no=1, tutar=300.0), merkez="GPP", sirket="UST LUGA"),
+             sonuc(gider(satir_no=2, tutar=100.0, kisi="B KISI"), merkez="UL-RESHET",
+                   sirket="UST LUGA")]
+        grup = mahsuplasma_uret(s).sirket_ozeti()[0]
+        self.assertAlmostEqual(sum(p["pay_yuzde"] for p in grup["projeler"]), 100.0, places=1)
+
+    def test_sirketsiz_satir_kendi_grubunda(self):
+        s = [sonuc(gider(tutar=60.0), merkez=None, durum=DURUM_ESLESMEDI,
+                   sicil=None, sirket=None)]
+        ozet = mahsuplasma_uret(s).sirket_ozeti()
+        self.assertEqual(ozet[0]["sirket"], "(sirket yok)")
+
+    def test_kisi_sayisi_sirket_bazinda_benzersiz(self):
+        """Ayni kisi iki projede gorunse de sirket duzeyinde bir kez sayilmali."""
+        s = [sonuc(gider(satir_no=1, gider_tipi="Bilet"), merkez="GPP",
+                   sirket="UST LUGA", sicil="100001"),
+             sonuc(gider(satir_no=2, gider_tipi="Otel", tarih=date(2026, 7, 20)),
+                   merkez="UL-RESHET", sirket="UST LUGA", sicil="100001")]
+        grup = mahsuplasma_uret(s).sirket_ozeti()[0]
+        self.assertEqual(grup["kisi_sayisi"], 1)

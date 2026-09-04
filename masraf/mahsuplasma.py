@@ -248,6 +248,57 @@ class MahsupTablosu:
             cikti.append(kayit)
         return sorted(cikti, key=lambda k: (-k["tutar"], k["masraf_merkezi"]))
 
+    def sirket_ozeti(self) -> list[dict]:
+        """Tuzel kisi (1C 'Firm 2') bazinda toplam, altinda projeleriyle.
+
+        Muhasebenin okuma sirasi budur: once hangi sirkete, sonra o sirketin
+        hangi projesine. Donen her oge bir sirkettir ve ``projeler`` anahtari
+        altinda kendi masraf merkezlerini tasir.
+        """
+        gruplar: dict[tuple[str, str], dict] = {}
+        for s in self.satirlar:
+            sirket = s.sirket or "(sirket yok)"
+            anahtar = (sirket, s.para_birimi)
+            grup = gruplar.setdefault(anahtar, {
+                "sirket": sirket, "para_birimi": s.para_birimi,
+                "tutar": 0.0, "satir_sayisi": 0,
+                "_kisiler": set(), "_projeler": {},
+            })
+            grup["tutar"] += s.tutar
+            grup["satir_sayisi"] += s.satir_sayisi
+            grup["_kisiler"] |= getattr(s, "_kimlikler", set())
+            proje = grup["_projeler"].setdefault(s.masraf_merkezi, {
+                "masraf_merkezi": s.masraf_merkezi,
+                "masraf_merkezi_adi": s.masraf_merkezi_adi,
+                "haritada_var": s.haritada_var,
+                "tutar": 0.0, "satir_sayisi": 0, "_kisiler": set(),
+            })
+            proje["tutar"] += s.tutar
+            proje["satir_sayisi"] += s.satir_sayisi
+            proje["_kisiler"] |= getattr(s, "_kimlikler", set())
+
+        toplam_pb: dict[str, float] = defaultdict(float)
+        for grup in gruplar.values():
+            toplam_pb[grup["para_birimi"]] += grup["tutar"]
+
+        cikti: list[dict] = []
+        for grup in gruplar.values():
+            genel = toplam_pb[grup["para_birimi"]]
+            grup["tutar"] = round(grup["tutar"], 2)
+            grup["kisi_sayisi"] = len(grup.pop("_kisiler"))
+            grup["pay_yuzde"] = round(grup["tutar"] / genel * 100, 2) if genel else 0.0
+            projeler = []
+            for proje in grup.pop("_projeler").values():
+                proje["tutar"] = round(proje["tutar"], 2)
+                proje["kisi_sayisi"] = len(proje.pop("_kisiler"))
+                proje["pay_yuzde"] = (
+                    round(proje["tutar"] / grup["tutar"] * 100, 2) if grup["tutar"] else 0.0
+                )
+                projeler.append(proje)
+            grup["projeler"] = sorted(projeler, key=lambda k: -k["tutar"])
+            cikti.append(grup)
+        return sorted(cikti, key=lambda k: (-k["tutar"], k["sirket"]))
+
     def toplamlar(self) -> dict[str, dict[str, float]]:
         """Para birimi bazinda gelen / yinelenen / dagitilan / dagitilamayan."""
         sonuc: dict[str, dict[str, float]] = {}

@@ -1,4 +1,4 @@
-gorev_yeri,masraf_merkezi_kodu,masraf_merkezi_adi,sirket,aktif
+﻿gorev_yeri,masraf_merkezi_kodu,masraf_merkezi_adi,sirket,aktif
 GPP Project,GPP,GPP Project,UST LUGA,E
 Amursky Gas Processing Plant,AGPP,Amursky Gas Processing Plant,RHI,E
 Ust Luga Fabrication - GPC (RHI),ULF-GPC-RHI,Ust Luga Fabrication - GPC (RHI),RHI,E
@@ -24,3 +24,12 @@ Novosibirsk Technical Office,NSK-TO,Novosibirsk Technical Office,RHI,E
 ESHI Transition,ESHI,ESHI Transition,RHI,E
 AWP-1B Module Murmansk,AWP1B,AWP-1B Module Murmansk,RHI,E
 QA/QC Services - Murmansk,QAQC-MRM,QA/QC Services - Murmansk,RHI,E
+Renstroydetal - Ust-Luga GPC,RSD-UL-GPC,Renstroydetal - Ust-Luga GPC,RSS,E
+Renservis - Lytkarino - Renservis,RSS-LYTKARINO,Renservis - Lytkarino,RSS,E
+Renstroydetal - Lytkarino,RSD-LYTKARINO,Renstroydetal - Lytkarino,RSS,E
+Catering  - Ust-Luga,RSS-CATERING,Catering - Ust-Luga,RSS,E
+One Tower,RC-ONE-TOWER,One Tower,RC,E
+Top Tower,RC-TOP-TOWER,Top Tower,RC,E
+Icity Business Center,RC-ICITY,Icity Business Center,RC,E
+Lakhta 2 Fit-out,RC-LAKHTA2,Lakhta 2 Fit-out,RC,E
+Bsk Management Group,BSK-MGMT,Bsk Management Group,BSK,E

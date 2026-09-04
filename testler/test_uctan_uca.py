@@ -49,7 +49,8 @@ CIKTI_ADI = "TEST_uctan_uca.xlsx"
 
 #: Excel ciktisinda bulunmasi zorunlu sayfalar, gosterildikleri sirada.
 #: Mahsuplasma en basta: muhasebeye giden tablo odur, digerleri onun dayanagi.
-BEKLENEN_SAYFALAR = ["Mahsuplasma", "Kontrol", "Sonuc", "Incele", "Eslesmedi", "Ozet"]
+BEKLENEN_SAYFALAR = ["Mahsuplasma", "Kontrol", "Sirket Kirilimi",
+                     "Harita Onerileri", "Sonuc", "Incele", "Eslesmedi", "Ozet"]
 
 #: 'Sonuc' sayfasinda bulunmasi zorunlu kolonlar.
 ZORUNLU_KOLONLAR = {

@@ -581,6 +581,22 @@ class Boru:
 
         return mahsuplasma_uret(list(sonuclar), self.harita)
 
+    def harita_onerileri(self, sonuclar: Sequence[Sonuc]) -> list:
+        """Haritada tanimli olmayan gorev yerleri icin hazir satir onerileri.
+
+        Sirket bilgisi 1C listesindeki 'Firm 2' kolonundan gelir; haritanin
+        kendi 'sirket' kolonuyla ayni sozlugu kullanir.
+        """
+        from masraf.harita_onerisi import oneri_uret
+
+        if self.harita is None:
+            return []
+        try:
+            return oneri_uret(sonuclar, self.harita, self.defter, self.yardimci)
+        except Exception as hata:  # noqa: BLE001
+            self.hatalar.append(f"Harita onerisi uretilemedi: {hata}")
+            return []
+
     def calistir(
         self,
         dosya_yollari: list[str] | Sequence[str | Path],
@@ -614,7 +630,19 @@ class Boru:
         cikti_dizini = Path(self.ayarlar.cikti_dizini)
         cikti_dizini.mkdir(parents=True, exist_ok=True)
         yol = cikti_dizini / (cikti_adi or varsayilan_cikti_adi())
-        excel_yolu = excel_yaz(sonuclar, str(yol), ozet, mahsup) if sonuclar else ""
+        oneriler = self.harita_onerileri(sonuclar)
+        if oneriler:
+            self.uyarilar.append(
+                f"{len(oneriler)} gorev yeri masraf merkezi haritasinda tanimli degil. "
+                "Excel'deki 'Harita Onerileri' sayfasinda yapistirmaya hazir satirlar var."
+            )
+        ozet["harita_onerileri"] = [
+            {"gorev_yeri": o.gorev_yeri, "kod": o.kod, "sirket": o.sirket,
+             "tutar": o.tutar, "satir_sayisi": o.satir_sayisi}
+            for o in oneriler
+        ]
+        excel_yolu = (excel_yaz(sonuclar, str(yol), ozet, mahsup, oneriler)
+                      if sonuclar else "")
         return {
             "sonuclar": sonuclar, "ozet": ozet,
             "mahsup": mahsup, "excel_yolu": excel_yolu,

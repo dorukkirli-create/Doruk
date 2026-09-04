@@ -145,9 +145,9 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--dim);font-size:12.5px;
       <div class="myth">
         <span class="q">“PDF’leri açıp okuyor mu?”</span>
         <span class="a"><span class="no">Hayır.</span> Sadece tablo dosyaları
-        okunur: <span class="mono">.xlsx .xls .xlsm .csv .tsv</span>. Temmuz
-        mailinizdeki <strong>6 PDF atlandı</strong>. Bunlar resmi fatura
-        nüshalarıdır; satır kırılımı yanlarındaki Excel’de gelir.</span>
+        okunur. Temmuz mailinizdeki <strong>8 PDF atlandı</strong>. Hepsini açıp
+        okudum: yedisi resmi e-fatura nüshası, kişi bazlı kırılım taşımıyorlar.
+        Sekizincisi taranmış görüntü, metin katmanı bile yok. Ayrıntı aşağıda.</span>
       </div>
     </div>
   </div>
@@ -281,8 +281,10 @@ tckn_ham       : None                <span class="mut">&lt;- faturada TC kimlik 
 ek alanlar     : evrak_no, guzergah, borc, alacak, kisiler, kisi_sayisi</pre>
       </div>
       <p class="note"><span class="mono">evrak_no</span> saklanır ama eşleştirmede
-      kullanılmaz. Denetim izidir: bir satırı sorguladığınızda hangi bilete ait
-      olduğunu görürsünüz.</p>
+      kullanılmaz. Denetim izidir. Çıktının <strong>Sonuc</strong> sayfasında artık
+      <strong>Evrak / Fatura No</strong> ve <strong>Mail Konusu</strong> kolonları
+      var: bir satır sorgulandığında hangi bilete, hangi faturaya ve hangi maile
+      ait olduğu görülür.</p>
     </div>
   </div>
 
@@ -397,6 +399,93 @@ uyarilar       : yok</pre>
       <p class="note">Bizim 47,30 USD’lik satırımız ilk satırın içinde, o 12 satırdan
       biri olarak duruyor. Kırılımı görmek isterseniz <strong>Sonuc</strong>
       sayfasında her satır tek tek, gerekçesiyle birlikte durur.</p>
+    </div>
+  </div>
+
+  <!-- 10: PDF denetimi -->
+  <div class="station">
+    <div class="marker"><span class="n">+</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Denetim</h4>
+      <h2>PDF’lerde gerçekten bir şey var mı</h2>
+      <p>“Eminiz?” diye sordunuz. Tahmin etmemek için sekiz PDF’i de açıp metnini
+      çıkardım. Sonuç:</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>PDF</th><th>İçeriği</th><th>Kişi kırılımı</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">ASS…2187 / 2468 / 2501 / 2867</td><td>AS Ölçme e-faturası: satıcı vergi bilgisi, fatura no, KDV, TL tutar</td><td><span class="pill pill--no">yok</span></td></tr>
+            <tr><td class="mono">EF02026000000163 / 170</td><td>A Plus Arabuluculuk e-faturası: “Arabuluculuk Hizmeti 5 Adet”</td><td><span class="pill pill--no">yok</span></td></tr>
+            <tr><td class="mono">UNF2026000000655</td><td>Koç Üniversitesi e-faturası: eğitim bedeli, tek kalem</td><td><span class="pill pill--no">yok</span></td></tr>
+            <tr><td class="mono">ENE_ONUR BOZ_09.06.2026</td><td><strong>Taranmış görüntü, metin katmanı yok</strong></td><td><span class="pill pill--no">okunamaz</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key">Faturalar toplam tutarı taşıyor, <strong>kimin adına
+      olduğunu taşımıyor.</strong> Kişi kırılımı yanlarındaki Excel’dedir. Örnek:
+      <span class="mono">ASS2026000002867.pdf</span> yalnızca “TEAM LEADER
+      Değerlendirme 3 adet, 78.000 TL” der; yanındaki Excel ise Hamdi Yılmaz,
+      Emrecan Erdoğan ve Nedim Gizli der. Mahsuplaştırma için gereken ikincisidir.</div>
+      <p style="margin-top:var(--s4)">Bir tuzak da buldum. Assessment faturalarında
+      <span class="mono">İlgili Kişi</span> alanı var (Orhan Tekin, Yusuf Hüseyin
+      Biricik). Bunlar <strong>talebi açan kişilerdir, masrafın sahibi değil.</strong>
+      PDF okunsaydı ve bu alan kullanılsaydı masraf yanlış kişiye, dolayısıyla
+      yanlış projeye yazılırdı.</p>
+      <div class="case" style="border-left-color:var(--red);margin-top:var(--s4)">
+        <h4>Bulgu: karşılığı olmayan belge</h4>
+        <p class="why"><span class="mono">ENE_ONUR BOZ_09.06.2026.pdf</span> taranmış
+        bir görüntü ve <strong>hiçbir Excel’de karşılığı yok</strong>. Onur Boz’un
+        tablolardaki tek gideri Temmuz seyahati (16.07 ve 23.07). 09.06.2026 tarihli
+        bir kalem hiçbir yerde geçmiyor.</p>
+        <p class="why">Yani bu tutar zaten 106.297,78 USD’nin içinde değil. Otomasyon
+        onu kaybetmedi; veri hiç gelmedi. Finansın bu belgeyi ayrıca takip etmesi
+        gerekir. Böyle bir belge her ay gelirse OCR eklenebilir, ama önce sorulması
+        gereken şu: bu gider neden Excel dökümünde yok?</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11: sirket kirilimi -->
+  <div class="station">
+    <div class="marker"><span class="n">+</span></div>
+    <div class="body">
+      <h4>Kırılım</h4>
+      <h2>Şirket üstte, projeler altında</h2>
+      <p>Masraf merkezi tek başına yetmiyor; muhasebe önce tüzel kişiyi okuyor.
+      Şirket bilgisi 1C personel listesinin <span class="mono">Firm 2</span>
+      kolonundan geliyor ve haritanın kendi şirket kolonuyla aynı sözlüğü
+      kullanıyor. Kontrol ettim: tanımlı projelerin tamamında iki kaynak birebir
+      örtüşüyor.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> Sirket Kirilimi sayfası</span><span>Temmuz 2026, USD</span></div>
+<pre><b>UST LUGA</b>                    29.742,50   %51,9    88 satir   74 kisi
+    GPP Project              29.587,06   %99,5
+    Ust-Luga - Reshetnikova     155,44    %0,5
+
+<b>RHI</b>                         19.779,84   %34,5    56 satir   35 kisi
+    RHI Russia - Headquarter  6.905,24   %34,9
+    Ust Luga Fabrication      4.231,83   %21,4
+    Regional Management       3.821,34   %19,3
+    ALNG2-GBS                 2.814,45   %14,2
+
+<b>RSS</b>                          3.075,96    %5,4     9 satir    6 kisi
+    <span class="hi">Renservis - Lytkarino</span>     2.139,72   %69,6
+    <span class="hi">Renstroydetal - UL GPC</span>      568,01   %18,5
+
+<b>RC</b>                           1.441,09    %2,5     6 satir    6 kisi
+    <span class="hi">One Tower</span>                  844,34   %58,6
+    <span class="hi">Top Tower</span>                  439,63   %30,5
+
+<b>BSK</b>                            259,23    %0,5     1 satir    1 kisi
+    <span class="hi">Bsk Management Group</span>       259,23  %100,0</pre>
+      </div>
+      <div class="key">Vurgulu satırlar daha önce <strong>“haritada tanımlı değil”</strong>
+      diyordu. Dokuzunun da şirketi 1C’den bulundu ve haritaya eklendi. Artık
+      tanımsız görev yeri kalmadı.</div>
+      <p class="note">Bir sonraki ay yeni bir proje çıkarsa Excel’e
+      <strong>Harita Onerileri</strong> sayfası gelir: şirketi 1C’den bulunmuş,
+      kodu önerilmiş, CSV satırı yapıştırmaya hazır. Kod önerisi finansın
+      onayına tabidir.</p>
     </div>
   </div>
 
