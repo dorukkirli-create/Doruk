@@ -456,3 +456,46 @@ taşıyor ve içinde eşleştirme yöntemi, güven skoru ve Türkçe gerekçe va
 23 test yazıldı ve hepsi geçiyor. Yedi tanesi altın örnek: dördü doğum tarihi
 kontrolü olmadan yanlış eşleşen vaka, üçü soyadı farklı yazıldığı için kaçırılan
 doğru vaka. Bu yedi vaka regresyona karşı sabitlendi.
+
+---
+
+## 12. Gider ayı ile personel dönemi eşleşmesi
+
+Bu, mahsuplaşmanın temel kuralı ve ayrıca yazılmayı hak ediyor.
+
+Bir gider, giderin **yapıldığı aydaki** personel kaydına göre mahsuplaşır. En güncel kayda
+göre değil. Sebebi basit: kişinin projesi ve masraf merkezi aydan aya değişebiliyor. Ölçtüm,
+kişilerin yüzde 1,4'ünün görev yeri, yüzde 3,5'inin şirketi dönemler arasında değişiyor.
+Küçük bir oran ama tam olarak o kişiler yanlış mahsuplaşmaya yol açar.
+
+Sistem her satırda bu ilişkiyi ayrı bir kolonda gösteriyor:
+
+| Durum | Satır | Oran | Anlamı |
+|---|---|---|---|
+| Aynı ay | 268 | yüzde 66,2 | normal durum, o ayın kaydı kullanıldı |
+| Personel kaydı yok | 83 | yüzde 20,5 | kişi hiç bulunamadı |
+| Önceki dönem | 36 | yüzde 8,9 | kişi o ay ayrılmış, çıkış ayının şantiyesi kullanıldı |
+| İşe girmeden önce | 18 | yüzde 4,4 | mobilizasyon veya aday seyahati |
+
+Satırların yüzde 13,3'ünde gider ayı ile personel dönemi örtüşmüyor. Hiçbiri sessizce
+geçmiyor, her biri etiketleniyor ve incelemeye düşüyor.
+
+### Çıkış durumu neden ayrı önemli
+
+Bir kişi Nisan'da ayrılmış ve Temmuz'da bir masrafı görünüyorsa, bu büyük ihtimalle çıkış
+bileti ya da çıkışa bağlı bir gider. O zaman doğru masraf merkezi ayrıldığı andaki şantiyedir.
+Bugünkü kayıt değil, çünkü bugün kaydı zaten yok.
+
+Sistem bunu yapıyor ve satıra şunu yazıyor:
+
+```
+Kisinin gider ayinda (Temmuz 2026) personel kaydi yok.
+Kayitli son donemi Kasim 2025; o donemin masraf merkezi kullanildi.
+Cikis masrafi ise dogru santiyedir, kontrol edin.
+```
+
+### Regresyon koruması
+
+Bu kural için ayrı bir test dosyası yazıldı. İçindeki en önemli test, veride görev yeri
+değiştiren gerçek bir kişiyi buluyor ve dokuz dönemin her birinde o ayın görev yerine
+bağlandığını doğruluyor. Bu test geçtiği sürece kural bozulamaz.
