@@ -1,0 +1,102 @@
+MASRAF MERKEZI OTOMASYONU - KURULUM
+====================================
+
+Ne yapiyor
+----------
+Tedarikci faturalarindaki her satiri, o satirdaki KISIYE gore dogru masraf
+merkezine (proje / santiye) mahsuplastirir. Ciktisi muhasebeye gidecek
+dagitim tablosudur: her fatura icin altinda hangi projeye ne kadar yazilacagi.
+
+Calisma aninda internet veya yapay zeka GEREKMEZ. Butun veri bilgisayarinizda
+kalir, hicbir yere gonderilmez.
+
+
+1. Python kurulumu (yalnizca bir kez)
+--------------------------------------
+Bilgisayarinizda Python var mi bilmiyorsaniz once 2. adimi deneyin; yoksa
+zaten uyari verecektir.
+
+Yoksa: https://www.python.org/downloads/ adresinden Python 3.11 veya ustunu
+indirin. Kurulum ekranindaki
+
+    [x] Add Python to PATH
+
+kutusunu MUTLAKA isaretleyin. Isaretlemezseniz uygulama Python'u bulamaz.
+
+Sirket bilgisayarinizda kurulum izniniz yoksa BT'ye "Python 3.11" talebi
+acin; standart bir gelistirme aracidir.
+
+
+2. Uygulamayi baslatin
+-----------------------
+Bu klasordeki
+
+    baslat.bat
+
+dosyasina CIFT TIKLAYIN.
+
+Ilk calistirmada gerekli paketler indirilir; birkac dakika surer ve internet
+gerekir. Sonraki acilislar birkac saniyedir ve internet gerekmez.
+
+Siyah bir konsol penceresi acilir, sonra tarayicinizda uygulama gelir.
+Gelmezse tarayiciya elle yazin: http://localhost:8501
+
+Kapatmak icin konsol penceresinde Ctrl+C.
+
+
+3. Ilk ayar (yalnizca bir kez)
+-------------------------------
+AYARLAR sekmesinde iki dosyanin yolunu verin:
+
+  a) Personel ana verisi: 2025_2026_giris_cikis.xlsx
+     Zorunlu. Ilk okunusu ~25 saniye surer, sonra yanina bir onbellek
+     dosyasi yazilir ve acilislar 2-3 saniyeye iner.
+
+  b) 1C personel listesi: 1C_Personnel_List_...xlsx
+     Istege bagli ama ONERILIR. Renservis, Renstroydetal, RC, One Tower,
+     Top Tower personeli yalnizca bu listede var. Olmadan bu kisiler
+     "eslesmedi" olarak kalir.
+
+Bu dosyalari uygulamanin yanina degil, kendi guvenli klasorunuze koyun.
+Uygulama sadece yollarini bilir.
+
+
+4. Aylik kullanim
+------------------
+1) FATURA ISLE sekmesine faturalari birakin. Outlook .msg dosyasini
+   dogrudan surukleyebilirsiniz; ekleri otomatik acilir.
+2) MAHSUPLASMA sekmesinde dagitim tablosunu okuyun. En ustteki mutabakat
+   YESIL ise para kaybolmamis demektir. KIRMIZI ise tablo muhasebeye
+   gonderilmemeli.
+3) INCELEME sekmesinde dusuk guvenli satirlar tek tek gelir. Dogru kisiyi
+   sectiginizde sistem bunu ogrenir; ayni isim bir daha sorulmaz.
+4) Excel'i indirin. Alti sayfa: Mahsuplasma, Kontrol, Sonuc, Incele,
+   Eslesmedi, Ozet.
+
+
+Sik karsilasilan sorunlar
+--------------------------
+"Python bulunamadi"
+    Python kurulu degil ya da PATH'e eklenmemis. 1. adimi tekrar yapin.
+
+"Paketler kurulamadi"
+    Internet yok ya da sirket proxy'si engelliyor. BT'den pip erisimi
+    isteyin: pypi.org ve files.pythonhosted.org.
+
+Tarayici acilmiyor
+    Adresi elle yazin: http://localhost:8501
+
+Bir fatura formati taninmiyor / 0 satir okunuyor
+    AYARLAR > KOLON SOZLUGU ekranindan o dosyadaki kolon adini bir kez
+    ekleyin. Kod degistirmek gerekmez.
+
+Masraf merkezi "HARITADA TANIMLI DEGIL" diyor
+    MASRAF MERKEZI HARITASI sekmesinden o gorev yerini finans koduna
+    baglayin. Bir kez yeterlidir.
+
+
+Gizlilik
+--------
+Personel dosyalari ve faturalar hicbir zaman internete cikmaz. Uygulama
+yerel makinede calisir. Ogrenilen eslesmeler veri/ klasorunde CSV olarak
+tutulur ve kisisel veri icerir; bu klasoru paylasmayin.
