@@ -391,12 +391,15 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
 - **Personel ana verisinde TC kimlik ve pasaport numarası yoktur.** Sadece
   sicil, ad soyad ve doğum tarihi kimlik alanı olarak bulunur. TC kimlik ile
   eşleşme yapabilmek için `veri/tckn_sicil.csv` köprüsü elle veya İK
-  sisteminden doldurulmalıdır. Köprü boşken arabuluculuk ve sağlık
-  dosyalarındaki TCKN'ler isim üzerinden eşleşmeye çalışır.
-- **Dosya yalnızca RHI ve UST LUGA tüzel kişilerini kapsar.** Renservis,
-  Renstroydetal, One Tower, Top Tower, RC Peter, RC Moskova personeli bu
-  veride **yoktur** ve bulunamaz. Bu kişiler eşleşmedi olarak gelir; doğru
-  davranış budur, çünkü masrafları başka bir şirkete yansıtılacaktır.
+  sisteminden doldurulabilir. Ancak köprü artık **otomatik de türetilir**:
+  sağlık listesindeki ad soyad ve doğum tarihi personel verisiyle birleştirilir
+  ve tek adaya inen kayıtlar köprüye yazılır. Ölçüm: 50 kişinin 27'si tek
+  çalıştırmada bağlandı.
+- **Ana personel dosyası yalnızca RHI ve UST LUGA tüzel kişilerini kapsar.**
+  Renservis, Renstroydetal, One Tower, Top Tower, RC Peter, RC Moskova
+  personeli bu dosyada **yoktur**. Bu kısıt 1C personel listesi eklenerek
+  kapatılır (bkz. "İki personel dosyası kullanın"); 1C listesi olmadan bu
+  kişiler eşleşmedi olarak gelir.
 - **Dönem aralığı 2025-11 ile 2026-07 arasıdır.** Bu aralığın dışında tarihli
   faturalarda en yakın dönem kullanılır ve satır uyarı taşır. Yeni aylar
   eklendikçe aralık kendiliğinden genişler.
