@@ -84,6 +84,9 @@ class CalismaAyarlari:
     defterleri_besle: bool = True
     ogrenmeyi_kaydet: bool = True
     tuzel_kisi_uyar: bool = False
+    # 1C personel listesi: grup sirketlerini kapsayan ikincil defter.
+    # None ise sadece ana veri kullanilir.
+    yardimci_personel_yolu: str | Path | None = None
     onbellek: bool = True
 
     def cozulmus_harita_yolu(self) -> Path:
@@ -155,6 +158,7 @@ class Boru:
         self.defterler: Any = None       # defter.Defterler
         self.harita: MasrafMerkeziHaritasi | None = None
         self.eslestirici: Any = None
+        self.yardimci: Any = None
         self.hatalar: list[str] = []
         self.uyarilar: list[str] = []
         self._son_donem: date | None = None
@@ -180,6 +184,16 @@ class Boru:
         )
         donemler = self.defter.donemler
         self._son_donem = donemler[-1] if donemler else None
+
+        self.yardimci = None
+        if self.ayarlar.yardimci_personel_yolu:
+            from masraf.yardimci_defter import YardimciDefter
+            try:
+                self.yardimci = YardimciDefter.yukle(
+                    self.ayarlar.yardimci_personel_yolu, onbellek=self.ayarlar.onbellek)
+            except Exception as hata:  # noqa: BLE001
+                self.uyarilar.append(
+                    f"1C personel listesi yuklenemedi ({self.ayarlar.yardimci_personel_yolu}): {hata}")
 
         self.defterler = Defterler(self.ayarlar.veri_dizini)
 
@@ -207,7 +221,7 @@ class Boru:
         """
         from masraf.eslestirici import Eslestirici
 
-        self.eslestirici = Eslestirici(self.defter, self.defterler)
+        self.eslestirici = Eslestirici(self.defter, self.defterler, self.yardimci)
 
     # ------------------------------------------------------------------
     # Okuma
@@ -334,6 +348,7 @@ class Boru:
                     alt_esik=self.ayarlar.alt_esik,
                     ek_masraf_merkezi=self._ek_merkez(satir, eslesme),
                     tuzel_kisi_uyar=self.ayarlar.tuzel_kisi_uyar,
+                    yardimci=self.yardimci,
                     son_donem=self._son_donem,
                 )
             )

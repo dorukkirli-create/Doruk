@@ -517,12 +517,21 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
         if not harita:
             continue
 
-        i_isim = kolon_ara(harita, *_ISIM_ADAYLARI)
-        i_sicil = kolon_ara(harita, *_SICIL_ADAYLARI)
-        i_tckn = kolon_ara(harita, *_TCKN_ADAYLARI)
-        i_tutar = kolon_ara(harita, *_TUTAR_ADAYLARI)
-        i_tarih = kolon_ara(harita, *_TARIH_ADAYLARI, haric=_TARIH_HARIC)
-        i_merkez = kolon_ara(harita, *_MERKEZ_ADAYLARI)
+        # Kullanici sozlugu (veri/kolon_esanlamlilari.csv) yerlesik adaylarin
+        # ONUNE eklenir. Boylece yeni bir tedarikci sablonu geldiginde kod
+        # degistirmeden, tek satir CSV ile taninabilir hale gelir.
+        try:
+            from masraf.kolon_sozlugu import genislet as _genislet
+        except Exception:  # noqa: BLE001
+            def _genislet(alan, varsayilanlar, veri_dizini="veri"):
+                return tuple(varsayilanlar)
+
+        i_isim = kolon_ara(harita, *_genislet("kisi", _ISIM_ADAYLARI))
+        i_sicil = kolon_ara(harita, *_genislet("sicil", _SICIL_ADAYLARI))
+        i_tckn = kolon_ara(harita, *_genislet("tckn", _TCKN_ADAYLARI))
+        i_tutar = kolon_ara(harita, *_genislet("tutar", _TUTAR_ADAYLARI))
+        i_tarih = kolon_ara(harita, *_genislet("tarih", _TARIH_ADAYLARI), haric=_TARIH_HARIC)
+        i_merkez = kolon_ara(harita, *_genislet("santiye", _MERKEZ_ADAYLARI))
 
         # Ayni kolon hem isim hem masraf merkezi olarak secilmesin.
         if i_merkez is not None and i_merkez == i_isim:

@@ -564,6 +564,7 @@ def masraf_merkezi_coz(
     alt_esik: float = ALT_ESIK,
     ek_masraf_merkezi: str | None = None,
     tuzel_kisi_uyar: bool = False,
+    yardimci: Any = None,
     son_donem: date | None = None,
 ) -> Sonuc:
     """Bir gider satirini nihai masraf merkezine baglar.
@@ -594,6 +595,10 @@ def masraf_merkezi_coz(
     uyarilar: list[str] = []
     belge_tarihi = _gecerli_tarih(satir.belge_tarihi)
     kayit = defter.donem_kaydi(eslesme.sicil, belge_tarihi)
+    if kayit is None and yardimci is not None:
+        # Ana veride yok: 1C personel listesine bak. Grup sirketleri
+        # (Renservis, Renstroydetal, RC, One Tower, Top Tower) ancak orada.
+        kayit = yardimci.donem_kaydi(eslesme.sicil, belge_tarihi)
     if kayit is None:
         kayit = defter.sicil_ile(eslesme.sicil)
         if kayit is not None:
@@ -634,7 +639,13 @@ def masraf_merkezi_coz(
     #    Kural: masraf, giderin YAPILDIGI AYDAKI kayda gore mahsuplasir.
     #    Kisinin projesi ve masraf merkezi aydan aya degisebilir.
     donem_eslesme = kayit.get("_donem_eslesme")
-    if donem_eslesme == "tarihsiz":
+    if donem_eslesme == "yardimci_defter":
+        uyarilar.append(
+            f"Kisi ana personel verisinde yok, 1C personel listesinden alindi "
+            f"(sirket {kayit.get('sirket')}, proje {kayit.get('gorev_yeri')}). "
+            "1C listesi tek tarihli oldugu icin gider ayindaki durum dogrulanamadi."
+        )
+    elif donem_eslesme == "tarihsiz":
         uyarilar.append(
             "Belge tarihi okunamadi; personel kaydinin en guncel donemi kullanildi. "
             "Gider ayi dogrulanamadi."

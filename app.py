@@ -98,7 +98,12 @@ RENK_INCELE = "#FFF2CC"
 RENK_ESLESMEDI = "#FBE5E5"
 
 PROJE_KOK = Path(__file__).resolve().parent
+VARSAYILAN_YARDIMCI_ADI = "1C_Personnel_List_31082026.xlsx"
 VARSAYILAN_PERSONEL = PROJE_KOK / "ornek_veri" / "personel" / "2025_2026_giris_cikis.xlsx"
+# 1C personel listesi: grup sirketlerini (Renservis, Renstroydetal, RC, One
+# Tower, Top Tower) kapsayan ikincil defter. Ana veride bulunamayan kisiler
+# buradan aranir. Zorunlu degildir.
+VARSAYILAN_YARDIMCI = PROJE_KOK / "ornek_veri" / "personel" / VARSAYILAN_YARDIMCI_ADI
 VERI_KOK = PROJE_KOK / "veri"
 CIKTI_KOK = PROJE_KOK / "cikti"
 HARITA_DOSYASI = "masraf_merkezi_haritasi.csv"
@@ -228,7 +233,7 @@ def personel_defteri_yukle(yol: str, imza: tuple[int, int]) -> "PersonelDefteri"
 
 
 @st.cache_resource(show_spinner=False)
-def boru_kur(yol: str, imza: tuple[int, int]) -> Any:
+def boru_kur(yol: str, imza: tuple[int, int], yardimci_yol: str = "") -> Any:
     """Boru hattini kurar (personel defteri + defterler + harita bir kez yuklenir).
 
     Ayni Boru ornegi tum oturum boyunca kullanilir; ``hazirla()`` agir
@@ -240,6 +245,7 @@ def boru_kur(yol: str, imza: tuple[int, int]) -> Any:
         return None
     ayarlar = AYAR_SINIFI(
         personel_yolu=yol,
+        yardimci_personel_yolu=(yardimci_yol or None),
         veri_dizini=str(VERI_KOK),
         cikti_dizini=str(CIKTI_KOK),
     )
@@ -1010,6 +1016,7 @@ def _oturum_hazirla() -> None:
     """Session state varsayilanlarini kurar."""
     varsayilanlar = {
         "personel_yolu": str(VARSAYILAN_PERSONEL),
+        "yardimci_personel_yolu": str(VARSAYILAN_YARDIMCI) if VARSAYILAN_YARDIMCI.exists() else "",
         "esik": 0.90,
         "defter": None,
         "boru": None,
@@ -1093,6 +1100,29 @@ def sekme_ayarlar() -> None:
     else:
         st.caption(f"Dosya bulunamadı: `{aday}`")
 
+    st.markdown("**Grup şirketleri listesi (isteğe bağlı)**")
+    st.caption(
+        "Ana personel dosyası sadece RHI ve UST LUGA tüzel kişilerini kapsar. "
+        "Renservis, Renstroydetal, RC, One Tower ve Top Tower personeli ancak "
+        "1C personel listesinde bulunur. Bu dosyayı da verirseniz masraf merkezi "
+        "çözülen satır oranı ölçülen örnekte yüzde 89'dan yüzde 98'e çıkıyor."
+    )
+    yardimci_metni = st.text_input(
+        "1C personel listesi yolu",
+        value=st.session_state.get("yardimci_personel_yolu", ""),
+        help="Örnek: ornek_veri/personel/1C_Personnel_List_31082026.xlsx. Boş bırakabilirsiniz.",
+        key="yardimci_personel_yolu_girdi",
+    )
+    st.session_state["yardimci_personel_yolu"] = yardimci_metni
+    if yardimci_metni:
+        _y = Path(yardimci_metni).expanduser()
+        if not _y.is_absolute():
+            _y = (PROJE_KOK / _y).resolve()
+        st.caption(
+            f"1C listesi bulundu: `{_y}`" if _y.exists()
+            else f"1C listesi bulunamadı: `{_y}` (bu dosya olmadan da çalışır)"
+        )
+
     if yukle_tiklandi:
         if not aday.exists():
             st.error(
@@ -1103,7 +1133,14 @@ def sekme_ayarlar() -> None:
             try:
                 with st.spinner("Personel verisi okunuyor (ilk okumada ~30 saniye sürebilir)..."):
                     imza = _dosya_imzasi(aday)
-                    boru = boru_kur(str(aday), imza)
+                    yardimci_metni = (st.session_state.get("yardimci_personel_yolu") or "").strip()
+                    yardimci_aday = ""
+                    if yardimci_metni:
+                        y = Path(yardimci_metni).expanduser()
+                        if not y.is_absolute():
+                            y = (PROJE_KOK / y).resolve()
+                        yardimci_aday = str(y) if y.exists() else ""
+                    boru = boru_kur(str(aday), imza, yardimci_aday)
                     defter = (
                         boru.defter
                         if boru is not None and getattr(boru, "defter", None) is not None

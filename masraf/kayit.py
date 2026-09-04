@@ -343,13 +343,30 @@ class PersonelDefteri:
     # Sorgular
     # ------------------------------------------------------------------
 
+    def _son_konum(self, anahtar: str, konumlar: list[int]) -> int:
+        """Sicilin EN GUNCEL kaydinin konumunu dondurur.
+
+        ``konumlar`` donem sirasindadir ve DONEMI BOS satirlar sona dizilir
+        (bkz. ``_insa_et``). Bu yuzden ``konumlar[-1]`` her zaman en guncel
+        kayit DEGILDIR: donemi bos tek bir satir varsa listenin sonuna duser
+        ve gercek son donemin (orn. 2026-07) yerine gecerek YANLIS masraf
+        merkezi uretir.
+
+        Bu nedenle once donemi DOLU olan son kayit tercih edilir; hicbir
+        kaydin donemi yoksa caresizlikten son satir kullanilir.
+        """
+        donemler = self._sicil_donemler.get(anahtar, [])
+        if donemler:
+            return konumlar[len(donemler) - 1]
+        return konumlar[-1]
+
     def sicil_ile(self, sicil: str) -> dict | None:
         """Sicile ait EN GUNCEL donem kaydini dondurur; yoksa None."""
         anahtar = sicil_normalize(sicil)
         konumlar = self._sicil_konumlar.get(anahtar)
         if not konumlar:
             return None
-        return dict(self._kayitlar[konumlar[-1]])
+        return dict(self._kayitlar[self._son_konum(anahtar, konumlar)])
 
     def isimle_adaylar(self, isim_norm: str) -> list[str]:
         """Normalize edilmis isme birebir uyan sicil listesini dondurur."""
@@ -419,7 +436,7 @@ class PersonelDefteri:
         donemler = self._sicil_donemler.get(anahtar, [])
         hedef = _tarihe_cevir(tarih) if tarih is not None else None
         if hedef is None or not donemler:
-            return _isaretle(konumlar[-1], "tarihsiz")
+            return _isaretle(self._son_konum(anahtar, konumlar), "tarihsiz")
 
         yer = bisect.bisect_right(donemler, hedef)
         if yer == 0:

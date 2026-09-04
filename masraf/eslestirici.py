@@ -165,9 +165,14 @@ class Eslestirici:
     olarak 1 saniyenin altinda eslesir.
     """
 
-    def __init__(self, defter: PersonelDefteri, defterler: Defterler) -> None:
+    def __init__(self, defter: PersonelDefteri, defterler: Defterler,
+                 yardimci: Any = None) -> None:
         self._defter = defter
         self._defterler = defterler
+        # 1C personel listesi: grup sirketlerini (Renservis, Renstroydetal,
+        # RC, One Tower, Top Tower) kapsayan ikincil defter. Ana veride
+        # bulunamayan kisiler BURADAN aranir. Opsiyoneldir.
+        self._yardimci = yardimci
 
         # isim (normalize) -> sicil listesi
         self._isim_siciller: dict[str, list[str]] = self._isim_haritasi(defter)
@@ -740,6 +745,59 @@ class Eslestirici:
             aday_siciller=[],
         )
 
+    def _adim_yardimci_defter(
+        self, norm: str, tokenlar: frozenset[str]
+    ) -> Eslesme | None:
+        """1C personel listesinde arar (grup sirketleri dahil).
+
+        Ana veri sadece RHI ve UST LUGA tuzel kisilerini kapsar. Renservis,
+        Renstroydetal, RC, One Tower, Top Tower personeli ancak burada bulunur.
+        Olculdu: 1C listesindeki 17.517 isimli kaydin 5.234'u ana veride yok.
+        """
+        if self._yardimci is None:
+            return None
+        adaylar = self._yardimci.isimle_adaylar(norm)
+        yontem_notu = "ad soyad"
+        if not adaylar:
+            adaylar = self._yardimci.token_ile_adaylar(tokenlar)
+            yontem_notu = "ad soyad (kelime sirasi farkli)"
+        if not adaylar:
+            return None
+        if len(adaylar) > 1:
+            kayitlar = [self._yardimci.sicil_ile(s) or {} for s in adaylar[:6]]
+            return Eslesme(
+                sicil=None,
+                ad_soyad=(kayitlar[0].get("ad_soyad") if kayitlar else None),
+                yontem="yardimci_defter",
+                guven=0.55,
+                aday_sayisi=len(adaylar),
+                aciklama=(
+                    f"1C personel listesinde '{norm}' icin {len(adaylar)} aday var: "
+                    + ", ".join(
+                        f"{k.get('ad_soyad')} / {k.get('sirket2')} / {k.get('gorev_yeri')}"
+                        for k in kayitlar
+                    )
+                    + ". Dogru kisiyi secin."
+                ),
+                aday_siciller=list(adaylar),
+            )
+        sicil = adaylar[0]
+        kayit = self._yardimci.sicil_ile(sicil) or {}
+        return Eslesme(
+            sicil=sicil,
+            ad_soyad=kayit.get("ad_soyad"),
+            yontem="yardimci_defter",
+            guven=0.90,
+            aday_sayisi=1,
+            aciklama=(
+                f"1C personel listesinde {yontem_notu} ile bulundu: "
+                f"{kayit.get('ad_soyad')} / {sicil}, sirket {kayit.get('sirket')} "
+                f"({kayit.get('sirket2')}), proje {kayit.get('gorev_yeri')}. "
+                "Ana personel verisinde yok, bu yuzden donem dogrulanamaz."
+            ),
+            aday_siciller=[sicil],
+        )
+
     def _adim_ek_defter(
         self, satir: GiderSatiri, norm: str, tokenlar: frozenset[str]
     ) -> Eslesme | None:
@@ -1016,6 +1074,7 @@ class Eslestirici:
             lambda: self._adim_bitisik_ad(tokenlar),
             lambda: self._adim_transliterasyon(norm, tokenlar),
             lambda: self._adim_onek(tokenlar),
+            lambda: self._adim_yardimci_defter(norm, tokenlar),
             lambda: self._adim_ek_defter(satir, norm, tokenlar),
             lambda: self._adim_bulanik(norm, tokenlar),
             lambda: self._adim_aile(satir, norm, tokenlar),

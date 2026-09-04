@@ -14,7 +14,13 @@ sadece kişi adı geçiyor. Finans ekibi bugün bu dağıtımı her ay elle yap�
 Bu araç aynı işi personel ana verisiyle otomatik yapar. Emin olduğu satırları
 doğrudan dağıtır, emin olmadıklarını gerekçesiyle birlikte inceleme kuyruğuna
 koyar. Amaç elle çalışmayı sıfırlamak değil, **elle bakılacak satır sayısını
-130'dan 20-30'a indirmek** ve her kararın nedenini görünür kılmak.
+azaltmak** ve her kararın nedenini görünür kılmak.
+
+Ölçülen durum (Temmuz 2026 seyahat faturası, 134 satır): 82 satır otomatik
+dağıtılıyor, 52 satır insana kalıyor. Bu 52'nin 20'si zaten grup şirketi
+personelidir ve **hiçbir zaman** otomatik dağıtılamaz — onlar için doğru
+davranış "eşleşmedi" demektir. Sayılar ve nasıl üretildikleri aşağıda
+[Ölçülen performans](#ölçülen-performans) bölümündedir.
 
 ## Nasıl çalışır
 
@@ -154,13 +160,21 @@ faturaları en zorudur: kimlik alanı yoktur, sadece serbest metinde isim vardı
 | `alt_kume` (zayıf) | 0,72 | Alt küme eşleşmesi ama isim çok yaygın |
 | `ek_defter` | 0,70 | Kişi ana veride yok, yardımcı listelerden (sağlık listesi vb.) bulundu |
 | `bulanik` | 0,79-0,90 | Yazım hatası toleranslı benzerlik (rapidfuzz ≥ 88 puan) ve ikinci adayla arada en az 6 puan fark var |
-| `aile` | 0,60 | Soyadı aynı dosyada kesin eşleşen bir çalışanla aynı; eş/çocuk olabilir |
+| `aile` | 0,30-0,60 | Soyadı aynı dosyada kesin eşleşen bir çalışanla aynı; eş/çocuk olabilir. Kanıtın gücüne göre dört kademe (aynı dosyada soyadaş + tek görev yeri en güçlüsü) |
 | çoklu aday | ≤ 0,58 | Aynı isimde birden fazla çalışan var; sicil **doldurulmaz** |
 | `yok` | 0,00 | Hiçbir kademe tutmadı |
 
-Karar eşikleri: **0,80 ve üstü** uyarısız satırlar `Sonuç` sayfasında otomatik
-kabul edilir. Altındakiler `İncele` sayfasına, hiç eşleşmeyenler `Eşleşmedi`
-sayfasına gider. Eşikler *Ayarlar* sekmesinden değiştirilebilir.
+Karar eşikleri (`masraf/masraf_merkezi.py`): **0,90 ve üstü** güvene sahip
+*ve* hiç uyarı taşımayan satırlar `Sonuç` sayfasında otomatik kabul edilir
+(`GUVEN_ESIGI = 0.90`). **0,50'nin altındakiler** eşleşmemiş sayılır ve
+`Eşleşmedi` sayfasına gider (`ALT_ESIK = 0.50`). Arada kalan her şey `İncele`
+sayfasına düşer. Eşikler *Ayarlar* sekmesinden değiştirilebilir.
+
+Buradan çıkan sonuç önemlidir: `transliterasyon` (0,88), `prefix` (0,85),
+`bulanik` (0,79-0,90), `ek_defter` (0,70) ve `aile` (0,60) kademelerinin
+**hiçbiri kendi başına otomatik kabul edilmez** — hepsi insan onayına gider.
+Otomatik kabul yalnızca sicil, TC kimlik, onaylanmış alias, tek kişiye denk
+gelen tam isim ve bitişik ad açılımı kademelerinden gelir.
 
 Bir satır yüksek güvenle eşleşse bile uyarı taşıyorsa (kişi belge tarihinden
 önce işten ayrılmış, görev yeri haritada yok, tüzel kişi çelişkisi) otomatik
@@ -185,6 +199,124 @@ Bir eşleşme neden kurulduğu sorulduğunda cevap her zaman bir CSV satırıdı
 "model böyle karar verdi" gibi bir cevap yoktur. Dosyaları bir metin
 düzenleyiciyle açıp elle de düzeltebilirsiniz.
 
+## Ölçülen performans
+
+Aşağıdaki sayıların hepsi **ölçülmüştür**, tahmin değildir. Kendiniz
+üretebilirsiniz:
+
+```bash
+python3 testler/kapsam_olc.py      # kapsam ve otomasyon oranı
+python3 -m testler.dogruluk_olc    # elle dağıtılmış dosyaya karşı doğruluk
+```
+
+Ölçüm örneklemi: Temmuz 2026 seyahat faturası, Mayıs–Temmuz 2026 Energo
+yansıtma dosyaları ve Koç Üniversitesi katılımcı listesi. Her iki betik de
+öğrenen defterlerin geçici bir kopyasıyla çalışır; ölçüm `veri/` dizinini
+kirletmez ve her koşuda aynı noktadan başlar (iki ardışık koşu birebir aynı
+sonucu verdi).
+
+### Dosya bazında otomasyon oranı
+
+| Dosya | Tip | Satır | Kişi çıkarıldı | Sicil bulundu | OTOMATİK | İNCELE | EŞLEŞMEDİ | Otomasyon |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `ANTIK_CARI_TEMMUZ_2026.xls` | antik_cari | 134 | 132 | 105 | 82 | 32 | 20 | **%61,2** |
+| `YUZYIL_TEMMUZ_2026_ELLE_DAGITILMIS.xlsx` | yuzyil_dagitilmis | 134 | 132 | 105 | 79 | 35 | 20 | **%59,0** |
+| `ASSESSMENT_YANSITMA_2026_05_06.xlsx` | energo_assessment | 6 | 6 | 5 | 4 | 1 | 1 | **%66,7** |
+| `ARABULUCULUK_2026_06_07.xlsx` | energo_arabulucu | 25 | 25 | 22 | 0 | 25 | 0 | **%0,0** |
+| `SAGLIK_KONTROL_LISTE.xlsx` | energo_saglik | 50 | 50 | 34 | 14 | 34 | 2 | **%28,0** |
+| `KOC_UNI_KATILIMCI_LISTESI.xlsx` | koc_katilimci | 50 | 50 | 50 | 46 | 4 | 0 | **%92,0** |
+| **TOPLAM** | | **399** | **395** | **321** | **225** | **131** | **43** | **%56,4** |
+
+Çözülen (OTOMATİK + İNCELE) satır oranı **%89,2**. Kişi çıkarılamayan 4 satırın
+tamamı gerçekten kişisiz kurumsal giderdir (cenaze çelengi, toplantı
+organizasyonu); bunlar kişiye mahsuplaşmaz.
+
+Uçlardaki iki sayı tesadüf değil, doğrudan **kaynak dosyada kimlik alanı olup
+olmadığını** ölçüyor:
+
+- **Koç katılımcı listesi %92** — dosyada `ID` kolonu doğrudan sicil numarası.
+- **Arabuluculuk %0** — dosyada TC kimlik var ama `veri/tckn_sicil.csv` köprüsü
+  boş olduğu için 25 satırın hepsi isim üzerinden bulunup 0,70 güvenle
+  incelemeye düşüyor. Köprü doldurulunca bu dosya 0,99 güvenle otomatiğe geçer.
+  Aynı sebep sağlık listesinin %28'ini de açıklar. **Bu iki dosyadaki düşük
+  oran algoritma zayıflığı değil, eksik bir yapılandırma dosyasıdır.**
+
+`ornek_mail.msg` bilerek toplama **katılmaz**: ekleri yukarıdaki faturaların
+aynısını ikinci kez taşır, toplama girseydi her satır iki kez sayılır ve oran
+şişerdi (ilk ölçümde toplam 804 görünüyordu, gerçek 399). Ekler ayrı bir
+tabloda raporlanır ve satır satır aynı sonucu verir — yani `.msg` okuyucusu
+doğru çalışıyor.
+
+### Eşleşmeyen 43 satırın nedeni
+
+| Kategori | Adet | Pay | Anlamı |
+|---|---:|---:|---|
+| `ALGORITMA` | **0** | %0,0 | Kişi veride var, eşleştirici bulamadı — **düzeltilebilir** |
+| `PARSER` | **0** | %0,0 | Satırda kişi var ama çıkarılamadı — **düzeltilebilir** |
+| `VERI_KAPSAMI` | 39 | %90,7 | Kişi personel ana verisinde yok — düzeltilemez |
+| `KISISIZ` | 4 | %9,3 | Satırda kişi yok (kurumsal gider) — kusur değil |
+
+Düzeltilebilir kusur **sıfır**. Eşleşmeyen her satır ya grup şirketi / dış
+danışman / taşeron personelidir (veri kapsamı dışı), ya da kişiye
+mahsuplaşmayan bir kurumsal giderdir.
+
+### Doğruluk: elle dağıtılmış dosyaya karşı
+
+Temmuz 2026'nın elle dağıtılmış hali (`YUZYIL_..._ELLE_DAGITILMIS.xlsx`) ile
+otomasyonun çıktısı 134 satırın **134'ünde** tutar + tarih ile hizalandı;
+hizalama hatası yok.
+
+**Kritik bulgu: elle dosya "doğruluk referansı" değildir.** Naif karşılaştırma
+%48,6 verdi. Bu 57 "hatanın" nedeni tek tek açıldığında hatanın otomasyonda
+olmadığı görüldü — iki dosya **aynı soruyu cevaplamıyor**:
+
+```
+GPP Project çalışanı -> elle 'RHI'            : 54 satır
+GPP Project çalışanı -> elle 'UST LUGA GPP'   : 12 satır
+```
+
+Aynı proje, aynı ay, iki farklı etiket. Kişi bazında çelişki **yok** (aynı kişi
+her zaman aynı etiketi almış), yani insan tutarsız değil. Ayrımı yapan değişken
+kişi değil, **biletin güzergahı**:
+
+| Güzergah sınıfı | Proje/şirket yazılmış | 'RHI' (varsayılan) |
+|---|---:|---:|
+| ESB kalkışlı giriş | **27** | 2 |
+| Güzergahsız | 2 | 28 |
+| Diğer giriş | 1 | 13 |
+| Çıkış | 1 | 39 |
+| Gidiş-dönüş | 0 | 18 |
+
+Ankara (ESB) kalkışlı tek yön biletler toplu mobilizasyondur ve masrafı
+üstlenen projeye yazılmış; diğer her şey merkeze bırakılmış. Yani `ŞANTİYESİ`
+kolonu **"bu kişi hangi projede çalışıyor"** sorusunu değil **"bu bileti hangi
+tüzel kişi ödeyecek"** sorusunu cevaplıyor. Otomasyonun ürettiği şey
+birincisidir.
+
+Bu yüzden doğruluk üç ayrı okumayla raporlanır:
+
+| Okuma | Sonuç | Ne ölçer |
+|---|---:|---|
+| `proje` (naif) | %48,6 (54/111) | Taksonomi farkını ölçer, doğruluğu değil. **Yanıltıcı.** |
+| `tüzel` | %96,4 (107/111) | Otomasyon elle dosyayla çelişiyor mu. Zayıf test: 'RHI' 100 satırda ayrım yapmıyor. |
+| `bilgi` | **%86,7 (13/15)** | Elle dosyanın gerçek proje bilgisi taşıdığı satırlar. **Tek geçerli ölçüm budur.** |
+
+### Bulunan gerçek otomasyon hataları: 2 — ikisi de İNCELE bayrağıyla yakalandı
+
+- **#131 TURAN MEHMET** (ESB-LED, 31.07). Sicil 549718: Amursky'de çalışmış ama
+  **06.04.2026'da çıkmış**. Aynı günün aynı partisindeki iki kişi için hem elle
+  hem otomasyon "GPP" diyor. Bu neredeyse kesinlikle yeni işe girmiş **başka bir
+  Mehmet Turan**. Elle dosya doğru, otomasyon yanlış — ama sistem iki uyarıyla
+  ("gider ayında personel kaydı yok", "belge tarihinden önce ayrılmış") tam
+  olarak doğru yeri işaret etti ve satırı otomatik kabul etmedi.
+- **#69 SERKAN KOCAK** — `aile` kuralı soyada değil **ada** takılıp Kocak Cem'e
+  0,45 güvenle bağlandı. Eşik altında kaldığı için `Eşleşmedi` sayfasına düştü,
+  yanlış mahsuplaşma üretmedi.
+
+Elle dosyada **düzeltilmesi gereken bir insan hatası bulunmadı.** Uyuşmazlıkların
+tamamı ya taksonomi farkı, ya veri kapsamı dışı kişi, ya da yukarıdaki iki
+otomasyon hatasıdır.
+
 ## Bilinen kısıtlar
 
 Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak gösterir.
@@ -203,8 +335,8 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
   eklendikçe aralık kendiliğinden genişler.
 - **Henüz işe başlamamış aday ve yeni girenler ana veride olmaz.** Bunlar için
   sağlık kontrol listesi gibi yardımcı kaynaklardan ek kişi defteri
-  beslenmelidir. Ölçüm: Temmuz 2026 dosyasında eşleşmeyen 44 satırın önemli bir
-  kısmı tam olarak bu gruptu.
+  beslenmelidir. Ölçüm: eşleşmeyen 43 satırın 39'u (%90,7) tam olarak bu
+  gruptur ve hiçbiri algoritma kusuru değildir.
 - **Aile bireyleri ve dış danışmanlar otomatik eşleşmez.** Eşin veya çocuğun
   bileti çalışanın soyadıyla gelir; sistem bunu "aile bireyi olabilir" diye
   işaretler, masraf merkezini o çalışandan devralır ama **incelemeye
@@ -216,6 +348,33 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
 - **Bordrosuz taşeron kayıtları isim eşleştirmesine girmez.** Ana veride
   44.482 satırın adı boştur (sahte sicil numaralarıyla). Bunlar sicil
   indeksinde bulunur ama isimle aranamaz.
+- **TC kimlik köprüsü boşken TCKN taşıyan dosyalar otomatiğe geçmez.**
+  Ölçülen etki büyüktür: arabuluculuk dosyası **%0**, sağlık listesi **%28**
+  otomasyon oranında kalıyor ve 59 satır gereksiz yere incelemeye düşüyor.
+  Dosyalarda TC kimlik **var**, eksik olan `veri/tckn_sicil.csv` köprüsüdür.
+  Bu köprü İK sisteminden bir kez doldurulursa iki dosya da 0,99 güvenle
+  otomatiğe geçer. Projedeki tek en yüksek getirili iyileştirme budur ve kod
+  değişikliği gerektirmez.
+- **`aile` kuralı ada da takılabiliyor.** Kural soyadı üzerinden çalışır ama
+  ölçümde bir vaka adı yakaladı: `SERKAN KOCAK` -> `Kocak Cem` (0,45).
+  Güven eşiğinin çok altında kaldığı için yanlış mahsuplaşma üretmedi, satır
+  `Eşleşmedi`'ye düştü. Yine de kuralın kesinliği soyad konumunun doğru
+  belirlenmesine bağlıdır; iki uçlu isimlerde zayıflar.
+- **İşten ayrılmış kişinin adaşı ayırt edilemez.** Ölçümde bulunan tek gerçek
+  otomasyon hatası budur (#131 TURAN MEHMET): alias doğru sicile gidiyor ama
+  o sicil Nisan 2026'da çıkmış; fatura Temmuz'da yeni işe girmiş **aynı adlı
+  başka birine** ait. Sistem bunu çözemez, ama iki uyarı üretip satırı
+  incelemeye gönderir — yani hata sessizce geçmez.
+- **Doğruluk ölçümünün karşılaştırılabilir örneklemi küçüktür.** Elle
+  dağıtılmış dosyanın 134 satırının yalnızca 15'i hem otomasyonla
+  karşılaştırılabilir hem de gerçek proje bilgisi taşır. %86,7 doğruluk bu 15
+  satır üzerinden hesaplanmıştır. Birkaç ay daha veri biriktikçe bu ölçüm
+  güçlenecektir.
+- **Elle dağıtılmış dosya doğruluk referansı olarak kullanılamaz.** Yukarıda
+  ölçüldüğü gibi o kolon tüzel kişi/ödeyen sorusunu cevaplıyor, proje sorusunu
+  değil. İki çıktının farklı olması otomasyonun hatalı olduğu anlamına gelmez;
+  karşılaştırma yaparken `testler/dogruluk_olc.py` içindeki `bilgi` okumasına
+  bakın.
 
 ## Veri gizliliği
 
@@ -254,7 +413,8 @@ isterseniz şirket içi bir paylaşıma kopyalayın, genel bir depoya koymayın.
 python3 -m unittest discover -s testler -v
 ```
 
-Testler standart kütüphaneyle yazılmıştır, ek bir test paketi gerekmez.
+Son durum: **147 test, hepsi geçiyor** (yaklaşık 22 saniye). Testler standart
+kütüphaneyle yazılmıştır, ek bir test paketi gerekmez.
 `ornek_veri/` dizini repoda olmadığı için veri gerektiren testler o dizin
 yoksa atlanır (`skipped`); metin normalizasyon testleri her ortamda çalışır.
 `testler/test_eslestirici.py` içindeki altın örnekler gerçek Temmuz 2026
