@@ -204,23 +204,25 @@ Sağlık Kontrol Listesi ile karşılaştırdım:
 **15 tanesi, yani yüzde 35'i, sağlık kontrol listesinde TC kimlik numarası ve şantiye bilgisiyle
 mevcut.**
 
-| İsim | TC kimlik | Şantiye |
+*TC kimlik numaraları ilk üç ve son üç hane dışında maskelenmiştir; bu belge kaynak kodla birlikte saklanır ve kimlik numarası taşımamalıdır.*
+
+| İsim | TC kimlik (maskeli) | Şantiye |
 |---|---|---|
-| NEVZAT GULER | 63574287888 | Ust Luga Gas Processing Complex GPC |
-| GOKHAN GUZEL | 55012637188 | Ust Luga GPP projesi |
-| ENIS DONMEZ | 72010082796 | Ust Luga GPP projesi |
-| HARUN YILDIZ | 34448323056 | Ust Luga GPP projesi |
-| AHMET CELER | 39424783404 | UST LUGA |
-| MUSTAFA OZCAN | 34579781688 | LYTKARINO |
-| HUSEYIN BAGUC | 11662308052 | Ust Luga Gas Processing Complex GPP |
-| OGUZHAN CANKAYA | 10596168220 | Ust Luga Gas Processing Complex GPC |
-| FURKAN ERDEM | 59497164320 | Ust Luga Gas Processing Complex GPC |
-| HARUN NERGIS | 23260033694 | Ust Luga GPP projesi |
-| MEHMET TURAN | 26290978980 | Ust Luga Gas Processing Complex GPC |
-| MUHAMMED YILMAZ | 28160415434 | Amur AGPP |
-| ISA MUCAHIT SAHIN | 13906007882 | Ust Luga Gas Processing Complex GPC |
-| ALI GUNDOGDU | 10405297660 | UST LUGA, Renstroydetal |
-| UMUT OZTURK | 39838874224 | Ust Luga GPP projesi, Yaka LLC |
+| NEVZAT GULER | 635*****888 | Ust Luga Gas Processing Complex GPC |
+| GOKHAN GUZEL | 550*****188 | Ust Luga GPP projesi |
+| ENIS DONMEZ | 720*****796 | Ust Luga GPP projesi |
+| HARUN YILDIZ | 344*****056 | Ust Luga GPP projesi |
+| AHMET CELER | 394*****404 | UST LUGA |
+| MUSTAFA OZCAN | 345*****688 | LYTKARINO |
+| HUSEYIN BAGUC | 116*****052 | Ust Luga Gas Processing Complex GPP |
+| OGUZHAN CANKAYA | 105*****220 | Ust Luga Gas Processing Complex GPC |
+| FURKAN ERDEM | 594*****320 | Ust Luga Gas Processing Complex GPC |
+| HARUN NERGIS | 232*****694 | Ust Luga GPP projesi |
+| MEHMET TURAN | 262*****980 | Ust Luga Gas Processing Complex GPC |
+| MUHAMMED YILMAZ | 281*****434 | Amur AGPP |
+| ISA MUCAHIT SAHIN | 139*****882 | Ust Luga Gas Processing Complex GPC |
+| ALI GUNDOGDU | 104*****660 | UST LUGA, Renstroydetal |
+| UMUT OZTURK | 398*****224 | Ust Luga GPP projesi, Yaka LLC |
 
 Yani otomasyonun bir "ek kişi defteri" tutması ve bunu sağlık listesi gibi yardımcı kaynaklardan
 otomatik beslemesi gerekiyor. Bu tek başına eşleşme oranını ciddi şekilde yukarı çeker.
@@ -326,7 +328,7 @@ Energo tarafına da yapılabilir.
 
 ### Bulunan veri çelişkisi
 
-Köprüyü kurarken bir çelişki çıktı. Mehmet Turan, TC 26290978980, doğum 28.12.1983,
+Köprüyü kurarken bir çelişki çıktı. Mehmet Turan, TC 262*****980, doğum yılı 1983,
 sicil 549718. Personel verisi Temmuz 2026'da görev yerini Amursky Gas Processing Plant
 gösteriyor. Sağlık kontrol listesi ise Ust Luga Gas Processing Complex diyor. Seyahat
 faturasındaki uçuşu da Ankara Petersburg, yani Ust Luga yönü.
