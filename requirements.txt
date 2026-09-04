@@ -6,3 +6,7 @@ xlrd>=2.0
 rapidfuzz>=3.6
 streamlit>=1.36
 xlsxwriter>=3.2
+
+# Outlook .msg dosyalarini okumak icin (masraf/okuyucular/posta.py).
+# Windows ve macOS uzerinde sorunsuz kurulur.
+extract-msg>=0.48
