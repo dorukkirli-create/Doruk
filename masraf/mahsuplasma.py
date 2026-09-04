@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Sequence
 
-from masraf.metin import isim_normalize
+from masraf.metin import isim_imzasi, isim_normalize
 
 __all__ = [
     "MahsupSatiri",
@@ -291,10 +291,10 @@ def _isim_imzasi(ham: str | None) -> str:
 
     'OZAKAY MUSTAFAKEMAL' ve 'MUSTAFA KEMAL OZAKAY' ayni imzayi verir; iki
     dosya ayni kisiyi farkli sirayla ve farkli bitisiklikte yazdigi icin
-    gereklidir.
+    gereklidir. Tanim ``masraf.metin`` icindedir; harici kisiler defteri de
+    ayni imzayi kullanir, ikisi ayrisamasin diye tek kaynaktan gelir.
     """
-    normal = isim_normalize(ham or "")
-    return "".join(sorted(ch for ch in normal if ch.isalnum()))
+    return isim_imzasi(ham or "")
 
 
 def _yineleme_anahtari(sonuc: Any) -> tuple | None:

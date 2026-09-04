@@ -1,0 +1,472 @@
+<title>Masraf Merkezi Otomasyonu</title>
+<style>
+:root{
+  --navy:#051C2C; --white:#FFFFFF; --blue:#1F40E6; --cyan:#00A9F4;
+  --ice:#AAE6F0; --teal:#3C96B4; --deep-teal:#027AB1;
+  --gray-d:#4D4D4D; --gray-m:#7F7F7F; --gray-s:#B3B3B3;
+  --border:#D0D0D0; --gray-l:#E6E6E6;
+  --ok-fill:#E2EFDA; --warn-fill:#FFF2CC; --stop-fill:#FCE4D6;
+  --ok-line:#4E7C3F; --warn-line:#9C7A16; --stop-line:#B4562E;
+
+  --bg:var(--white); --surface:var(--white); --surface-alt:#F7F8F9;
+  --text:var(--gray-d); --text-strong:var(--navy); --text-dim:var(--gray-m);
+  --rule:var(--border); --rule-strong:var(--navy);
+
+  --f-head:Georgia,"Times New Roman",serif;
+  --f-body:Arial,Helvetica,sans-serif;
+  --s1:4px; --s2:8px; --s3:16px; --s4:24px; --s5:32px; --s6:48px; --s7:72px;
+  --wrap:1080px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#04151F; --surface:#08222F; --surface-alt:#0C2A38;
+    --text:#C9D4DA; --text-strong:#FFFFFF; --text-dim:#8FA3AD;
+    --rule:#1C3A4A; --rule-strong:#2C5A70;
+    --ok-fill:#16321C; --warn-fill:#37300F; --stop-fill:#3A2116;
+    --ok-line:#7FBF6A; --warn-line:#D9B64A; --stop-line:#E0895F;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#04151F; --surface:#08222F; --surface-alt:#0C2A38;
+  --text:#C9D4DA; --text-strong:#FFFFFF; --text-dim:#8FA3AD;
+  --rule:#1C3A4A; --rule-strong:#2C5A70;
+  --ok-fill:#16321C; --warn-fill:#37300F; --stop-fill:#3A2116;
+  --ok-line:#7FBF6A; --warn-line:#D9B64A; --stop-line:#E0895F;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--f-body);
+     font-size:15px;line-height:1.6;margin:0}
+h1,h2,h3,h4{font-family:var(--f-head);color:var(--text-strong);font-weight:700;
+     text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,4.4vw,50px);line-height:1.1}
+h2{font-size:clamp(21px,2.5vw,28px);line-height:1.2}
+h3{font-size:18px;line-height:1.3}
+h4{font-family:var(--f-body);font-size:14px;letter-spacing:.09em;
+   text-transform:uppercase;color:var(--text-dim);font-weight:700}
+p{margin:0}
+strong{color:var(--text-strong)}
+code,.mono{font-family:"Consolas","SF Mono",Menlo,monospace;font-size:.92em}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 var(--s4)}
+
+/* Ust serit */
+.topbar{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3);
+  border-bottom:1px solid var(--rule-strong);padding:var(--s3) 0;flex-wrap:wrap}
+.topbar .brand{font-weight:700;color:var(--text-strong);letter-spacing:.02em}
+.topbar .tag{font-size:12px;color:var(--text-dim);letter-spacing:.06em}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:0;
+      border-bottom:1px solid var(--rule-strong)}
+.hero__l{padding:var(--s7) var(--s6) var(--s7) 0}
+.hero__r{background:var(--navy);color:#EAF1F5;padding:var(--s6);
+         display:flex;flex-direction:column;justify-content:center;gap:var(--s4)}
+.hero__l .lede{margin-top:var(--s4);font-size:17px;max-width:46ch}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+         color:var(--deep-teal);font-weight:700;margin-bottom:var(--s3)}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat__n{font-family:var(--f-head);font-size:34px;line-height:1;color:#fff;
+         font-variant-numeric:tabular-nums}
+.stat__l{font-size:12.5px;color:#9FBACB;letter-spacing:.03em}
+.stat__s{font-size:12px;color:#7E9DB0}
+
+section{padding:var(--s7) 0;border-bottom:1px solid var(--rule)}
+section:last-of-type{border-bottom:none}
+.sec-head{margin-bottom:var(--s5)}
+.sec-head p{margin-top:var(--s3);max-width:70ch}
+
+/* Boru hatti */
+.pipe{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.step{background:var(--surface);padding:var(--s4);display:grid;
+      grid-template-columns:46px 1fr;gap:var(--s4);align-items:start}
+.step__n{font-family:var(--f-head);font-size:26px;color:var(--cyan);
+         line-height:1;font-variant-numeric:tabular-nums}
+.step__b h3{margin-bottom:var(--s2)}
+.step__b p{max-width:72ch}
+.step--key{background:var(--surface-alt)}
+.step--key .step__n{color:var(--blue)}
+
+/* Tablo */
+.tw{overflow-x:auto;border:1px solid var(--rule)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}
+caption{text-align:left;font-size:12.5px;color:var(--text-dim);padding:var(--s3);
+        border-bottom:1px solid var(--rule)}
+th{text-align:left;font-weight:700;color:var(--text-strong);
+   border-bottom:1.5px solid var(--rule-strong);padding:10px var(--s3);white-space:nowrap}
+td{padding:9px var(--s3);border-bottom:1px solid var(--rule);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{display:block;height:5px;background:var(--cyan);border-radius:1px;min-width:2px}
+.bar--dim{background:var(--teal)}
+
+/* Vurgu */
+.callout{background:var(--blue);color:#fff;padding:var(--s5) var(--s6);
+         display:grid;gap:var(--s3)}
+.callout h3{font-size:23px;color:#fff}
+.callout p{max-width:66ch;color:#DDE3FF}
+.callout .mono{color:#fff}
+
+/* Durum kartlari */
+.verdicts{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.v{border:1px solid var(--rule);border-top:4px solid var(--c);padding:var(--s4);
+   background:var(--f);display:flex;flex-direction:column;gap:var(--s2)}
+.v--ok{--c:var(--ok-line);--f:var(--ok-fill)}
+.v--warn{--c:var(--warn-line);--f:var(--warn-fill)}
+.v--stop{--c:var(--stop-line);--f:var(--stop-fill)}
+.v__t{font-family:var(--f-body);font-weight:700;font-size:13px;letter-spacing:.09em;
+      color:var(--text-strong)}
+.v__n{font-family:var(--f-head);font-size:30px;color:var(--text-strong);line-height:1;
+      font-variant-numeric:tabular-nums}
+.v__r{font-size:13.5px;color:var(--text)}
+
+/* Vaka kutusu */
+.case{border:1px solid var(--rule);border-left:4px solid var(--cyan);
+      background:var(--surface-alt);padding:var(--s4) var(--s5);display:grid;gap:var(--s3)}
+.case pre{margin:0;overflow-x:auto;font-size:13px;line-height:1.65;color:var(--text)}
+.case .why{font-size:14.5px;max-width:72ch}
+
+/* Adimlar */
+.doers{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.doer{border:1px solid var(--rule);padding:var(--s4);background:var(--surface);
+      display:flex;flex-direction:column;gap:var(--s2)}
+.doer__k{font-family:var(--f-head);font-size:15px;color:var(--deep-teal)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s6)}
+.note{font-size:13px;color:var(--text-dim);max-width:74ch}
+.rule{height:1px;background:var(--rule);margin:var(--s5) 0}
+ul{margin:0;padding-left:1.15em}li{margin-bottom:var(--s2)}
+footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
+       border-top:1px solid var(--rule-strong)}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr}
+  .hero__l{padding:var(--s6) 0 var(--s5)}
+  .hero__r{margin:0 calc(-1*var(--s4));padding:var(--s5) var(--s4)}
+  .verdicts,.doers,.grid2{grid-template-columns:1fr}
+  section{padding:var(--s6) 0}
+}
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">Rencons Heavy Industries</div>
+    <div class="tag">Finans &rsaquo; Fatura Mahsuplaştırma</div>
+  </div>
+
+  <div class="hero">
+    <div class="hero__l">
+      <div class="eyebrow">Masaüstü otomasyonu</div>
+      <h1>Masraf Merkezi Otomasyonu</h1>
+      <p class="lede">Tedarikçi faturasındaki her satırı, o satırdaki <strong>kişiye</strong> ve
+      giderin <strong>yapıldığı aya</strong> göre doğru projeye mahsuplaştırır.
+      Çıktısı muhasebeye giden dağıtım tablosudur.</p>
+      <p class="lede" style="font-size:15px;color:var(--text-dim)">İnternet gerekmez,
+      yapay zeka çalıştırmaz. Veriler bilgisayardan dışarı çıkmaz.</p>
+    </div>
+    <div class="hero__r">
+      <div class="stat">
+        <span class="stat__n">405</span>
+        <span class="stat__l">satır okundu</span>
+        <span class="stat__s">2 Outlook maili, 12 ek dosya</span>
+      </div>
+      <div class="stat">
+        <span class="stat__n">34</span>
+        <span class="stat__l">mahsup satırı üretildi</span>
+        <span class="stat__s">muhasebeye giden tablo</span>
+      </div>
+      <div class="stat">
+        <span class="stat__n">15 sn</span>
+        <span class="stat__l">toplam süre</span>
+        <span class="stat__s">elle yapıldığında yarım gün</span>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>Çözdüğü problem</h2>
+      <p>Seyahat acentesi faturası tek toplam olarak geliyor. İçindeki 134 satırın
+      hangi projeye yazılacağı fatura üzerinde yazmıyor; sadece kişi adı var. Bugüne
+      kadar birinin oturup her satır için <em>“bu kişi o ay hangi şantiyedeydi”</em>
+      sorusunu cevaplaması gerekiyordu. Otomasyon bu soruyu personel verisinden
+      cevaplıyor.</p>
+    </div>
+    <div class="pipe">
+      <div class="step"><div class="step__n">1</div><div class="step__b">
+        <h3>Mailleri açar</h3>
+        <p>Outlook <span class="mono">.msg</span> dosyasının içine girer, ekleri çıkarır,
+        içinde başka mail veya zip varsa onları da açar. Temmuz mailinden 12 dosya çıktı.</p>
+      </div></div>
+      <div class="step"><div class="step__n">2</div><div class="step__b">
+        <h3>Satırları çıkarır</h3>
+        <p>Her tedarikçinin şablonu farklı. Antik ham döküm, Yüzyıl elle dağıtılmış,
+        Energo arabuluculuk, Koç katılımcı listesi için ayrı okuyucular var. Tanımadığı
+        bir format gelirse kolon adlarından çıkarım yapar.</p>
+      </div></div>
+      <div class="step step--key"><div class="step__n">3</div><div class="step__b">
+        <h3>Kişiyi bulur</h3>
+        <p>Asıl iş burada. En güvenilirden en zayıfa sıralı kademeler denenir, ilk
+        başarılı olan kazanır. Ayrıntısı aşağıda.</p>
+      </div></div>
+      <div class="step step--key"><div class="step__n">4</div><div class="step__b">
+        <h3>O ayın kaydını seçer</h3>
+        <p>İş kuralının kalbi. Gider, giderin yapıldığı aydaki personel kaydına göre
+        mahsuplaşır; bugünkü kayda göre değil.</p>
+      </div></div>
+      <div class="step"><div class="step__n">5</div><div class="step__b">
+        <h3>Görev yerini finans koduna çevirir</h3>
+        <p><span class="mono">masraf_merkezi_haritasi.csv</span> üzerinden. Haritada
+        karşılığı olmayan görev yeri çıktıda işaretlenir, sessizce geçilmez.</p>
+      </div></div>
+      <div class="step"><div class="step__n">6</div><div class="step__b">
+        <h3>Dağıtır ve mutabakatı kapatır</h3>
+        <p>Her fatura için okunan tutar = yinelenen + dağıtılan + dağıtılamayan.
+        Kuruşuna kadar.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Kişiyi bulma: kademeli merdiven</h2>
+      <p>Tek bir yöntem yok. Sicil veya TC kimlik varsa iş kolaydır, ama seyahat
+      faturasında ikisi de yoktur; sadece serbest metinde isim geçer. Aşağıdaki tablo
+      Temmuz 2026 faturasında hangi kademenin kaç satır çözdüğünü gösteriyor.</p>
+    </div>
+    <div class="tw">
+      <table>
+        <caption>Temmuz 2026, 405 satır. Kademeler yukarıdan aşağıya denenir.</caption>
+        <thead><tr>
+          <th>Kademe</th><th>Ne yapar</th><th class="num">Satır</th><th style="width:26%">Pay</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><strong>Sicil</strong></td><td>Dosyada sicil numarası var</td><td class="num">50</td><td><span class="bar" style="width:22%"></span></td></tr>
+          <tr><td><strong>TC kimlik</strong></td><td>Dosyada TC kimlik var</td><td class="num">27</td><td><span class="bar" style="width:12%"></span></td></tr>
+          <tr><td><strong>Tam isim</strong></td><td>İsim personel verisinde birebir bulundu</td><td class="num">225</td><td><span class="bar" style="width:100%"></span></td></tr>
+          <tr><td><strong>1C listesi</strong></td><td>Grup şirketi personeli (Renservis, RC, One Tower…)</td><td class="num">56</td><td><span class="bar" style="width:25%"></span></td></tr>
+          <tr><td><strong>Transliterasyon</strong></td><td>Rusça yazım farkı (<span class="mono">NATALIIA / NATALIA</span>)</td><td class="num">9</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+          <tr><td><strong>Harici kişiler</strong></td><td>Çalışan değil; elle tutulan defterde kayıtlı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+          <tr><td><strong>Aile</strong></td><td>Aynı soyadlı çalışan var, aile bileti olabilir</td><td class="num">36</td><td><span class="bar bar--dim" style="width:16%"></span></td></tr>
+          <tr><td><strong>Bulunamadı</strong></td><td>Hiçbir kademe tutmadı</td><td class="num">10</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:var(--s3)">İsim eşleştirmesi göründüğünden zordur.
+    Havayolu <span class="mono">OZAKAY/MUSTAFAKEMAL</span> yazar: soyad önce, ad bitişik.
+    Sistem bunu açıp <span class="mono">Ozakay Mustafa Kemal</span> kaydına bağlar.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Dönem kuralı</h2>
+      <p>Bir gider, giderin <strong>yapıldığı aydaki</strong> personel kaydına göre
+      mahsuplaşır. En güncel kayda göre değil. Ölçüldü: kişilerin yüzde 1,4’ünün görev
+      yeri, yüzde 3,5’inin şirketi dönemler arasında değişiyor. Küçük bir oran, ama
+      yanlış mahsuplaşma tam olarak o kişilerde oluşur.</p>
+    </div>
+    <div class="case">
+      <h4>Gerçek vaka — Temmuz 2026 faturası</h4>
+      <pre>belge tarihi : 28.07.2026
+kullanılan dönem : 01.11.2025          <-- Temmuz değil, Kasım
+görev yeri   : Udokan (GMK)
+masraf merkezi : UDOKAN                 durum: İNCELE
+
+uyarı : Kişinin gider ayında (Temmuz 2026) personel kaydı yok.
+        Kayıtlı son dönemi Kasım 2025; o dönemin masraf merkezi kullanıldı.
+uyarı : Kişi belge tarihinden önce işten ayrılmış (çıkış: 27.11.2025).
+        Son çalıştığı proje kullanıldı.</pre>
+      <p class="why">Kişi Kasım 2025’te çıkmış, Temmuz 2026’da bir bilet masrafı görünüyor.
+      En güncel kayda baksaydık hiçbir şey bulamazdık. Sistem çıkış anındaki projeyi
+      kullanıyor ve satırı incelemeye düşürüyor, çünkü bu bir insan kararı.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Üç sonuç</h2>
+      <p>Her satır üç kutudan birine girer. Kural iki eşiktir: güven <strong>0,90 üstü ve
+      hiç uyarı yoksa</strong> otomatik; güven <strong>0,50 altı veya masraf merkezi
+      yoksa</strong> eşleşmedi; arada kalan her şey incelemeye düşer. Tek bir uyarı bile
+      satırı incelemeye alır, güven 1,00 olsa dahi.</p>
+    </div>
+    <div class="verdicts">
+      <div class="v v--ok">
+        <span class="v__t">OTOMATİK</span>
+        <span class="v__n">224</span>
+        <span class="v__r">Kimlik kesin, uyarı yok. Olduğu gibi kaydedilebilir.</span>
+      </div>
+      <div class="v v--warn">
+        <span class="v__t">İNCELE</span>
+        <span class="v__n">156</span>
+        <span class="v__r">Sistem bir sonuç buldu ama emin değil. Gerekçesi her satırda
+        Türkçe yazılı; onaylayın ya da düzeltin.</span>
+      </div>
+      <div class="v v--stop">
+        <span class="v__t">EŞLEŞMEDİ</span>
+        <span class="v__n">25</span>
+        <span class="v__r">Kişi hiç bulunamadı. Tutar kaybolmaz, tabloda
+        <span class="mono">(DAGITILAMAYAN)</span> satırı olarak durur.</span>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="case" style="border-left-color:var(--warn-line)">
+      <h4>“İncele” ne demek — örnek</h4>
+      <pre>çıkarılan ad : SIMSEK ZEYNEP
+gerekçe : 'SIMSEK' soyadlı çalışan Simsek Mesut / 641976 aynı dosyada
+          kesin eşleşti; bu satır onun ailesi olabilir
+güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
+      <p class="why">Zeynep Şimşek personel verisinde yok, ama Mesut Şimşek aynı faturada
+      kesin eşleşmiş. Muhtemelen aile bileti. Sistem tahmin ediyor fakat
+      <strong>asla otomatik kabul etmiyor</strong>. Tasarım ilkesi bu: emin olmadığında
+      tahmin etmez, gerekçesini yazıp insana sorar.</p>
+    </div>
+  </section>
+
+  <section style="padding-bottom:var(--s5)">
+    <div class="callout">
+      <h4 style="color:#AFC3FF">Otomasyonun elle yapılan işten farkı</h4>
+      <h3>Aynı mail iki dosya taşıdığında para iki kez sayılır</h3>
+      <p>Temmuz mailinde iki seyahat dosyası var: acentenin ham dökümü
+      (<span class="mono">48.946,59 USD</span>) ve aynı işlemlerin elle dağıtılmış hali
+      (<span class="mono">48.978,59 USD</span>). Bunlar <strong>aynı 134 işlemdir</strong>.
+      Naif toplama 97.925,18 USD verir; gerçek rakam yarısıdır.</p>
+      <p>Aradaki 32,00 USD tek bir kalemden gelir: 14.07.2026 tarihli bir bilet bedeli ham
+      dökümde <span class="mono">-16,00</span> (iade), elle dağıtılmış halde
+      <span class="mono">+16,00</span> yazılmış. Sistem bunu işaret çelişkisi olarak
+      ayrıca uyarır.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Paranın izi</h2>
+      <p>Mutabakat tanım gereği kapanır. Oransal bölmede kalan kuruş artığı faturanın en
+      büyük satırına eklenir. <strong>Kontrol</strong> sayfasındaki <em>Fark</em> sütunu
+      sıfır olmak zorundadır; değilse tablo muhasebeye gönderilmemelidir.</p>
+    </div>
+    <div class="tw">
+      <table>
+        <caption>Temmuz 2026, USD. Okunan = yinelenen + dağıtılan + dağıtılamayan.</caption>
+        <thead><tr><th>Adım</th><th class="num">Tutar</th><th>Ne anlama gelir</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Okunan</strong></td><td class="num">106.297,78</td><td>Dosyalarda görülen her şeyin toplamı</td></tr>
+          <tr><td>Yinelenen</td><td class="num">−48.978,59</td><td>Aynı işlem diğer dosyada zaten sayıldı</td></tr>
+          <tr><td><strong>Net</strong></td><td class="num">57.319,19</td><td>Gerçekten dağıtılacak tutar</td></tr>
+          <tr><td>Dağıtılan</td><td class="num">53.718,89</td><td>Projelere yazıldı (%93,7)</td></tr>
+          <tr><td>Dağıtılamayan</td><td class="num">3.600,30</td><td>Kişi ya da masraf merkezi bulunamadı</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="rule"></div>
+    <div class="tw">
+      <table>
+        <caption>Proje bazında dağılım (ilk altı).</caption>
+        <thead><tr><th>Masraf merkezi</th><th class="num">Tutar</th><th class="num">Pay</th><th>Durum</th></tr></thead>
+        <tbody>
+          <tr><td>GPP</td><td class="num">29.313,42</td><td class="num">51,1%</td><td>finans kodu</td></tr>
+          <tr><td>HQ-MOSCOW</td><td class="num">6.905,24</td><td class="num">12,1%</td><td>finans kodu</td></tr>
+          <tr><td>ULF-GPC-RHI</td><td class="num">4.231,83</td><td class="num">7,4%</td><td>finans kodu</td></tr>
+          <tr><td>RM-RHI</td><td class="num">3.821,34</td><td class="num">6,7%</td><td>finans kodu</td></tr>
+          <tr><td>(DAGITILAMAYAN)</td><td class="num">3.600,30</td><td class="num">6,3%</td><td>kişi bulunamadı</td></tr>
+          <tr><td>Renservis - Lytkarino</td><td class="num">2.139,72</td><td class="num">3,7%</td><td><strong>haritada tanımlı değil</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:var(--s3)">Son satır önemli. 1C listesinden gelen
+    görev yerlerinin finans karşılığı henüz haritada yok; metin olduğu gibi taşınıyor ve
+    işaretleniyor. Bunlar koda bağlanana kadar muhasebeye ham metinle gitmemeli.</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Excel nasıl okunur</h2>
+      <p>Altı sayfa var, sırası iş akışı sırasıdır: önce muhasebeye gidecek olan, sonra kanıtı.</p>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th style="width:22%">Sayfa</th><th>İçeriği</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Mahsuplasma</strong></td><td><strong>Muhasebeye giden tablo budur.</strong> Her fatura için hangi projeye ne kadar yazılacağı.</td></tr>
+          <tr><td><strong>Kontrol</strong></td><td>Mutabakat. <em>Fark</em> sütunu sıfır olmak zorunda.</td></tr>
+          <tr><td>Sonuc</td><td>Bütün satırlar, 26 kolon. Her satırda kişinin nasıl bulunduğu, güven skoru ve Türkçe gerekçe. “Bu satır neden bu projeye yazıldı” sorusunun cevabı burada.</td></tr>
+          <tr><td>Incele</td><td>Elle bakılacak satırlar.</td></tr>
+          <tr><td>Eslesmedi</td><td>Kişi bulunamayanlar.</td></tr>
+          <tr><td>Ozet</td><td>Dağılımlar, oranlar, toplamlar.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Her ay yapılacaklar</h2>
+    </div>
+    <div class="doers">
+      <div class="doer">
+        <span class="doer__k">1 &middot; Bırak</span>
+        <p>Gelen mailleri <span class="mono">1_FATURALAR</span> klasörüne atın. Outlook
+        dosyasını olduğu gibi atabilirsiniz, ekleri kendi açılır.</p>
+      </div>
+      <div class="doer">
+        <span class="doer__k">2 &middot; Çalıştır</span>
+        <p><span class="mono">CALISTIR.bat</span> dosyasına çift tıklayın. Bittiğinde Excel
+        kendiliğinden açılır.</p>
+      </div>
+      <div class="doer">
+        <span class="doer__k">3 &middot; Temizle</span>
+        <p>İşlem bitince <span class="mono">1_FATURALAR</span> klasörünü boşaltın. Eski
+        faturalar kalırsa gelecek ay tekrar işlenir ve tutarlar iki kez sayılır.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Sistemi eğitmek</h2>
+      <p>Otomasyon öğrenir, ama model eğitimiyle değil. Öğrendiği her şey
+      <span class="mono">veri</span> klasöründeki CSV dosyalarında durur. Excel ile açıp
+      okuyabilir, düzeltebilir, elle satır ekleyebilirsiniz. Kod değiştirmek gerekmez.</p>
+    </div>
+    <div class="grid2">
+      <div>
+        <h3>Çalışan olmayan biri</h3>
+        <p style="margin:var(--s3) 0">Dış danışman, konuşmacı, koç. Personel verisinde
+        yoktur ve hiçbir zaman otomatik eşleşmez. Doğru davranış onu
+        <span class="mono">harici_kisiler.csv</span> dosyasına yazmaktır:</p>
+        <div class="tw"><table><thead><tr><th>Kolon</th><th>Değer</th></tr></thead><tbody>
+          <tr><td class="mono">isim_norm</td><td>TALIP KEREM KOCKESEN</td></tr>
+          <tr><td class="mono">ad_soyad</td><td>Talip Kerem Kockesen</td></tr>
+          <tr><td class="mono">kurum</td><td>Dis konusmaci</td></tr>
+          <tr><td class="mono">masraf_merkezi</td><td>RHI Russia - Headquarter (Moscow)</td></tr>
+        </tbody></table></div>
+        <p class="note" style="margin-top:var(--s3)">Tek satır yeter. Fatura metni
+        <span class="mono">KOCKESEN TALIPKEREM</span> yazsa bile bulunur; sistem ismi
+        sıradan ve bitişiklikten bağımsız karşılaştırır.</p>
+      </div>
+      <div>
+        <h3>Tanınmayan görev yeri</h3>
+        <p style="margin:var(--s3) 0">Çıktıda <strong>haritada tanımlı değil</strong>
+        uyarısı aldığınız her görev yeri için
+        <span class="mono">masraf_merkezi_haritasi.csv</span> dosyasına bir satır ekleyin.
+        Bir kez eklemek yeterlidir.</p>
+        <h3 style="margin-top:var(--s5)">Tanınmayan kolon adı</h3>
+        <p style="margin-top:var(--s3)">Yeni bir tedarikçi farklı bir kolon adı kullanırsa
+        dosya okunur ama satır çıkmaz. <span class="mono">kolon_esanlamlilari.csv</span>
+        dosyasına o kolon adını bir kez yazın, sonraki aylarda çalışır.</p>
+        <h3 style="margin-top:var(--s5)">İnceleme kararları</h3>
+        <p style="margin-top:var(--s3)">İncelemede doğru kişiyi seçtiğinizde eşleşme
+        kaydedilir ve aynı isim bir daha sorulmaz. Temmuz faturasında sistem kendiliğinden
+        27 TC kimlik köprüsü ve 30 isim varyantı öğrendi.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>Kaynak:</strong> Temmuz 2026 dönemi, iki Outlook maili (Yüzyıl Turizm bilet
+    ve vize alımları, Energo Taahhüt Mayıs–Haziran yansıtma), 12 ek dosya, 405 satır.
+    Bütün rakamlar bu veriden ölçülmüştür.</p>
+    <p style="margin-top:var(--s2)">Otomasyon çevrimdışı çalışır. Personel dosyaları ve
+    faturalar bilgisayardan dışarı çıkmaz. Öğrenilen eşleşmeler kişisel veri içerir;
+    <span class="mono">veri</span> klasörü paylaşılmamalıdır.</p>
+  </footer>
+</div>

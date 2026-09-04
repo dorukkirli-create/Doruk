@@ -127,6 +127,26 @@ def isim_normalize(s: str) -> str:
     return _COKLU_BOSLUK.sub(" ", metin).strip()
 
 
+def isim_imzasi(s: str) -> str:
+    """Isim sirasindan ve bosluklardan BAGIMSIZ karsilastirma imzasi.
+
+    Normalize edilmis ismin harflerini siralar. Boylece ayni kisinin farkli
+    yazimlari tek bir anahtara duser::
+
+        'KOCKESEN TALIPKEREM'   -> AEEEEIKKKLMNOPSST
+        'TALIP KEREM KOCKESEN'  -> AEEEEIKKKLMNOPSST
+
+    Iki sorunu birden cozer: soyadin one alinmasi ve bitisik yazilmis ad
+    ('TALIPKEREM'). Sozluge ihtiyac duymaz.
+
+    Yanlis eslesme riski dusuktur: iki farkli kisinin isminin harf harf ayni
+    olmasi gerekir. Yine de tek basina KIMLIK KANITI DEGILDIR; yalnizca
+    elle bakimi yapilan kucuk defterlerde (harici kisiler) ve tarih+tutar
+    ile birlikte (yineleme tespiti) kullanilir.
+    """
+    return "".join(sorted(ch for ch in isim_normalize(s) if ch.isalnum()))
+
+
 def isim_tokenlari(s: str) -> frozenset[str]:
     """Isimdeki benzersiz tokenlari sirasiz kume olarak dondurur.
 

@@ -55,6 +55,7 @@ from rapidfuzz import fuzz, process
 from masraf.defter import Defterler, tckn_normalize
 from masraf.kayit import PersonelDefteri, sicil_normalize
 from masraf.metin import (
+    isim_imzasi,
     bitisik_ad_ac,
     isim_normalize,
     kisi_metnini_temizle,
@@ -202,8 +203,23 @@ class Eslestirici:
         for isim, sicil in self._defterler.aliases.items():
             self._alias_token.setdefault(frozenset(isim.split(" ")), sicil)
         self._harici_token: dict[frozenset[str], dict] = {}
+        # Isim sirasi ve bitisiklikten bagimsiz indeks. Fatura metinlerinde
+        # ayni kisi 'KOCKESEN TALIPKEREM' ve 'TALIP KEREM KOCKESEN' olarak
+        # iki turlu geciyor; token kumesi bunlari ayni saymiyor cunku
+        # 'TALIPKEREM' tek token. Harf imzasi ikisini de yakalar.
+        self._harici_imza: dict[str, dict] = {}
         for isim, kayit in self._defterler.harici.items():
             self._harici_token.setdefault(frozenset(isim.split(" ")), kayit)
+            imza = isim_imzasi(isim)
+            if imza:
+                self._harici_imza.setdefault(imza, kayit)
+            # Defterdeki 'ad_soyad' yazimi da indekslensin; kullanici
+            # isim_norm kolonunu bos birakabilir ya da farkli yazabilir.
+            ad_soyad = kayit.get("ad_soyad") or ""
+            if ad_soyad:
+                imza2 = isim_imzasi(ad_soyad)
+                if imza2:
+                    self._harici_imza.setdefault(imza2, kayit)
         self._ek_token: dict[frozenset[str], dict] = {}
         for anahtar, kayit in self._defterler.ek_kisiler.items():
             if " " in anahtar:
@@ -726,7 +742,11 @@ class Eslestirici:
         )
 
     def _adim_harici(self, norm: str, tokenlar: frozenset[str]) -> Eslesme | None:
-        kayit = self._defterler.harici.get(norm) or self._harici_token.get(tokenlar)
+        kayit = (
+            self._defterler.harici.get(norm)
+            or self._harici_token.get(tokenlar)
+            or self._harici_imza.get(isim_imzasi(norm))
+        )
         if kayit is None:
             return None
         kurum = kayit.get("kurum") or "bilinmeyen kurum"
