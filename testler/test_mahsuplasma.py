@@ -402,3 +402,44 @@ class GercekMesajTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class ParolaKorumaliTest(unittest.TestCase):
+    """Parola korumali dosya anlasilir bir mesajla reddedilmeli.
+
+    Ham istisna metni ('ImportError: msoffcrypto ...') kullaniciya hicbir sey
+    anlatmaz. Paketten sifre cozme kutuphanesi cikarildigi icin bu durumun
+    net bir mesaj uretmesi gerekir.
+    """
+
+    def test_ole_kabindaki_xlsx_korumali_sayilir(self):
+        import tempfile
+
+        from masraf.boru import _parola_korumali_mi
+
+        with tempfile.TemporaryDirectory() as gecici:
+            # Modern .xlsx bir ZIP'tir; sifrelenince Excel onu OLE kabina koyar.
+            sahte = Path(gecici) / "sifreli.xlsx"
+            sahte.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 512)
+            self.assertTrue(_parola_korumali_mi(sahte))
+
+    def test_normal_dosyalar_korumali_sayilmaz(self):
+        """Yanlis pozitif olmamali: saglam dosya reddedilirse is durur."""
+        from masraf.boru import _parola_korumali_mi
+
+        for yol in (Path("ornek_veri/personel/2025_2026_giris_cikis.xlsx"),
+                    Path("ornek_veri/posta/ornek_mail.msg")):
+            if yol.is_file():
+                with self.subTest(dosya=yol.name):
+                    self.assertFalse(_parola_korumali_mi(yol))
+
+    def test_olmayan_ve_ilgisiz_dosya_false_doner(self):
+        import tempfile
+
+        from masraf.boru import _parola_korumali_mi
+
+        self.assertFalse(_parola_korumali_mi(Path("olmayan_dosya.xlsx")))
+        with tempfile.TemporaryDirectory() as gecici:
+            metin = Path(gecici) / "not.txt"
+            metin.write_text("merhaba", encoding="utf-8")
+            self.assertFalse(_parola_korumali_mi(metin))

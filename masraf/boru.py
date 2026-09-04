@@ -106,6 +106,49 @@ def _bildir(ilerleme: Ilerleme | None, yuzde: float, mesaj: str) -> None:
         pass  # Arayuz hatasi is akisini durdurmamali.
 
 
+#: OLE bilesik dosya imzasi. Modern .xlsx/.xlsm aslinda ZIP'tir; sifrelenince
+#: Excel onu bir OLE kabina koyar. Yani ZIP olmasi gereken yerde OLE gormek
+#: neredeyse her zaman 'parola korumali' demektir.
+_OLE_IMZASI = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+#: Sifreli OLE kabinda bulunan akis adlari.
+_SIFRELI_AKISLAR = frozenset({"EncryptionInfo", "EncryptedPackage"})
+
+
+def _parola_korumali_mi(yol: Path) -> bool:
+    """Dosya parola korumali mi? Emin olamazsa False doner.
+
+    Yanlis pozitif vermemek onemli: saglam bir dosyayi 'korumali' diye
+    reddetmektense, korumali dosyanin normal hata yoluna dusmesi yeglenir.
+    """
+    try:
+        if not yol.is_file():
+            return False
+        uzanti = yol.suffix.lower()
+        if uzanti not in (".xlsx", ".xlsm", ".xls", ".msg"):
+            return False
+        with open(yol, "rb") as akis:
+            bas = akis.read(8)
+        if bas != _OLE_IMZASI:
+            return False
+        # ZIP olmasi gereken bicim OLE cikti: sifreli.
+        if uzanti in (".xlsx", ".xlsm"):
+            return True
+        # .xls ve .msg zaten OLE'dir; icerideki akislara bakmak gerekir.
+        try:
+            import olefile
+        except ImportError:
+            return False
+        try:
+            with olefile.OleFileIO(yol) as ole:
+                adlar = {parca for yollar in ole.listdir() for parca in yollar}
+        except Exception:  # noqa: BLE001
+            return False
+        return bool(adlar & _SIFRELI_AKISLAR)
+    except OSError:
+        return False
+
+
 def _mahsup_ozeti(mahsup) -> dict:
     """Mahsuplasma tablosunun ozet gostergeleri (arayuz ve rapor icin)."""
     return {
@@ -258,6 +301,15 @@ class Boru:
         for sira, yol in enumerate(dosya_yollari, start=1):
             hedef = Path(yol)
             _bildir(ilerleme, 5 + 25 * (sira - 1) / toplam, f"Okunuyor: {hedef.name}")
+            if _parola_korumali_mi(hedef):
+                # Ham istisna mesaji ('ImportError: msoffcrypto ...') kullaniciya
+                # hicbir sey anlatmaz. Ne oldugunu ve ne yapacagini soyleyelim.
+                self.hatalar.append(
+                    f"{hedef.name}: dosya PAROLA KORUMALI, acilamadi. "
+                    "Excel'de acip parolayi girin, 'Farkli Kaydet' ile parolasiz "
+                    "kaydedin ve tekrar deneyin."
+                )
+                continue
             try:
                 tip = dosya_tipini_bul(hedef)
                 # kesif.oku Outlook mesajlarini, referans listelerini ve
