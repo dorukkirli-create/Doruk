@@ -234,6 +234,30 @@ sonucu verdi).
 tamamı gerçekten kişisiz kurumsal giderdir (cenaze çelengi, toplantı
 organizasyonu); bunlar kişiye mahsuplaşmaz.
 
+#### 1C ikincil personel defteri açıkken
+
+Yukarıdaki tablo **yalnızca ana veriyle** ölçülmüştür. Uygulama, yanında bir
+1C personel listesi bulduğunda onu ikincil defter olarak da kullanır
+(grup şirketlerini kapsar, ölçülen katkı: 17.517 isimli kayıttan 5.234'ü ana
+veride yoktur). Aynı örneklem, 1C defteri açıkken:
+
+| Dosya | Satır | OTOMATİK | İNCELE | EŞLEŞMEDİ | Otomasyon |
+|---|---:|---:|---:|---:|---:|
+| `ANTIK_CARI_TEMMUZ_2026.xls` | 134 | 82 | 45 | 7 | %61,2 |
+| `YUZYIL_..._ELLE_DAGITILMIS.xlsx` | 134 | 79 | 48 | 7 | %59,0 |
+| `ASSESSMENT_YANSITMA_2026_05_06.xlsx` | 6 | 4 | 2 | 0 | %66,7 |
+| `ARABULUCULUK_2026_06_07.xlsx` | 25 | 0 | 25 | 0 | %0,0 |
+| `SAGLIK_KONTROL_LISTE.xlsx` | 50 | 14 | 36 | 0 | %28,0 |
+| `KOC_UNI_KATILIMCI_LISTESI.xlsx` | 50 | 46 | 4 | 0 | %92,0 |
+| **TOPLAM** | **399** | **225** | **160** | **14** | **%56,4** |
+
+Çözülen oran **%89,2 -> %96,5**, eşleşmeyen satır **43 -> 14**. Otomasyon oranı
+**değişmez (%56,4)**, çünkü 1C listesi tek bir tarihe ait durum fotoğrafıdır,
+aylık dönem serisi değildir; bu defterden gelen her kayıt "dönem
+doğrulanamadı" uyarısı taşır ve bilerek incelemeye gönderilir. Yani 1C defteri
+**otomatik dağıtımı artırmaz, "hiç bulunamadı" sayısını azaltır** — kullanıcıya
+boş satır yerine doğrulanacak bir aday verir.
+
 Uçlardaki iki sayı tesadüf değil, doğrudan **kaynak dosyada kimlik alanı olup
 olmadığını** ölçüyor:
 
@@ -250,7 +274,7 @@ aynısını ikinci kez taşır, toplama girseydi her satır iki kez sayılır ve
 tabloda raporlanır ve satır satır aynı sonucu verir — yani `.msg` okuyucusu
 doğru çalışıyor.
 
-### Eşleşmeyen 43 satırın nedeni
+### Eşleşmeyen 43 satırın nedeni (1C defteri kapalıyken)
 
 | Kategori | Adet | Pay | Anlamı |
 |---|---:|---:|---|
@@ -440,6 +464,14 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
   karşılaştırılabilir hem de gerçek proje bilgisi taşır. %86,7 doğruluk bu 15
   satır üzerinden hesaplanmıştır. Birkaç ay daha veri biriktikçe bu ölçüm
   güçlenecektir.
+- **Ölçüm betikleri 1C ikincil defterini kullanmıyor.**
+  `testler/kapsam_olc.py` ve `testler/dogruluk_olc.py` yalnızca ana veriyle
+  çalışır; uygulamanın kendisi ise yanında bir 1C listesi bulduğunda onu
+  otomatik kullanır. Bu yüzden betiklerin bastığı eşleşmeyen sayısı (43),
+  uygulamanın gerçek davranışına (14) göre **kötümserdir**. Yukarıdaki
+  "1C ikincil personel defteri açıkken" tablosu farkı gösterir. Betiklere bir
+  `--yardimci` seçeneği eklenmesi bekleyen bir iştir; ölçümlerin ikisi de
+  düzeltilene kadar alt sınır olarak okunmalıdır.
 - **Elle dağıtılmış dosya doğruluk referansı olarak kullanılamaz.** Yukarıda
   ölçüldüğü gibi o kolon tüzel kişi/ödeyen sorusunu cevaplıyor, proje sorusunu
   değil. İki çıktının farklı olması otomasyonun hatalı olduğu anlamına gelmez;
@@ -483,7 +515,7 @@ isterseniz şirket içi bir paylaşıma kopyalayın, genel bir depoya koymayın.
 python3 -m unittest discover -s testler -v
 ```
 
-Son durum: **147 test, hepsi geçiyor** (yaklaşık 22 saniye). Testler standart
+Son durum: **155 test, hepsi geçiyor** (yaklaşık 33 saniye). Testler standart
 kütüphaneyle yazılmıştır, ek bir test paketi gerekmez.
 `ornek_veri/` dizini repoda olmadığı için veri gerektiren testler o dizin
 yoksa atlanır (`skipped`); metin normalizasyon testleri her ortamda çalışır.
