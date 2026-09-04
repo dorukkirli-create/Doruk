@@ -23,8 +23,6 @@ her etkilesiminde YENIDEN YUKLENMEZ.
 from __future__ import annotations
 
 import csv
-import inspect
-import io
 import tempfile
 import traceback
 from dataclasses import dataclass, field
@@ -66,13 +64,17 @@ except Exception:  # pragma: no cover - sadece eksik kurulumda calisir
     DURUM_OTOMATIK, DURUM_INCELE, DURUM_ESLESMEDI = "OTOMATIK", "INCELE", "ESLESMEDI"
     INCELE_ESIGI = 0.80
 
-# Istege bagli moduller: varsa kullanilir, yoksa yerel esdeger calisir.
+# Boru hatti ve cikti modulleri. Bunlar olmadan da calisir (yerel esdegerler
+# asagida tanimlidir) ama VARSA TERCIH EDILIR: isleme sirasi, masraf merkezi
+# cozumu ve Excel bicimi orada tanimlidir.
 BORU_SINIFI: Any = None
-BORU_HATA = ""
+AYAR_SINIFI: Any = None
 try:
     from masraf.boru import Boru as BORU_SINIFI  # type: ignore
+    from masraf.boru import CalismaAyarlari as AYAR_SINIFI  # type: ignore
 except Exception:
     BORU_SINIFI = None
+    AYAR_SINIFI = None
 
 CIKTI_MODULU: Any = None
 try:
@@ -102,7 +104,7 @@ VERI_KOK = PROJE_KOK / "veri"
 CIKTI_KOK = PROJE_KOK / "cikti"
 HARITA_DOSYASI = "masraf_merkezi_haritasi.csv"
 
-DESTEKLENEN_UZANTILAR = (".xls", ".xlsx", ".xlsm", ".csv")
+DESTEKLENEN_UZANTILAR = (".xls", ".xlsx", ".xlsm", ".csv", ".msg")
 
 # kaynak_tip -> kullaniciya gosterilecek Turkce ad.
 KAYNAK_TIP_ADLARI: dict[str, str] = {
@@ -112,6 +114,7 @@ KAYNAK_TIP_ADLARI: dict[str, str] = {
     "energo_arabulucu": "Energo - arabuluculuk",
     "energo_saglik": "Energo - saglik kontrol listesi",
     "koc_katilimci": "Koc Universitesi - egitim katilimci listesi",
+    "outlook_msg": "Outlook e-postasi (ekleri ayri ayri okunur)",
     "genel": "Taninmayan sablon (genel okuyucu)",
 }
 
@@ -225,8 +228,36 @@ def personel_defteri_yukle(yol: str, imza: tuple[int, int]) -> "PersonelDefteri"
     return PersonelDefteri.yukle(yol, onbellek=True)
 
 
+@st.cache_resource(show_spinner=False)
+def boru_kur(yol: str, imza: tuple[int, int]) -> Any:
+    """Boru hattini kurar (personel defteri + defterler + harita bir kez yuklenir).
+
+    Ayni Boru ornegi tum oturum boyunca kullanilir; ``hazirla()`` agir
+    yuklemeleri yalnizca ilk cagrida yapar. Boru modulu yoksa None doner ve
+    arayuz yerel isleme yoluna duser.
+    """
+    del imza  # sadece onbellek anahtari
+    if BORU_SINIFI is None or AYAR_SINIFI is None:
+        return None
+    ayarlar = AYAR_SINIFI(
+        personel_yolu=yol,
+        veri_dizini=str(VERI_KOK),
+        cikti_dizini=str(CIKTI_KOK),
+    )
+    boru = BORU_SINIFI(ayarlar)
+    boru.hazirla()
+    return boru
+
+
 def defterleri_al(kok: Path | None = None) -> "Defterler":
-    """Ogrenen defterleri (alias / harici / ek kisi / TCKN) session'da tutar."""
+    """Ogrenen defterleri (alias / harici / ek kisi / TCKN) dondurur.
+
+    Boru hatti kuruluysa ONUN defter ornegi kullanilir; boylece inceleme
+    ekraninda ogrenilen bir kayit ayni anda boru hattinda da gecerli olur.
+    """
+    boru = st.session_state.get("boru")
+    if boru is not None and getattr(boru, "defterler", None) is not None:
+        return boru.defterler
     hedef = Path(kok or VERI_KOK)
     mevcut = st.session_state.get("defterler")
     if mevcut is not None and Path(getattr(mevcut, "kok", "")) == hedef:
@@ -338,6 +369,7 @@ class IslemeOzeti:
     dosya_bilgileri: list[dict] = field(default_factory=list)
     hatalar: list[str] = field(default_factory=list)
     notlar: list[str] = field(default_factory=list)
+    boru_ozeti: dict = field(default_factory=dict)
 
     @property
     def otomatik_orani(self) -> float:
@@ -538,86 +570,25 @@ def dosyalari_oku(
     return satirlar, bilgiler, hatalar
 
 
-def _uygun_argumanlar(cagrilabilir: Any, havuz: dict[str, Any]) -> dict[str, Any]:
-    """Cagrilabilirin imzasinda YER ALAN argumanlari havuzdan secer.
-
-    ``masraf.boru`` modulu bu arayuzden bagimsiz gelistirildigi icin imzasi
-    onceden bilinmez; bu yardimci sayesinde uyumlu adlar otomatik eslenir.
-    """
-    try:
-        imza = inspect.signature(cagrilabilir)
-    except (TypeError, ValueError):
-        return {}
-    secilen: dict[str, Any] = {}
-    for ad, parametre in imza.parameters.items():
-        if ad == "self" or parametre.kind in (
-            parametre.VAR_KEYWORD,
-            parametre.VAR_POSITIONAL,
-        ):
-            continue
-        if ad in havuz:
-            secilen[ad] = havuz[ad]
-    return secilen
-
-
-def _sonuc_listesi_mi(deger: Any) -> bool:
-    """Deger, ``Sonuc`` benzeri nesnelerden olusan bir liste mi?"""
-    if not isinstance(deger, (list, tuple)) or not deger:
-        return False
-    ornek = deger[0]
-    return all(hasattr(ornek, ad) for ad in ("satir", "eslesme", "durum"))
-
-
-def _boru_ile_isle(
-    yollar: Sequence[Path],
-    defter: "PersonelDefteri",
-    defterler: "Defterler",
-    harita: dict[str, dict[str, str]],
-    esik: float,
-) -> list["Sonuc"] | None:
-    """``masraf.boru.Boru`` varsa onu kullanir; uyumsuzsa None doner."""
-    if BORU_SINIFI is None:
-        return None
-    havuz = {
-        "defter": defter,
-        "personel": defter,
-        "personel_defteri": defter,
-        "defterler": defterler,
-        "harita": harita,
-        "masraf_merkezi_haritasi": harita,
-        "harita_yolu": str(harita_yolu()),
-        "veri_kok": str(VERI_KOK),
-        "kok": str(VERI_KOK),
-        "esik": esik,
-        "guven_esigi": esik,
-    }
-    boru = BORU_SINIFI(**_uygun_argumanlar(BORU_SINIFI, havuz))
-    metot = getattr(boru, "isle", None)
-    if metot is None:
-        return None
-    yol_metinleri = [str(y) for y in yollar]
-    havuz_isle = dict(havuz)
-    havuz_isle.update(
-        {
-            "yollar": yol_metinleri,
-            "dosyalar": yol_metinleri,
-            "dosya_yollari": yol_metinleri,
-            "girdiler": yol_metinleri,
-        }
-    )
-    kwargs = _uygun_argumanlar(metot, havuz_isle)
-    ham = metot(**kwargs) if kwargs else metot(yol_metinleri)
-    if _sonuc_listesi_mi(ham):
-        return list(ham)
-    for ad in ("sonuclar", "sonuc", "kayitlar"):
-        alt = getattr(ham, ad, None)
-        if _sonuc_listesi_mi(alt):
-            return list(alt)
-    if isinstance(ham, tuple):
-        for parca in ham:
-            if _sonuc_listesi_mi(parca):
-                return list(parca)
-    return None
+def _dosya_bilgileri(yollar: Sequence[Path], sonuclar: Sequence["Sonuc"]) -> list[dict]:
+    """Her kaynak dosya icin tip ve uretilen satir sayisini ozetler."""
+    sayaclar: dict[str, int] = {}
+    for sonuc in sonuclar:
+        ad = Path(str(sonuc.satir.kaynak_dosya or "")).name
+        sayaclar[ad] = sayaclar.get(ad, 0) + 1
+    bilgiler: list[dict] = []
+    for yol in yollar:
+        p = Path(yol)
+        adet = sayaclar.get(p.name, 0)
+        bilgiler.append(
+            {
+                "dosya": p.name,
+                "tip": dosya_tipi_onbellekli(str(p), _dosya_imzasi(p)),
+                "satir": adet,
+                "durum": "OK" if adet else "SATIR YOK",
+            }
+        )
+    return bilgiler
 
 
 def isle(
@@ -627,43 +598,51 @@ def isle(
     harita: dict[str, dict[str, str]],
     esik: float,
     ilerleme: Callable[[float, str], None] | None = None,
+    boru: Any = None,
 ) -> tuple[list["Sonuc"], IslemeOzeti]:
-    """Secilen dosyalari bastan sona isler ve sonuc listesini dondurur."""
+    """Secilen dosyalari bastan sona isler ve sonuc listesini dondurur.
+
+    Boru hatti verilmisse (``masraf.boru.Boru``) o kullanilir: tum dosyalar
+    once okunur, yardimci listelerden kisi defteri beslenir, eslestirme tek
+    seferde yapilir. Boru yoksa ayni adimlarin yerel esdegeri calisir.
+    """
     ozet = IslemeOzeti(dosya_sayisi=len(yollar))
     sonuclar: list["Sonuc"] = []
 
-    if BORU_SINIFI is not None:
+    if boru is not None:
         try:
-            if ilerleme:
-                ilerleme(0.1, "Boru hatti calisiyor...")
-            ham = _boru_ile_isle(yollar, defter, defterler, harita, esik)
-            if ham:
-                sonuclar = ham
-                ozet.motor = "boru"
+            # Kullanicinin sectigi esik boru hattina aktarilir.
+            try:
+                boru.ayarlar.guven_esigi = float(esik)
+            except Exception:
+                pass
+
+            def _ilerleme_koprusu(yuzde: float, mesaj: str) -> None:
+                if ilerleme:
+                    ilerleme(float(yuzde) / 100.0, str(mesaj))
+
+            sonuclar = list(boru.isle([str(y) for y in yollar], _ilerleme_koprusu))
+            ozet.motor = "boru"
+            ozet.hatalar = list(getattr(boru, "hatalar", []) or [])
+            ozet.notlar = list(getattr(boru, "uyarilar", []) or [])
+            try:
+                ozet.boru_ozeti = boru.ozet(sonuclar) if sonuclar else {}
+            except Exception:
+                ozet.boru_ozeti = {}
+            ozet.dosya_bilgileri = _dosya_bilgileri(yollar, sonuclar)
         except Exception as hata:
+            sonuclar = []
             ozet.notlar.append(
-                f"Boru modulu kullanilamadi, yerel isleme yapildi ({hata})."
+                f"Boru hatti calistirilamadi, yerel isleme yapildi ({hata})."
             )
 
-    if not sonuclar:
+    if not sonuclar and ozet.motor != "boru":
         satirlar, bilgiler, hatalar = dosyalari_oku(yollar, ilerleme)
         ozet.dosya_bilgileri = bilgiler
-        ozet.hatalar = hatalar
+        ozet.hatalar.extend(hatalar)
         if ilerleme:
             ilerleme(0.7, "Kisiler personel verisiyle eslestiriliyor...")
         sonuclar = sonuclari_uret(satirlar, defter, defterler, harita, esik)
-    elif not ozet.dosya_bilgileri:
-        for yol in yollar:
-            p = Path(yol)
-            ozet.dosya_bilgileri.append(
-                {
-                    "dosya": p.name,
-                    "tip": dosya_tipi_onbellekli(str(p), _dosya_imzasi(p)),
-                    "satir": sum(1 for s in sonuclar if s.satir.kaynak_dosya
-                                 and Path(str(s.satir.kaynak_dosya)).name == p.name),
-                    "durum": "OK",
-                }
-            )
 
     if ilerleme:
         ilerleme(1.0, "Tamamlandi")
@@ -766,37 +745,26 @@ def tabloyu_boya(df: pd.DataFrame):
         return df
 
 
-def excel_uret(sonuclar: Sequence["Sonuc"], hedef: Path) -> Path:
+def excel_uret(
+    sonuclar: Sequence["Sonuc"], hedef: Path, boru_ozeti: dict | None = None
+) -> Path:
     """Sonuclari 4 sayfali Excel dosyasina yazar.
 
-    Once ``masraf.cikti`` modulu denenir (varsa), yoksa buradaki yerel yazici
-    kullanilir. Sayfalar: Sonuc / Incele / Eslesmedi / Ozet.
+    Once ``masraf.cikti.excel_yaz`` denenir (renkli, bicimli, gerekce
+    kolonlariyla birlikte); modul yoksa buradaki yerel yazici kullanilir.
+    Sayfalar her iki durumda da: Sonuc / Incele / Eslesmedi / Ozet.
     """
     hedef = Path(hedef)
     hedef.parent.mkdir(parents=True, exist_ok=True)
 
-    if CIKTI_MODULU is not None:
-        yazici = getattr(CIKTI_MODULU, "excel_yaz", None)
-        if callable(yazici):
-            try:
-                havuz = {
-                    "sonuclar": list(sonuclar),
-                    "sonuc": list(sonuclar),
-                    "kayitlar": list(sonuclar),
-                    "yol": str(hedef),
-                    "hedef": str(hedef),
-                    "dosya": str(hedef),
-                    "cikti_yolu": str(hedef),
-                }
-                kwargs = _uygun_argumanlar(yazici, havuz)
-                if kwargs:
-                    yazici(**kwargs)
-                else:
-                    yazici(list(sonuclar), str(hedef))
-                if hedef.exists():
-                    return hedef
-            except Exception:
-                pass  # Yerel yaziciya dus.
+    yazici = getattr(CIKTI_MODULU, "excel_yaz", None) if CIKTI_MODULU else None
+    if callable(yazici):
+        try:
+            yazici(list(sonuclar), str(hedef), dict(boru_ozeti or {}))
+            if hedef.exists():
+                return hedef
+        except Exception:
+            pass  # Yerel yaziciya dus.
 
     tablo = sonuc_tablosu(sonuclar)
     sayfalar = {
@@ -1012,6 +980,7 @@ def _oturum_hazirla() -> None:
         "personel_yolu": str(VARSAYILAN_PERSONEL),
         "esik": 0.90,
         "defter": None,
+        "boru": None,
         "sonuclar": [],
         "ozet": None,
         "yollar": [],
@@ -1045,7 +1014,12 @@ def _yeniden_isle() -> None:
     defterler = defterleri_al()
     harita = harita_sozlugu(harita_oku())
     sonuclar, ozet = isle(
-        [Path(y) for y in yollar], defter, defterler, harita, float(st.session_state["esik"])
+        [Path(y) for y in yollar],
+        defter,
+        defterler,
+        harita,
+        float(st.session_state["esik"]),
+        boru=st.session_state.get("boru"),
     )
     st.session_state["sonuclar"] = sonuclar
     st.session_state["ozet"] = ozet
@@ -1096,10 +1070,19 @@ def sekme_ayarlar() -> None:
         else:
             try:
                 with st.spinner("Personel verisi okunuyor (ilk okumada ~30 saniye sürebilir)..."):
-                    defter = personel_defteri_yukle(str(aday), _dosya_imzasi(aday))
+                    imza = _dosya_imzasi(aday)
+                    boru = boru_kur(str(aday), imza)
+                    defter = (
+                        boru.defter
+                        if boru is not None and getattr(boru, "defter", None) is not None
+                        else personel_defteri_yukle(str(aday), imza)
+                    )
+                st.session_state["boru"] = boru
                 st.session_state["defter"] = defter
                 st.session_state["personel_yolu"] = str(aday)
                 st.success("Personel verisi yüklendi. Bu oturumda tekrar okunmayacak.")
+                for uyari in list(getattr(boru, "uyarilar", []) or [])[:5]:
+                    st.warning(uyari)
             except Exception as hata:
                 _hata_goster(
                     "Personel verisi okunamadı. Dosyanın Excel formatında ve açık "
@@ -1244,8 +1227,8 @@ def sekme_fatura() -> None:
     yollar: list[Path] = []
     if kaynak_secim == "Dosya yükle":
         yuklenenler = st.file_uploader(
-            "Fatura / liste dosyaları (xls, xlsx, csv)",
-            type=["xls", "xlsx", "xlsm", "csv"],
+            "Fatura / liste dosyaları (xls, xlsx, csv, Outlook .msg)",
+            type=["xls", "xlsx", "xlsm", "csv", "msg"],
             accept_multiple_files=True,
             help="Birden fazla dosya seçebilirsiniz. Dosyalar sadece bu bilgisayarda işlenir.",
         )
@@ -1255,7 +1238,7 @@ def sekme_fatura() -> None:
         klasor = st.text_input(
             "Klasör yolu",
             value=str(PROJE_KOK / "ornek_veri" / "antik_travel"),
-            help="Klasördeki tüm xls/xlsx/csv dosyaları işlenir.",
+            help="Klasördeki tüm xls/xlsx/csv/msg dosyaları işlenir.",
         )
         yollar = _klasorden_topla(klasor)
         if klasor and not yollar:
@@ -1302,6 +1285,7 @@ def sekme_fatura() -> None:
                 harita,
                 float(st.session_state["esik"]),
                 ilerleme,
+                boru=st.session_state.get("boru"),
             )
             st.session_state["sonuclar"] = sonuclar
             st.session_state["ozet"] = ozet
@@ -1395,8 +1379,9 @@ def sekme_fatura() -> None:
             CIKTI_KOK.mkdir(parents=True, exist_ok=True)
             damga = datetime.now().strftime("%Y%m%d_%H%M%S")
             hedef = CIKTI_KOK / f"masraf_merkezi_{damga}.xlsx"
+            boru_ozeti = ozet.boru_ozeti if ozet is not None else {}
             with st.spinner("Excel dosyası hazırlanıyor..."):
-                excel_uret(sonuclar, hedef)
+                excel_uret(sonuclar, hedef, boru_ozeti)
             st.session_state["son_excel"] = str(hedef)
         except Exception as hata:
             _hata_goster("Excel dosyası oluşturulamadı.", hata)

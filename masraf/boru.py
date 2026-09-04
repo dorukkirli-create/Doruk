@@ -182,8 +182,8 @@ class Boru:
         Okunamayan dosya is akisini durdurmaz; hata ``self.hatalar`` listesine
         yazilir ve digerleri islenmeye devam eder.
         """
-        from masraf.okuyucular.kesif import dosya_tipini_bul, oku_tip
-        from masraf.okuyucular.genel import genel_oku
+        from masraf.okuyucular.kesif import dosya_tipini_bul
+        from masraf.okuyucular.kesif import oku as kesif_oku
 
         satirlar: list[GiderSatiri] = []
         toplam = max(1, len(dosya_yollari))
@@ -192,9 +192,9 @@ class Boru:
             _bildir(ilerleme, 5 + 25 * (sira - 1) / toplam, f"Okunuyor: {hedef.name}")
             try:
                 tip = dosya_tipini_bul(hedef)
-                dosya_satirlari = oku_tip(hedef, tip)
-                if not dosya_satirlari and tip != "genel":
-                    dosya_satirlari = genel_oku(hedef)
+                # kesif.oku Outlook mesajlarini, referans listelerini ve
+                # ozel parser bos donerse genel parser'a dusmeyi kendi ele alir.
+                dosya_satirlari = kesif_oku(hedef)
                 if not dosya_satirlari:
                     self.hatalar.append(
                         f"{hedef.name}: dosyadan hic gider satiri cikarilamadi "
@@ -216,22 +216,60 @@ class Boru:
         _bildir(ilerleme, 1, "Personel verisi yukleniyor")
         self.hazirla()
 
-        satirlar = self.oku(dosya_yollari, ilerleme)
-        if not satirlar:
+        tum_satirlar = self.oku(dosya_yollari, ilerleme)
+        if not tum_satirlar:
             _bildir(ilerleme, 100, "Islenecek satir bulunamadi")
+            return []
+
+        # Referans listeleri (ferdi kaza sigorta kutugu gibi) fatura degildir.
+        # Defter beslemesine girerler ama gider satiri olarak islenmezler;
+        # aksi halde binlerce sahte satir uretilir.
+        satirlar = [s for s in tum_satirlar if s.kaynak_tip != "referans_liste"]
+        referanslar = [s for s in tum_satirlar if s.kaynak_tip == "referans_liste"]
+        if referanslar:
+            self.hatalar.append(
+                f"{len(referanslar)} satir kisi kutugu olarak ayrildi ve gider "
+                "satiri sayilmadi; defter beslemesinde kullanildi."
+            )
+        if not satirlar:
+            _bildir(ilerleme, 100, "Islenecek gider satiri bulunamadi")
             return []
 
         # Yardimci listelerden ek kisi defterini besle (sicili olmayan kisiler).
         if self.ayarlar.defterleri_besle:
-            _bildir(ilerleme, 32, "Yardimci listelerden kisi defteri besleniyor")
+            _bildir(ilerleme, 30, "Yardimci listelerden kisi defteri besleniyor")
             try:
-                besleme = self.defterler.yardimci_kaynaktan_besle(list(satirlar))
+                besleme = self.defterler.yardimci_kaynaktan_besle(list(tum_satirlar))
                 if self.ayarlar.ogrenmeyi_kaydet and (
                     besleme.get("ek_kisi") or besleme.get("tckn_kopru")
                 ):
                     self.defterler.kaydet()
             except Exception as hata:  # noqa: BLE001
                 self.hatalar.append(f"Kisi defteri beslenemedi: {hata}")
+
+            # TC kimlik koprusunu ve dogum tarihiyle dogrulanmis aliaslari turet.
+            # Personel ana verisinde TC kimlik yok; kopru ad soyad ve dogum
+            # tarihi uzerinden kurulur ve kalici olarak saklanir.
+            _bildir(ilerleme, 34, "TC kimlik koprusu ve alias defteri turetiliyor")
+            try:
+                from masraf.kopru import (
+                    alias_turet,
+                    aliaslari_deftere_yaz,
+                    kopru_turet,
+                    kopruyu_deftere_yaz,
+                )
+
+                yeni_kopru = kopruyu_deftere_yaz(
+                    kopru_turet(tum_satirlar, self.defter), self.defterler)
+                yeni_alias = aliaslari_deftere_yaz(
+                    alias_turet(tum_satirlar, self.defter), self.defterler)
+                if yeni_kopru or yeni_alias:
+                    self.hatalar.append(
+                        f"Ogrenildi: {yeni_kopru} yeni TC kimlik koprusu, "
+                        f"{yeni_alias} yeni dogum tarihiyle dogrulanmis alias."
+                    )
+            except Exception as hata:  # noqa: BLE001
+                self.hatalar.append(f"Kopru turetilemedi: {hata}")
 
         _bildir(ilerleme, 38, "Eslestirme motoru kuruluyor")
         self._eslestirici_kur()

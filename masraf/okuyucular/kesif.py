@@ -40,8 +40,13 @@ PARSERLAR: dict[str, Callable[[str | Path], list[GiderSatiri]]] = {
     "energo_arabulucu": arabulucu_oku,
     "energo_saglik": saglik_oku,
     "koc_katilimci": koc_katilimci_oku,
+    "referans_liste": genel_oku,
     "genel": genel_oku,
 }
+
+# Bir dosyanin gider satiri mi yoksa kisi kutugu mu oldugunu ayirt eden esik.
+# Kutuklerde hicbir satirda tutar yoktur; faturalarda neredeyse her satirda vardir.
+_KUTUK_SATIR_ESIGI = 200
 
 # Kesif icin okunacak satir sayisi (dosyanin tamami okunmaz, hizli kalir).
 _KESIF_SATIR_SINIRI = 15
@@ -79,6 +84,12 @@ def dosya_tipini_bul(yol: str | Path) -> str:
     veya hicbir ipucu eslesmiyorsa 'genel' doner (istisna firlatmaz).
     """
     p = Path(yol)
+
+    # 0) Outlook mesaji: icerik degil uzanti belirler. Mesaj bir kapsayicidir,
+    #    icindeki tablo dosyalari ayri ayri tespit edilir.
+    if p.suffix.lower() == ".msg":
+        return "outlook_msg"
+
     try:
         metinler, blob = _ipuclarini_topla(p)
     except Exception:
@@ -112,6 +123,14 @@ def dosya_tipini_bul(yol: str | Path) -> str:
     if "id" in metinler and _iceriyor(blob, "alt fonksiyon"):
         return "koc_katilimci"
 
+    # 7) Ferdi kaza sigorta listesi ve benzeri PERSONEL KUTUKLERI.
+    #    Bunlar fatura degil, kisi kutugudur: sicil ve masraf merkezi tasir
+    #    ama tutar tasimaz. Gider satiri olarak islenirlerse binlerce sahte
+    #    satir uretirler; ayri tip olarak isaretlenip defter beslemesine
+    #    yonlendirilirler.
+    if _iceriyor(blob, "sicil no") and _iceriyor(blob, "masraf merkezi"):
+        return "referans_liste"
+
     return "genel"
 
 
@@ -124,15 +143,62 @@ def oku_tip(yol: str | Path, tip: str) -> list[GiderSatiri]:
     return PARSERLAR[tip](yol)
 
 
-def oku(yol: str | Path) -> list[GiderSatiri]:
+def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderSatiri]:
+    """Outlook mesajindaki tum tablo eklerini cikarir ve tek tek okur.
+
+    Mesaj bir kapsayicidir: icinde baska mesajlar, zip arsivleri ve Excel
+    dosyalari olabilir. Cikarilan her dosyanin tipi ayrica tespit edilir.
+    Her satira hangi mailden geldigi `ek['mail_konusu']` icinde yazilir.
+    """
+    from tempfile import mkdtemp
+
+    from masraf.okuyucular.posta import msg_aciklarini_cikar
+
+    hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="masraf_msg_"))
+    satirlar: list[GiderSatiri] = []
+    for ek in msg_aciklarini_cikar(yol, hedef):
+        try:
+            ic_satirlar = oku(ek.yol)
+        except Exception:
+            continue
+        for s in ic_satirlar:
+            # Kaynak dosya adini mesaj + ek olarak yaz, izlenebilirlik icin.
+            s.kaynak_dosya = f"{yol.name} > {ek.ad}"
+            if isinstance(s.ek, dict):
+                s.ek.setdefault("mail_konusu", ek.mail_konusu)
+                s.ek.setdefault("mail_gonderen", ek.mail_gonderen)
+                s.ek.setdefault("mail_tarihi", ek.mail_tarihi)
+                s.ek.setdefault("mail_zinciri", ek.kaynak_aciklamasi)
+        satirlar.extend(ic_satirlar)
+    return satirlar
+
+
+def oku(yol: str | Path, cikarma_dizini: str | Path | None = None) -> list[GiderSatiri]:
     """Dosya tipini bulur ve dogru parser'i calistirir.
+
+    Outlook mesajlari kapsayici olarak ele alinir: icindeki tum tablo ekleri
+    cikarilip ayri ayri okunur ve tek listede birlestirilir.
 
     Ozel parser hic satir uretmezse (sablon beklenenden farkliysa) genel
     parser'a duser; boylece bilinmeyen bir surum sessizce bos sonuc vermez.
     """
     p = Path(yol)
     tip = dosya_tipini_bul(p)
+    if tip == "outlook_msg":
+        return _msg_oku(p, cikarma_dizini)
     satirlar = oku_tip(p, tip)
     if not satirlar and tip != "genel":
         satirlar = genel_oku(p)
+
+    # Guvenlik agi: cok satirli ve hicbir satirinda tutar olmayan bir dosya
+    # fatura degil kisi kutugudur. Gider olarak islenirse sahte satir uretir.
+    if (tip == "genel" and len(satirlar) >= _KUTUK_SATIR_ESIGI
+            and not any(s.tutar is not None for s in satirlar)):
+        tip = "referans_liste"
+
+    if tip == "referans_liste":
+        for s in satirlar:
+            s.kaynak_tip = "referans_liste"
+            if isinstance(s.ek, dict):
+                s.ek["referans_liste"] = True
     return satirlar
