@@ -58,6 +58,7 @@ from masraf.metin import (
     bitisik_ad_ac,
     isim_normalize,
     kisi_metnini_temizle,
+    rus_disi_soyad_erkek_hali,
     translit_varyantlari,
 )
 from masraf.modeller import (
@@ -117,6 +118,17 @@ NADIR_SOYAD_SINIRI = 8
 #: konumdan almak icin kullanilir.
 SOYAD_ONDE_TIPLERI: frozenset[str] = frozenset({"Bilet"})
 
+#: Aile kuralinda bir tokenin "belirgin bicimde soyad" sayilmasi icin gereken
+#: soyad olasiligi. Personel verisinde isimler 'SOYAD AD' sirali oldugundan bu
+#: oran tokenin ilk konumda gecme sikligidir: 'GOZUKARA' 1,00 iken 'HASAN'
+#: 0,02 civarindadir.
+AILE_SOYAD_BELIRGIN = 0.50
+
+#: Ote uc belirgin bicimde soyad iken bu esigin altinda kalan uc tamamen
+#: elenir. 'HASAN HUSEYIN GOZUKARA' satirinda 'HASAN' bu kurala takilir ve
+#: soyadi HASAN olan alakasiz calisanlara baglanma hatasi onlenir.
+AILE_SOYAD_ASGARI = 0.10
+
 
 def durum_belirle(eslesme: Eslesme) -> str:
     """Bir eslesmenin hangi cikti sayfasina gidecegini soyler.
@@ -168,6 +180,12 @@ class Eslestirici:
         for isim, tokenlar in self._isim_tokenlar.items():
             for token in tokenlar:
                 self._token_isimler.setdefault(token, []).append(isim)
+        # soyad (ilk token) -> o soyadi tasiyan isimler. Personel verisinde
+        # isimler 'SOYAD AD' sirali oldugu icin bu indeks bir tokenin soyad
+        # olma olasiligini olcmeye yarar (bkz. _soyad_olasiligi).
+        self._soyad_isimler: dict[str, list[str]] = {}
+        for isim in self._isim_siciller:
+            self._soyad_isimler.setdefault(isim.split(" ", 1)[0], []).append(isim)
         # onek aramasi icin sirali token listesi
         self._tokenlar_sirali: list[str] = sorted(self._token_isimler)
         self._sozluk: set[str] = set(self._tokenlar_sirali)
@@ -752,112 +770,203 @@ class Eslestirici:
             aday_siciller=[],
         )
 
+    def _soyad_olasiligi(self, token: str) -> float:
+        """Bir tokenin SOYAD olma olasiligi (0.0 - 1.0).
+
+        Personel ana verisinde isimler 'SOYAD AD' sirasindadir, yani bir
+        tokenin ilk konumda gecme orani onun ne kadar soyad oldugunu soyler.
+        'GOZUKARA' yalnizca soyad olarak gecer (1,00); 'HASAN' yuzlerce isimde
+        ad olarak gecer, soyad olarak yalnizca birkacinda (~0,02).
+
+        Bu olcu, gider tipinden gelen "bilet satirlarinda soyad ONDEDIR"
+        varsayimi yanildiginda dogru tokeni secmeyi saglar.
+        """
+        toplam = self._siklik(token)
+        if not toplam:
+            return 0.0
+        return len(self._soyad_isimler.get(token, ())) / toplam
+
+    def _aile_adaylari(self, soyad: str, tokenlar: frozenset[str]) -> tuple[list[str], str]:
+        """Bir soyad tokeni icin aile adayi sicilleri toplar.
+
+        Dogrudan arama sonuc vermezse Rusca kadin soyadi eki geri cevrilir
+        ('NOVOSELOVA' -> 'NOVOSELOV'); uretilen erkek hali personel soyad
+        indeksinde GERCEKTEN varsa kullanilir, yoksa atilir.
+
+        Returns:
+            (aday siciller, kullanilan soyad)
+        """
+        kullanilan = soyad
+        adaylar = _tekil(self._defter.soyad_ile_adaylar(soyad))
+        if not adaylar:
+            erkek = rus_disi_soyad_erkek_hali(soyad)
+            if erkek:
+                bulunan = _tekil(self._defter.soyad_ile_adaylar(erkek))
+                if bulunan:
+                    adaylar, kullanilan = bulunan, erkek
+        # Ismi faturadakiyle birebir ayni olanlar zaten onceki adimlarda
+        # denendi; burada sadece FARKLI kisiler kalmali.
+        adaylar = [s for s in adaylar if self._kayit_tokenlari(s) != tokenlar]
+        return adaylar, kullanilan
+
+    def _aile_kaniti(
+        self, soyad: str, tokenlar: frozenset[str]
+    ) -> tuple[int, Eslesme] | None:
+        """Tek bir soyad adayi icin kanit kademesini ve eslesmeyi uretir.
+
+        Returns:
+            (kanit kademesi, Eslesme) veya aday yoksa None. Kanit kademesi
+            buyudukce kimlik tespiti guclenir:
+            3 = ayni dosyada kesin eslesen soyadas, 2 = tek calisan,
+            1 = coklu aday ama hepsi ayni gorev yerinde, 0 = belirsiz.
+        """
+        adaylar, kullanilan = self._aile_adaylari(soyad, tokenlar)
+        if not adaylar:
+            return None
+        cevrildi = kullanilan != soyad
+        ek_not = (
+            f" ('{soyad}' Rusca kadin soyadi eki cozulerek '{kullanilan}' okundu)"
+            if cevrildi else ""
+        )
+
+        # Soyadi tasiyan calisan sayisi: kanit kurallarinin gecerlilik olcusu.
+        nadir = len(adaylar) <= NADIR_SOYAD_SINIRI
+
+        # Ayni dosyada kesin eslesen bir calisan varsa aile bagi kanitlanir.
+        # Yaygin soyadlarda bu kanit gecersizdir (tesadufen ayni soyadli
+        # baska bir calisan da seyahat etmis olabilir).
+        kesinler = self._kesin_soyadlar.get(kullanilan, set()) if nadir else set()
+        ortak_kesin = [s for s in adaylar if s in kesinler]
+        if len(ortak_kesin) == 1:
+            sicil = ortak_kesin[0]
+            return 3, Eslesme(
+                sicil=sicil,
+                ad_soyad=self._ad(sicil),
+                yontem="aile",
+                guven=0.60,
+                aday_sayisi=len(adaylar),
+                aciklama=(
+                    f"'{kullanilan}' soyadli calisan {self._etiket(sicil)} ayni dosyada "
+                    f"kesin eslesti; bu satir onun aile bireyi olabilir{ek_not}. Masraf "
+                    "merkezi o calisandan devralindi, dogrulanmali."
+                ),
+                aday_siciller=adaylar[:AZAMI_ADAY],
+            )
+
+        if len(adaylar) == 1:
+            sicil = adaylar[0]
+            return 2, Eslesme(
+                sicil=sicil,
+                ad_soyad=self._ad(sicil),
+                yontem="aile",
+                guven=0.50,
+                aday_sayisi=1,
+                aciklama=(
+                    f"Soyadi '{kullanilan}' olan tek calisan {self._etiket(sicil)} ile "
+                    f"eslesiyor, ad tokenlari tutmuyor: aile bireyi olabilir{ek_not}. "
+                    "Masraf merkezi o calisandan devralindi, dogrulanmali."
+                ),
+                aday_siciller=[sicil],
+            )
+
+        ortak = self._ortak_gorev_yeri(adaylar)
+        if ortak and nadir:
+            sicil = adaylar[0]
+            return 1, Eslesme(
+                sicil=sicil,
+                ad_soyad=self._ad(sicil),
+                yontem="aile",
+                guven=0.45,
+                aday_sayisi=len(adaylar),
+                aciklama=(
+                    f"Soyadi '{kullanilan}' olan {len(adaylar)} calisan var; hepsi ayni "
+                    f"gorev yerinde ({ortak}), bu yuzden masraf merkezi kesin{ek_not}. "
+                    "Aile bireyi olabilir, kisi dogrulanmali."
+                ),
+                aday_siciller=adaylar[:AZAMI_ADAY],
+            )
+
+        return 0, Eslesme(
+            sicil=None,
+            ad_soyad=None,
+            yontem="aile",
+            guven=0.30,
+            aday_sayisi=len(adaylar),
+            aciklama=(
+                f"Soyadi '{kullanilan}' olan {len(adaylar)} farkli calisan var ve gorev "
+                f"yerleri farkli; aile bireyi olabilir ama hangi calisana ait oldugu "
+                f"belirlenemedi{ek_not}. Adaylar: "
+                + ", ".join(self._etiket(s) for s in adaylar[:4])
+            ),
+            aday_siciller=adaylar[:AZAMI_ADAY],
+        )
+
     def _adim_aile(
         self, satir: GiderSatiri, norm: str, tokenlar: frozenset[str]
     ) -> Eslesme | None:
         """Soyadi bir calisanla eslesen aile bireylerini isaretler.
 
-        Soyadin hangi tokende oldugu gider tipinden bilinir: bilet satirlari
-        PNR bicimindedir ('SOYAD AD'), otel / vize satirlari 'AD SOYAD'
-        bicimindedir. Yanlis tokeni soyad sanip alakasiz bir calisana baglamayi
-        onlemek icin yalnizca dogru konum denenir; gider tipi bilinmiyorsa iki
-        konum da denenir.
+        Soyadin hangi tokende oldugunu iki kaynak birlikte belirler:
+
+        1. GIDER TIPI. Bilet satirlari PNR bicimindedir ('SOYAD AD'), otel /
+           vize satirlari 'AD SOYAD' bicimindedir. Bu yalnizca bir TERCIHTIR.
+        2. VERININ KENDISI. Her iki uctaki token icin ``_soyad_olasiligi``
+           hesaplanir. Gider tipi yaniltici olabilir: elle dagitilmis seyahat
+           dosyasinda bilet satirlari PNR degil duz 'AD SOYAD' yazilidir, bu
+           yuzden 'HASAN HUSEYIN GOZUKARA' satirinda tercih edilen ilk token
+           ('HASAN') soyad DEGILDIR.
+
+        Iki uc de degerlendirilir, en guclu kanit kazanir. Bir uctaki token
+        soyad olma olasiligi cok dusukken ote uc belirgin bicimde soyad ise
+        zayif uc tamamen elenir; boylece 'HASAN' soyadli alakasiz bir calisana
+        baglanma hatasi olusmaz.
         """
         parcalar = norm.split(" ")
         if len(parcalar) < 2:
             return None
+
         if satir.gider_tipi in SOYAD_ONDE_TIPLERI:
-            konumlar = [(parcalar[0], "ilk")]
+            tercih = "ilk"
         elif satir.gider_tipi:
-            konumlar = [(parcalar[-1], "son")]
+            tercih = "son"
         else:
-            konumlar = [(parcalar[0], "ilk"), (parcalar[-1], "son")]
+            tercih = ""
 
-        for soyad, _konum in konumlar:
-            if len(soyad) < 3:
+        uclar = [(parcalar[0], "ilk"), (parcalar[-1], "son")]
+        uclar = [(t, k) for t, k in uclar if len(t) >= 3]
+        if not uclar:
+            return None
+
+        olasiliklar = {konum: self._soyad_olasiligi(token) for token, konum in uclar}
+        en_yuksek = max(olasiliklar.values(), default=0.0)
+
+        adaylar: list[tuple[int, float, int, Eslesme]] = []
+        for token, konum in uclar:
+            olasilik = olasiliklar[konum]
+            tercihli = not tercih or konum == tercih
+            # Gider tipinin gosterdigi ucun DISINDAKI uc ancak belirgin bicimde
+            # soyad ise degerlendirilir. Aksi halde 'TRAPEZNIKOVA POLINA'
+            # satirinda Rusca bir AD olan 'POLINA' soyad sanilir ve alakasiz
+            # bir calisana baglanir.
+            if not tercihli and olasilik < AILE_SOYAD_BELIRGIN:
                 continue
-            adaylar = _tekil(self._defter.soyad_ile_adaylar(soyad))
-            # Ismi faturadakiyle birebir ayni olanlar zaten onceki adimlarda
-            # denendi; burada sadece FARKLI kisiler kalmali.
-            adaylar = [
-                sicil
-                for sicil in adaylar
-                if self._kayit_tokenlari(sicil) != tokenlar
-            ]
-            if not adaylar:
+            # Ote uc belirgin bicimde soyad iken bu uc soyad degilse ele.
+            if (
+                en_yuksek >= AILE_SOYAD_BELIRGIN
+                and olasilik < AILE_SOYAD_ASGARI
+                and olasilik < en_yuksek
+            ):
                 continue
+            kanit = self._aile_kaniti(token, tokenlar)
+            if kanit is None:
+                continue
+            kademe, eslesme = kanit
+            adaylar.append((kademe, olasilik, 1 if konum == tercih else 0, eslesme))
 
-            # Soyadi tasiyan calisan sayisi: kanit kurallarinin gecerlilik olcusu.
-            nadir = len(adaylar) <= NADIR_SOYAD_SINIRI
-
-            # Ayni dosyada kesin eslesen bir calisan varsa aile bagi kanitlanir.
-            # Yaygin soyadlarda bu kanit gecersizdir (tesadufen ayni soyadli
-            # baska bir calisan da seyahat etmis olabilir).
-            kesinler = self._kesin_soyadlar.get(soyad, set()) if nadir else set()
-            ortak_kesin = [s for s in adaylar if s in kesinler]
-            if len(ortak_kesin) == 1:
-                sicil = ortak_kesin[0]
-                return Eslesme(
-                    sicil=sicil,
-                    ad_soyad=self._ad(sicil),
-                    yontem="aile",
-                    guven=0.60,
-                    aday_sayisi=len(adaylar),
-                    aciklama=(
-                        f"'{soyad}' soyadli calisan {self._etiket(sicil)} ayni dosyada "
-                        "kesin eslesti; bu satir onun aile bireyi olabilir. Masraf "
-                        "merkezi o calisandan devralindi, dogrulanmali."
-                    ),
-                    aday_siciller=adaylar[:AZAMI_ADAY],
-                )
-
-            if len(adaylar) == 1:
-                sicil = adaylar[0]
-                return Eslesme(
-                    sicil=sicil,
-                    ad_soyad=self._ad(sicil),
-                    yontem="aile",
-                    guven=0.50,
-                    aday_sayisi=1,
-                    aciklama=(
-                        f"Soyadi '{soyad}' olan tek calisan {self._etiket(sicil)} ile "
-                        "eslesiyor, ad tokenlari tutmuyor: aile bireyi olabilir. Masraf "
-                        "merkezi o calisandan devralindi, dogrulanmali."
-                    ),
-                    aday_siciller=[sicil],
-                )
-
-            ortak = self._ortak_gorev_yeri(adaylar)
-            if ortak and nadir:
-                sicil = adaylar[0]
-                return Eslesme(
-                    sicil=sicil,
-                    ad_soyad=self._ad(sicil),
-                    yontem="aile",
-                    guven=0.45,
-                    aday_sayisi=len(adaylar),
-                    aciklama=(
-                        f"Soyadi '{soyad}' olan {len(adaylar)} calisan var; hepsi ayni "
-                        f"gorev yerinde ({ortak}), bu yuzden masraf merkezi kesin. Aile "
-                        "bireyi olabilir, kisi dogrulanmali."
-                    ),
-                    aday_siciller=adaylar[:AZAMI_ADAY],
-                )
-            return Eslesme(
-                sicil=None,
-                ad_soyad=None,
-                yontem="aile",
-                guven=0.30,
-                aday_sayisi=len(adaylar),
-                aciklama=(
-                    f"Soyadi '{soyad}' olan {len(adaylar)} farkli calisan var ve gorev "
-                    "yerleri farkli; aile bireyi olabilir ama hangi calisana ait oldugu "
-                    "belirlenemedi. Adaylar: "
-                    + ", ".join(self._etiket(s) for s in adaylar[:4])
-                ),
-                aday_siciller=adaylar[:AZAMI_ADAY],
-            )
-        return None
+        if not adaylar:
+            return None
+        adaylar.sort(key=lambda k: (k[0], k[1], k[2]), reverse=True)
+        return adaylar[0][3]
 
     def _kayit_tokenlari(self, sicil: str) -> frozenset[str]:
         kayit = self._defter.sicil_ile(sicil)

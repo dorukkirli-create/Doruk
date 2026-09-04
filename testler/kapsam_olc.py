@@ -52,8 +52,20 @@ if str(KOK) not in sys.path:
 from rapidfuzz import fuzz, process  # noqa: E402
 
 from masraf.boru import Boru, CalismaAyarlari  # noqa: E402
+import masraf.eslestirici as _eslestirici  # noqa: E402
 from masraf.kayit import PersonelDefteri  # noqa: E402
-from masraf.metin import isim_normalize, isim_tokenlari, translit_varyantlari  # noqa: E402
+
+#: Eslestiricinin "bu token gercekten soyad" esigi. Olcum, motorun kullandigi
+#: ESIGIN AYNISINI kullanmalidir; aksi halde motorun bilerek reddettigi adlar
+#: (GOKHAN, CAN, POLINA) "algoritma sorunu" olarak yanlis raporlanir. Esik
+#: eslestiricide tanimli degilse (eski surum) yerel varsayilan kullanilir.
+AILE_SOYAD_BELIRGIN: float = getattr(_eslestirici, "AILE_SOYAD_BELIRGIN", 0.50)
+from masraf.metin import (  # noqa: E402
+    isim_normalize,
+    isim_tokenlari,
+    rus_disi_soyad_erkek_hali,
+    translit_varyantlari,
+)
 from masraf.modeller import (  # noqa: E402
     DURUM_ESLESMEDI,
     DURUM_INCELE,
@@ -70,6 +82,7 @@ __all__ = [
     "olc",
     "elle_ara",
     "rapor_metni",
+    "karsilastir",
 ]
 
 #: Olcume girecek ornek dosyalar (personel ana verisi haric).
@@ -96,11 +109,18 @@ ADAY_SAYISI = 3
 KATEGORI_PARSER = "PARSER"
 KATEGORI_VERI = "VERI_KAPSAMI"
 KATEGORI_ALGORITMA = "ALGORITMA"
+KATEGORI_KISISIZ = "KISISIZ"
+
+#: Kategori sirasi: en degerliden (duzeltilebilir) en degersize (kusur degil).
+KATEGORILER: tuple[str, ...] = (
+    KATEGORI_ALGORITMA, KATEGORI_PARSER, KATEGORI_VERI, KATEGORI_KISISIZ,
+)
 
 KATEGORI_ACIKLAMA: dict[str, str] = {
-    KATEGORI_PARSER: "Kisi adi cikarilamadi (okuyucu zayif) - DUZELTILEBILIR",
-    KATEGORI_VERI: "Kisi personel ana verisinde yok - DUZELTILEMEZ",
     KATEGORI_ALGORITMA: "Kisi veride var, eslestirici bulamadi - DUZELTILEBILIR",
+    KATEGORI_PARSER: "Satirda kisi var ama cikarilamadi - DUZELTILEBILIR",
+    KATEGORI_VERI: "Kisi personel ana verisinde yok - DUZELTILEMEZ",
+    KATEGORI_KISISIZ: "Satirda kisi YOK (kurumsal gider) - KUSUR DEGIL",
 }
 
 
@@ -115,6 +135,9 @@ class DosyaOlcumu:
 
     dosya: str
     tip: str
+    #: Bu dosya bir Outlook mesajinin EKI ise mesajin adi; degilse None.
+    #: Ekler toplamlara KATILMAZ: ayni faturayi ikinci kez saymamak icin.
+    kapsayici: str | None = None
     toplam: int = 0
     kisi_cikarilan: int = 0
     sicil_bulunan: int = 0
@@ -143,6 +166,7 @@ class DosyaOlcumu:
         return {
             "dosya": self.dosya,
             "tip": self.tip,
+            "kapsayici": self.kapsayici,
             "toplam": self.toplam,
             "kisi_cikarilan": self.kisi_cikarilan,
             "sicil_bulunan": self.sicil_bulunan,
@@ -165,6 +189,8 @@ class EslesmeyenVaka:
     aciklama: str
     kategori: str
     gerekce: str
+    #: Outlook mesajinin eki ise mesaj adi; kategori dagilimina GIRMEZ.
+    kapsayici: str | None = None
     adaylar: list[tuple[str, str, float]] = field(default_factory=list)
 
     def sozluk(self) -> dict[str, Any]:
@@ -175,6 +201,7 @@ class EslesmeyenVaka:
             "aciklama": self.aciklama[:160],
             "kategori": self.kategori,
             "gerekce": self.gerekce,
+            "kapsayici": self.kapsayici,
             "adaylar": [
                 {"sicil": sicil, "ad_soyad": ad, "skor": round(skor, 1)}
                 for sicil, ad, skor in self.adaylar
@@ -193,24 +220,39 @@ class Olcum:
     hatalar: list[str] = field(default_factory=list)
 
     @property
+    def ana_dosyalar(self) -> list[DosyaOlcumu]:
+        """Toplamlara giren dosyalar: mesaj ekleri haric.
+
+        ``ornek_mail.msg`` ayni seyahat ve saglik faturalarini EK olarak
+        yeniden tasir. Ekler toplama katilirsa her satir iki kez sayilir ve
+        oran yaniltici olur; bu yuzden ekler ayri raporlanir.
+        """
+        return [d for d in self.dosyalar if d.kapsayici is None]
+
+    @property
+    def ek_dosyalar(self) -> list[DosyaOlcumu]:
+        """Outlook mesajindan cikan ek dosyalar (ayri raporlanir)."""
+        return [d for d in self.dosyalar if d.kapsayici is not None]
+
+    @property
     def toplam(self) -> int:
-        return sum(d.toplam for d in self.dosyalar)
+        return sum(d.toplam for d in self.ana_dosyalar)
 
     @property
     def otomatik(self) -> int:
-        return sum(d.otomatik for d in self.dosyalar)
+        return sum(d.otomatik for d in self.ana_dosyalar)
 
     @property
     def incele(self) -> int:
-        return sum(d.incele for d in self.dosyalar)
+        return sum(d.incele for d in self.ana_dosyalar)
 
     @property
     def eslesmedi(self) -> int:
-        return sum(d.eslesmedi for d in self.dosyalar)
+        return sum(d.eslesmedi for d in self.ana_dosyalar)
 
     @property
     def kisi_cikarilan(self) -> int:
-        return sum(d.kisi_cikarilan for d in self.dosyalar)
+        return sum(d.kisi_cikarilan for d in self.ana_dosyalar)
 
     @property
     def otomasyon_orani(self) -> float:
@@ -223,10 +265,44 @@ class Olcum:
         return round((self.otomatik + self.incele) / self.toplam * 100, 1)
 
     @property
+    def ana_vakalar(self) -> list[EslesmeyenVaka]:
+        """Kategori dagilimina giren vakalar: mesaj eklerininki haric."""
+        return [v for v in self.vakalar if v.kapsayici is None]
+
+    @property
     def kategori_dagilimi(self) -> dict[str, int]:
-        sayac = Counter(v.kategori for v in self.vakalar)
-        return {ad: sayac.get(ad, 0) for ad in
-                (KATEGORI_PARSER, KATEGORI_VERI, KATEGORI_ALGORITMA)}
+        sayac = Counter(v.kategori for v in self.ana_vakalar)
+        return {ad: sayac.get(ad, 0) for ad in KATEGORILER}
+
+    @classmethod
+    def sozlukten(cls, veri: dict[str, Any]) -> "Olcum":
+        """``sozluk()`` ciktisindan olcumu geri kurar (onceki/sonraki icin).
+
+        Yalnizca karsilastirmada kullanilan alanlar geri yuklenir; adaylar gibi
+        detaylar JSON'da kalir.
+        """
+        olcum = cls(etiket=str(veri.get("etiket") or "olcum"),
+                    yontem_dagilimi=dict(veri.get("yontem_dagilimi") or {}),
+                    hatalar=list(veri.get("hatalar") or []))
+        for ham in veri.get("dosyalar") or []:
+            olcum.dosyalar.append(DosyaOlcumu(
+                dosya=ham["dosya"], tip=ham.get("tip", "-"),
+                kapsayici=ham.get("kapsayici"),
+                toplam=int(ham.get("toplam", 0)),
+                kisi_cikarilan=int(ham.get("kisi_cikarilan", 0)),
+                sicil_bulunan=int(ham.get("sicil_bulunan", 0)),
+                otomatik=int(ham.get("otomatik", 0)),
+                incele=int(ham.get("incele", 0)),
+                eslesmedi=int(ham.get("eslesmedi", 0)),
+            ))
+        for ham in veri.get("vakalar") or []:
+            olcum.vakalar.append(EslesmeyenVaka(
+                dosya=ham["dosya"], satir_no=int(ham.get("satir_no", 0)),
+                kisi_ham=ham.get("kisi_ham", ""), aciklama=ham.get("aciklama", ""),
+                kategori=ham.get("kategori", KATEGORI_VERI),
+                gerekce=ham.get("gerekce", ""), kapsayici=ham.get("kapsayici"),
+            ))
+        return olcum
 
     def sozluk(self) -> dict[str, Any]:
         return {
@@ -265,12 +341,66 @@ class ElleArayici:
         # oldugu icin bu indekste zaten yoktur.
         self._isimler: dict[str, list[str]] = dict(defter._isim_index)
         self._havuz: list[str] = list(self._isimler.keys())
+        # Token -> tokeni iceren isim sayisi ve ILK konumda (soyad) gecen isim
+        # sayisi. Ikisinin orani bir tokenin soyad olma olasiligidir; eslestirici
+        # ile AYNI olcuyu kullanmak sart, aksi halde motorun bilerek reddettigi
+        # 'GOKHAN' / 'CAN' gibi ADLAR "algoritma sorunu" sanilir.
+        self._token_sayisi: dict[str, int] = {}
+        self._soyad_sayisi: dict[str, int] = {}
+        for isim in self._havuz:
+            parcalar = isim.split(" ")
+            for token in set(parcalar):
+                self._token_sayisi[token] = self._token_sayisi.get(token, 0) + 1
+            self._soyad_sayisi[parcalar[0]] = self._soyad_sayisi.get(parcalar[0], 0) + 1
+
+    def soyad_olasiligi(self, token: str) -> float:
+        """Tokenin soyad olma olasiligi (bkz. Eslestirici._soyad_olasiligi)."""
+        toplam = self._token_sayisi.get(token, 0)
+        if not toplam:
+            return 0.0
+        return self._soyad_sayisi.get(token, 0) / toplam
 
     def _sicil_ad(self, isim_norm: str) -> tuple[str, str]:
         siciller = self._isimler.get(isim_norm, [])
         sicil = siciller[0] if siciller else ""
         kayit = self.defter.sicil_ile(sicil) if sicil else None
         return sicil, (kayit or {}).get("ad_soyad") or isim_norm
+
+    def isim_izi(self, aciklama: str) -> str | None:
+        """Aciklamada personel isim sozlugunden bir token geciyor mu?
+
+        Kisi adi cikarilamayan satirlar icin ayirt edicidir: aciklamada bir
+        isim izi VARSA okuyucu onu kacirmistir (PARSER sorunu); hicbir iz
+        yoksa satir zaten kisi barindirmayan kurumsal bir giderdir.
+        """
+        sozluk = self.defter.isim_sozlugu
+        for token in isim_normalize(aciklama).split(" "):
+            if len(token) >= 4 and token in sozluk:
+                return token
+        return None
+
+    def soyad_var_mi(self, ham_isim: str) -> str | None:
+        """Isimdeki tokenlardan biri personel SOYAD indeksinde geciyor mu?
+
+        Skor esigini gecemeyen ama soyadi veride bulunan isimler (aile
+        bireyleri) icin kullanilir: kisinin kendisi veride olmasa da soyadi
+        uzerinden dogru masraf merkezine baglanabilir, yani eslestiricinin
+        en azindan ADAY uretmesi beklenir.
+        """
+        for token in isim_tokenlari(isim_normalize(ham_isim)):
+            for aday in (token, rus_disi_soyad_erkek_hali(token)):
+                if not aday or len(aday) < 3:
+                    continue
+                if not self.defter.soyad_ile_adaylar(aday):
+                    continue
+                # Yalnizca GERCEKTEN soyad olan tokenlar sayilir. 'GOKHAN',
+                # 'CAN', 'POLINA' birer AD'dir; birkac kisinin soyadi olmalari
+                # aile bagi kanit degildir ve eslestirici bunlari hakli olarak
+                # reddeder.
+                if self.soyad_olasiligi(aday) < AILE_SOYAD_BELIRGIN:
+                    continue
+                return aday
+        return None
 
     def ara(self, ham_isim: str, sayi: int = ADAY_SAYISI) -> list[tuple[str, str, float]]:
         """En yakin adaylari (sicil, ad_soyad, skor) olarak dondurur."""
@@ -285,8 +415,16 @@ class ElleArayici:
                 skorlar[isim_norm] = skor
 
         # 1) Soyad indeksi uzerinden daraltilmis arama. Fatura tarafinda ad
-        #    sirasi belirsiz oldugu icin HER token soyad adayi sayilir.
+        #    sirasi belirsiz oldugu icin HER token soyad adayi sayilir; Rusca
+        #    kadin soyadi eki ('NOVOSELOVA' -> 'NOVOSELOV') de cozulur, aksi
+        #    halde defterdeki erkek hali gozden kacar.
+        aranacak: set[str] = set()
         for token in isim_tokenlari(norm):
+            aranacak.add(token)
+            erkek = rus_disi_soyad_erkek_hali(token)
+            if erkek:
+                aranacak.add(erkek)
+        for token in aranacak:
             for sicil in self.defter.soyad_ile_adaylar(token):
                 kayit = self.defter.sicil_ile(sicil)
                 if not kayit:
@@ -329,19 +467,28 @@ def elle_ara(defter: PersonelDefteri, ham_isim: str,
 
 
 def _kategorize_et(sonuc: Sonuc, arayici: ElleArayici) -> EslesmeyenVaka:
-    """Bir ESLESMEDI satirini uc kategoriden birine yerlestirir."""
+    """Bir ESLESMEDI satirini kategorilerden birine yerlestirir."""
     satir = sonuc.satir
     ham = (satir.kisi_ham or "").strip()
     dosya = Path(satir.kaynak_dosya).name
+    ortak = dict(dosya=dosya, satir_no=satir.satir_no,
+                 aciklama=satir.aciklama or "",
+                 kapsayici=dosya.split(EK_AYIRICI, 1)[0] if EK_AYIRICI in dosya else None)
 
     if not ham:
+        # Kisi cikarilamamis olabilir; ama satirda GERCEKTEN kisi olmayabilir
+        # de ('CENAZE CELENK GONDERIMI', 'TOPLANTI ORGANIZASYONU'). Ikisini
+        # ayirmak sart: birincisi duzeltilecek bir kusur, ikincisi degil.
+        ipucu = arayici.isim_izi(satir.aciklama or "")
+        if ipucu is None:
+            return EslesmeyenVaka(
+                **ortak, kisi_ham="", kategori=KATEGORI_KISISIZ,
+                gerekce=("Aciklamada personel isim sozlugunden hicbir token yok; "
+                         "satir kurumsal bir gider, kisiye mahsuplasmaz."),
+            )
         return EslesmeyenVaka(
-            dosya=dosya,
-            satir_no=satir.satir_no,
-            kisi_ham="",
-            aciklama=satir.aciklama or "",
-            kategori=KATEGORI_PARSER,
-            gerekce="Satirdan kisi adi cikarilamadi.",
+            **ortak, kisi_ham="", kategori=KATEGORI_PARSER,
+            gerekce=(f"Kisi adi cikarilamadi ama aciklamada isim izi var: '{ipucu}'."),
         )
 
     adaylar = arayici.ara(ham)
@@ -349,26 +496,29 @@ def _kategorize_et(sonuc: Sonuc, arayici: ElleArayici) -> EslesmeyenVaka:
     if en_iyi >= KESIN_ESIK:
         sicil, ad, skor = adaylar[0]
         return EslesmeyenVaka(
-            dosya=dosya,
-            satir_no=satir.satir_no,
-            kisi_ham=ham,
-            aciklama=satir.aciklama or "",
-            kategori=KATEGORI_ALGORITMA,
+            **ortak, kisi_ham=ham, kategori=KATEGORI_ALGORITMA, adaylar=adaylar,
             gerekce=f"Personel verisinde '{ad}' (sicil {sicil}) skor {skor:.0f} ile bulundu.",
-            adaylar=adaylar,
+        )
+
+    # Kisinin kendisi veride olmasa bile SOYADI veride olabilir (aile bireyi).
+    # Bu durumda masraf merkezi soyadastan devralinabilir, yani eslestiricinin
+    # en azindan aday uretmesi beklenir: aday uretmemisse ALGORITMA sorunudur.
+    soyad = arayici.soyad_var_mi(ham)
+    if soyad and not sonuc.eslesme.aday_siciller and sonuc.eslesme.yontem == "yok":
+        return EslesmeyenVaka(
+            **ortak, kisi_ham=ham, kategori=KATEGORI_ALGORITMA, adaylar=adaylar,
+            gerekce=(f"Kisinin kendisi veride yok ama '{soyad}' soyadi veride var; "
+                     "aile kurali aday uretmeliydi, hic aday uretmedi."),
         )
 
     return EslesmeyenVaka(
-        dosya=dosya,
-        satir_no=satir.satir_no,
-        kisi_ham=ham,
-        aciklama=satir.aciklama or "",
-        kategori=KATEGORI_VERI,
+        **ortak, kisi_ham=ham, kategori=KATEGORI_VERI, adaylar=adaylar,
         gerekce=(
-            f"Personel verisinde karsilik yok (en yakin skor {en_iyi:.0f})."
+            (f"Personel verisinde karsilik yok (en yakin skor {en_iyi:.0f})"
+             + (f"; '{soyad}' soyadli calisanlar aday olarak sunuldu." if soyad
+                else "."))
             if adaylar else "Personel verisinde hicbir yakin aday yok."
         ),
-        adaylar=adaylar,
     )
 
 
@@ -452,6 +602,10 @@ def olc(
         for yol in mevcut:
             ad = yol.name
             grup = gruplar.pop(ad, [])
+            if not grup and any(a.startswith(ad + EK_AYIRICI) for a in gruplar):
+                # Outlook mesaji bir KAPSAYICIDIR: kendisi gider satiri
+                # uretmez, ekleri uretir. Bos bir satir olarak gosterilmez.
+                continue
             olcum.dosyalar.append(_dosya_olcumu(ad, grup))
         # Boru hattinin urettigi ama listede olmayan kaynaklar (mesaj ekleri).
         for ad, grup in sorted(gruplar.items()):
@@ -474,10 +628,15 @@ def olc(
             shutil.rmtree(calisma_veri, ignore_errors=True)
 
 
+#: Outlook okuyucusu ek dosyalari 'mesaj.msg > ek.xlsx' bicimiyle etiketler.
+EK_AYIRICI = " > "
+
+
 def _dosya_olcumu(ad: str, grup: list[Sonuc]) -> DosyaOlcumu:
     """Bir dosyaya ait sonuclardan olcum satirini uretir."""
     tip = grup[0].satir.kaynak_tip if grup else "-"
-    olcum = DosyaOlcumu(dosya=ad, tip=tip, toplam=len(grup))
+    kapsayici = ad.split(EK_AYIRICI, 1)[0] if EK_AYIRICI in ad else None
+    olcum = DosyaOlcumu(dosya=ad, tip=tip, kapsayici=kapsayici, toplam=len(grup))
     for sonuc in grup:
         if (sonuc.satir.kisi_ham or "").strip():
             olcum.kisi_cikarilan += 1
@@ -521,16 +680,19 @@ def rapor_metni(olcum: Olcum, vaka_detayi: bool = True) -> str:
     satirlar.append("=" * 100)
     satirlar.append("")
 
+    basliklar = ["dosya", "tip", "toplam", "kisi", "sicil",
+                 "OTOM", "INCE", "ESLESMEDI", "otom %"]
+
+    def _satir(d: DosyaOlcumu) -> list[Any]:
+        return [d.dosya, d.tip, d.toplam, d.kisi_cikarilan, d.sicil_bulunan,
+                d.otomatik, d.incele, d.eslesmedi, f"{d.otomasyon_orani:.1f}"]
+
     satirlar.append("DOSYA BAZINDA")
     satirlar.append(_tablo(
-        ["dosya", "tip", "toplam", "kisi", "sicil", "OTOM", "INCE", "ESLESMEDI", "otom %"],
-        [
-            [d.dosya, d.tip, d.toplam, d.kisi_cikarilan, d.sicil_bulunan,
-             d.otomatik, d.incele, d.eslesmedi, f"{d.otomasyon_orani:.1f}"]
-            for d in olcum.dosyalar
-        ] + [
+        basliklar,
+        [_satir(d) for d in olcum.ana_dosyalar] + [
             ["TOPLAM", "-", olcum.toplam, olcum.kisi_cikarilan,
-             sum(d.sicil_bulunan for d in olcum.dosyalar),
+             sum(d.sicil_bulunan for d in olcum.ana_dosyalar),
              olcum.otomatik, olcum.incele, olcum.eslesmedi,
              f"{olcum.otomasyon_orani:.1f}"]
         ],
@@ -538,6 +700,13 @@ def rapor_metni(olcum: Olcum, vaka_detayi: bool = True) -> str:
     satirlar.append("")
     satirlar.append(f"Cozulen (OTOMATIK + INCELE): %{olcum.cozulen_orani}")
     satirlar.append("")
+
+    ekler = olcum.ek_dosyalar
+    if ekler:
+        satirlar.append(
+            "OUTLOOK MESAJI EKLERI (ayni faturalari yeniden tasir; TOPLAMA GIRMEZ)")
+        satirlar.append(_tablo(basliklar, [_satir(d) for d in ekler]))
+        satirlar.append("")
 
     satirlar.append("ESLESMEYEN SATIRLARIN KATEGORI DAGILIMI")
     dagilim = olcum.kategori_dagilimi
@@ -558,10 +727,10 @@ def rapor_metni(olcum: Olcum, vaka_detayi: bool = True) -> str:
     ))
     satirlar.append("")
 
-    if vaka_detayi and olcum.vakalar:
-        satirlar.append("ESLESMEYEN VAKALAR")
-        for kategori in (KATEGORI_ALGORITMA, KATEGORI_PARSER, KATEGORI_VERI):
-            grup = [v for v in olcum.vakalar if v.kategori == kategori]
+    if vaka_detayi and olcum.ana_vakalar:
+        satirlar.append("ESLESMEYEN VAKALAR (mesaj ekleri haric)")
+        for kategori in KATEGORILER:
+            grup = [v for v in olcum.ana_vakalar if v.kategori == kategori]
             if not grup:
                 continue
             satirlar.append("")
@@ -570,7 +739,7 @@ def rapor_metni(olcum: Olcum, vaka_detayi: bool = True) -> str:
                 ad = vaka.kisi_ham or "(kisi cikarilamadi)"
                 satirlar.append(f"  [{vaka.dosya}:{vaka.satir_no}] {ad}")
                 satirlar.append(f"      gerekce : {vaka.gerekce}")
-                if vaka.kategori == KATEGORI_PARSER:
+                if vaka.kategori in (KATEGORI_PARSER, KATEGORI_KISISIZ):
                     satirlar.append(f"      aciklama: {vaka.aciklama[:110]}")
                 for sicil, aday_ad, skor in vaka.adaylar:
                     satirlar.append(f"      aday    : {skor:5.1f}  {sicil:>8}  {aday_ad}")
@@ -591,7 +760,7 @@ def karsilastir(oncesi: Olcum, sonrasi: Olcum) -> str:
 
     onceki = {d.dosya: d for d in oncesi.dosyalar}
     veri: list[list[Any]] = []
-    for sonra in sonrasi.dosyalar:
+    for sonra in sonrasi.ana_dosyalar:
         once = onceki.get(sonra.dosya)
         if once is None:
             continue
@@ -642,6 +811,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="Gecici kopya yerine gercek veri dizinine yaz.")
     ayrist.add_argument("--kisa", action="store_true", help="Vaka detayini bastirma.")
     ayrist.add_argument("--json", default=None, help="Olcumu JSON olarak bu dosyaya yaz.")
+    ayrist.add_argument("--karsilastir", default=None,
+                        help="Onceki bir olcum JSON'u; oncesi/sonrasi tablosu basilir.")
     ayrist.add_argument("--etiket", default="OLCUM", help="Rapor basligi.")
     secenekler = ayrist.parse_args(argv)
 
@@ -654,6 +825,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         gecici_veri=not secenekler.gercek_veri,
     )
     print(rapor_metni(olcum, vaka_detayi=not secenekler.kisa))
+
+    if secenekler.karsilastir:
+        onceki_yol = Path(secenekler.karsilastir)
+        if not onceki_yol.exists():
+            print(f"Karsilastirilacak olcum bulunamadi: {onceki_yol}")
+        else:
+            oncesi = Olcum.sozlukten(
+                json.loads(onceki_yol.read_text(encoding="utf-8")))
+            print(karsilastir(oncesi, olcum))
 
     if secenekler.json:
         hedef = Path(secenekler.json)

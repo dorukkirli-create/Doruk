@@ -428,3 +428,57 @@ def kisi_metnini_temizle(s: str) -> str:
     # Tek harflik artiklari ve bos tokenlari at
     tokenlar = [t for t in metin.split() if len(t) >= 2]
     return " ".join(tokenlar).strip()
+
+
+# --------------------------------------------------------------------------
+# Rusca disi soyad ekleri
+# --------------------------------------------------------------------------
+
+# Rusca soyadlar cinsiyete gore cekimlenir: erkek 'NOVOSELOV', kadin
+# 'NOVOSELOVA'. Personel ana verisinde calisan ERKEK ise defterde yalnizca
+# erkek hali bulunur; esi bir seyahat faturasinda kadin haliyle gecer ve
+# soyad indeksinde karsilik bulamaz. Bu tablo kadin halini erkek haline
+# cevirerek aile bagini kurulabilir kilar.
+#
+# Sira ONEMLIDIR: uzun ekler once denenir, aksi halde 'SKAYA' eki 'AYA'
+# kuralina takilir.
+_DISI_SOYAD_EKLERI: tuple[tuple[str, str], ...] = (
+    ("OVSKAYA", "OVSKIY"),
+    ("EVSKAYA", "EVSKIY"),
+    ("SKAYA", "SKIY"),
+    ("TSKAYA", "TSKIY"),
+    ("CKAYA", "CKIY"),
+    ("OVA", "OV"),
+    ("EVA", "EV"),
+    ("YOVA", "YOV"),
+    ("INA", "IN"),
+    ("YNA", "YN"),
+    ("AYA", "IY"),
+)
+
+#: Bu ekleri tasiyan bir tokenin soyad sayilabilmesi icin asgari uzunlugu.
+#: 'IVANOVA' (7) evet, 'EVA' (3) hayir - 'Eva' bir ADDIR, soyad cekimi degil.
+_DISI_SOYAD_ASGARI = 6
+
+
+@lru_cache(maxsize=4096)
+def rus_disi_soyad_erkek_hali(token: str) -> str | None:
+    """Rusca kadin soyadinin erkek halini uretir; uygun degilse None.
+
+    Yalnizca TEK bir aday dondurur; dogrulama cagiran tarafa aittir (uretilen
+    hal personel soyad indeksinde bulunmuyorsa kullanilmamalidir).
+
+    >>> rus_disi_soyad_erkek_hali("NOVOSELOVA")
+    'NOVOSELOV'
+    >>> rus_disi_soyad_erkek_hali("SHTEYNIKOVA")
+    'SHTEYNIKOV'
+    >>> rus_disi_soyad_erkek_hali("MUSTAFA") is None
+    True
+    """
+    t = isim_normalize(token)
+    if not t or " " in t or len(t) < _DISI_SOYAD_ASGARI:
+        return None
+    for son, yeni in _DISI_SOYAD_EKLERI:
+        if t.endswith(son) and len(t) - len(son) >= 3:
+            return t[: -len(son)] + yeni
+    return None
