@@ -44,7 +44,7 @@ CEKIRDEK_HAZIR = True
 CEKIRDEK_HATA = ""
 
 try:
-    from masraf.defter import Defterler, tckn_normalize
+    from masraf.defter import Defterler
     from masraf.eslestirici import INCELE_ESIGI, Eslestirici, durum_belirle
     from masraf.kayit import PersonelDefteri, sicil_normalize
     from masraf.metin import ascii_katla, isim_normalize, kisi_metnini_temizle
@@ -55,9 +55,8 @@ try:
         Eslesme,
         GiderSatiri,
         Sonuc,
-        bos_eslesme,
     )
-    from masraf.okuyucular.kesif import dosya_tipini_bul, oku, oku_tip
+    from masraf.okuyucular.kesif import dosya_tipini_bul, oku
 except Exception:  # pragma: no cover - sadece eksik kurulumda calisir
     CEKIRDEK_HAZIR = False
     CEKIRDEK_HATA = traceback.format_exc()
@@ -288,6 +287,22 @@ def _ayirici_bul(yol: Path) -> str:
     return ";" if ilk.count(";") > ilk.count(",") else ","
 
 
+def _kodlama_bul(yol: Path) -> str:
+    """Mevcut dosyanin kodlamasini korur (BOM varsa utf-8-sig, yoksa utf-8).
+
+    Excel Turkce karakterleri BOM'lu dosyalarda dogru gosterir; ancak var olan
+    bir dosyanin bicimini gereksiz yere degistirmemek icin mevcut hali korunur.
+    Yeni dosyalar BOM ile yazilir (defterlerle ayni bicim).
+    """
+    if not yol.exists():
+        return "utf-8-sig"
+    try:
+        with yol.open("rb") as akis:
+            return "utf-8-sig" if akis.read(3) == b"\xef\xbb\xbf" else "utf-8"
+    except OSError:
+        return "utf-8-sig"
+
+
 def harita_oku(kok: Path | None = None) -> pd.DataFrame:
     """Masraf merkezi haritasini DataFrame olarak okur; yoksa bos tablo doner."""
     yol = harita_yolu(kok)
@@ -309,6 +324,7 @@ def harita_yaz(df: pd.DataFrame, kok: Path | None = None) -> Path:
     yol = harita_yolu(kok)
     yol.parent.mkdir(parents=True, exist_ok=True)
     ayirici = _ayirici_bul(yol) if yol.exists() else ","
+    kodlama = _kodlama_bul(yol)
     temiz = df.fillna("").astype(str)
     for kolon in HARITA_KOLONLARI:
         if kolon not in temiz.columns:
@@ -316,10 +332,26 @@ def harita_yaz(df: pd.DataFrame, kok: Path | None = None) -> Path:
     temiz = temiz[list(HARITA_KOLONLARI)]
     temiz = temiz[temiz["gorev_yeri"].str.strip() != ""]
     gecici = yol.with_suffix(".csv.tmp")
-    temiz.to_csv(gecici, sep=ayirici, index=False, encoding="utf-8-sig",
+    temiz.to_csv(gecici, sep=ayirici, index=False, encoding=kodlama,
                  quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
     gecici.replace(yol)
     return yol
+
+
+def haritayi_tazele() -> None:
+    """Boru hattindaki masraf merkezi haritasini diskten yeniden okur.
+
+    Harita duzenlendikten sonra cagrilmalidir; boru hatti haritayi kurulusta
+    bir kez yukler, bu cagri olmadan yeni tanimlar devreye girmez.
+    """
+    boru = st.session_state.get("boru")
+    mevcut = getattr(boru, "harita", None) if boru is not None else None
+    if mevcut is None:
+        return
+    try:
+        boru.harita = type(mevcut).yukle(harita_yolu())
+    except Exception:
+        pass  # Harita tazelenemezse eski harita ile calismaya devam et.
 
 
 def harita_sozlugu(df: pd.DataFrame) -> dict[str, dict[str, str]]:
@@ -1369,6 +1401,57 @@ def sekme_fatura() -> None:
     with st.expander("Masraf merkezi özeti"):
         st.dataframe(ozet_tablosu(sonuclar), hide_index=True, width="stretch")
 
+    boru_ozeti = (ozet.boru_ozeti if ozet is not None else {}) or {}
+    if boru_ozeti:
+        with st.expander("İşleme özeti (yöntem dağılımı, eksik tanımlar)"):
+            y1, y2 = st.columns(2)
+            with y1:
+                st.write("**Eşleştirme yöntemi dağılımı**")
+                dagilim = boru_ozeti.get("yontem_dagilimi") or {}
+                if dagilim:
+                    st.dataframe(
+                        pd.DataFrame(
+                            [
+                                {"Yöntem": YONTEM_ADLARI.get(k, k), "Satır": v}
+                                for k, v in sorted(
+                                    dagilim.items(), key=lambda x: -x[1]
+                                )
+                            ]
+                        ),
+                        hide_index=True,
+                        width="stretch",
+                    )
+                paralar = boru_ozeti.get("para_birimi_toplamlari") or {}
+                if paralar:
+                    st.write("**Para birimi toplamları**")
+                    for para, tutar in paralar.items():
+                        st.write(f"{para}: {float(tutar):,.2f}".replace(",", " "))
+            with y2:
+                eksik = boru_ozeti.get("eksik_masraf_merkezleri") or []
+                st.write("**Haritada tanımsız masraf merkezleri**")
+                if eksik:
+                    st.warning(", ".join(str(e) for e in eksik[:25]))
+                    st.caption(
+                        "Bunları **Masraf Merkezi Haritası** sekmesinden tanımlayın."
+                    )
+                else:
+                    st.success("Tüm görev yerleri haritada tanımlı.")
+                eslesmeyen = boru_ozeti.get("eslesmeyen_kisiler") or {}
+                if eslesmeyen:
+                    st.write("**En sık eşleşmeyen kişiler**")
+                    st.dataframe(
+                        pd.DataFrame(
+                            [
+                                {"Kişi": k, "Satır": v}
+                                for k, v in sorted(
+                                    eslesmeyen.items(), key=lambda x: -x[1]
+                                )[:15]
+                            ]
+                        ),
+                        hide_index=True,
+                        width="stretch",
+                    )
+
     st.divider()
     blok_baslik("Excel çıktısı")
     sutun_a, sutun_b = st.columns([1, 3])
@@ -1698,6 +1781,7 @@ def sekme_harita() -> None:
         if st.button("Kaydet", type="primary", width="stretch"):
             try:
                 yol = harita_yaz(duzenlenen)
+                haritayi_tazele()
                 st.success(f"Harita kaydedildi: {yol.name}")
                 if st.session_state.get("sonuclar"):
                     _yeniden_isle()
@@ -1749,6 +1833,7 @@ def sekme_harita() -> None:
                 ]
             )
             harita_yaz(pd.concat([duzenlenen, yeni], ignore_index=True))
+            haritayi_tazele()
             st.success(
                 "Eksik görev yerleri eklendi. Masraf merkezi kodlarını yukarıdaki tablodan "
                 "doldurup tekrar kaydedin."
