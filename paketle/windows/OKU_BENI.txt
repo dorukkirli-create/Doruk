@@ -1,0 +1,176 @@
+MASRAF MERKEZI OTOMASYONU
+=========================
+
+PYTHON KURMANIZA GEREK YOK. Gereken her sey bu klasorun icinde.
+Internet de gerekmez. Butun veri bilgisayarinizda kalir.
+
+
+ILK KURULUM (bir kez, 2 dakika)
+================================
+
+1. Bu klasorun tamamini masaustundeki Otomasyon klasorune kopyalayin:
+
+       C:\Users\dokirli\Desktop\Otomasyon\
+
+   Icinde su klasorler gorunmeli:
+       1_FATURALAR
+       2_EXCEL_CIKTI
+       PERSONEL
+       program
+       veri
+       CALISTIR.bat
+       OKU_BENI.txt
+
+2. Personel dosyalarini PERSONEL klasorune kopyalayin:
+
+       PERSONEL\2025_2026_giris_cikis.xlsx        <- ZORUNLU
+       PERSONEL\1C_Personnel_List_31082026.xlsx   <- ONERILIR
+
+   Dosya adlari farkli olabilir, program kendisi bulur. Kuralı basit:
+   adinda "1C" gecen dosya grup sirketleri listesi, digeri ana veridir.
+
+   1C listesi olmadan da calisir, ama Renservis, Renstroydetal, RC,
+   One Tower ve Top Tower personeli "eslesmedi" olarak kalir.
+
+Kurulum bu kadar.
+
+
+HER AY NE YAPACAKSINIZ
+=======================
+
+1. Gelen faturalari 1_FATURALAR klasorune atin.
+   Outlook mailini (.msg) oldugu gibi atabilirsiniz, ekleri kendi acilir.
+   Kabul edilen tipler: .msg  .xlsx  .xls  .xlsm  .csv
+
+2. CALISTIR.bat dosyasina CIFT TIKLAYIN.
+
+3. Siyah pencerede ilerlemeyi izleyin. Bittiginde Excel kendiliginden acilir.
+   Ayni dosya 2_EXCEL_CIKTI klasorune de yazilir, tarih saat damgasiyla.
+
+Alternatif: dosyalari dogrudan CALISTIR.bat uzerine surukleyip birakin.
+O zaman 1_FATURALAR klasorune koymaniza gerek kalmaz.
+
+
+EXCEL'I NASIL OKUYACAKSINIZ
+============================
+
+Alti sayfa var. Sirasi is akisi sirasidir.
+
+  Mahsuplasma   MUHASEBEYE GIDECEK TABLO BUDUR. Her fatura icin hangi
+                projeye ne kadar yazilacagi. Once buna bakin.
+
+  Kontrol       Mutabakat. Her fatura icin okunan / yinelenen /
+                dagitilan / dagitilamayan tutar.
+                >>> "Fark" sutunu SIFIR olmak zorunda. <<<
+                Sifir degilse tablo muhasebeye gonderilmemeli.
+
+  Sonuc         Butun satirlar, 26 kolon. Her satirda kisinin nasil
+                bulundugu, guven skoru ve Turkce gerekce yazar.
+                "Bu satir neden bu projeye yazildi" sorusunun cevabi burada.
+
+  Incele        Sistemin emin olamadigi satirlar. Elle bakilmasi gerekenler.
+
+  Eslesmedi     Kisi hic bulunamayan satirlar.
+
+  Ozet          Dagilimlar, oranlar, toplamlar.
+
+
+KONSOLDA NE YAZAR
+==================
+
+Islem bitince siyah pencerede sunlari gorursunuz:
+
+  [TAMAM] Butun faturalar kapandi. Para kaybolmadi.
+     Iyi. Excel muhasebeye gidebilir.
+
+  [DIKKAT] MUTABAKAT ACIK
+     Dagitim toplami fatura toplamina esit degil. Excel'in Kontrol
+     sayfasina bakin, hangi faturada sorun oldugunu yazar.
+
+  "<- haritada tanimli degil"
+     O masraf merkezi finans koduna cevrilememis, gorev yeri metni
+     oldugu gibi kullanilmis. Asagidaki "Masraf merkezi haritasi"
+     bolumune bakin.
+
+
+BIR SEY CALISMAZSA: TESTET.bat
+==============================
+
+TESTET.bat dosyasina cift tiklayin. Hicbir seyi degistirmez, sadece bakar ve
+neyin eksik oldugunu yazar: klasorler yerinde mi, gomulu Python calisiyor mu,
+kutuphaneler tam mi, personel ve fatura dosyalari duruyor mu.
+
+Ciktinin tamamini kopyalayip iletin, sorun ne olursa olsun oradan gorunur.
+
+
+SIK KARSILASILAN DURUMLAR
+==========================
+
+"Personel dosyasi bulunamadi"
+    PERSONEL klasoru bos. Ana personel verisini oraya kopyalayin.
+
+"Islenecek fatura bulunamadi"
+    1_FATURALAR klasoru bos ya da icindeki dosyalarin uzantisi taninmiyor.
+
+Ilk calistirma cok yavas
+    Normal. 24 MB'lik personel dosyasi ilk kez okunurken 30 saniye kadar
+    surer. Yanina bir onbellek dosyasi yazilir, sonraki calistirmalar
+    birkac saniyedir. Personel dosyasi degisince onbellek kendini yeniler.
+
+Bir fatura okunuyor ama 0 satir cikiyor
+    Dosyanin kolon adlari taninmamis. veri\kolon_esanlamlilari.csv
+    dosyasini Excel ile acin ve o dosyadaki gercek kolon adini ekleyin.
+    Ornek satir:
+        alan;kolon_adi;not
+        kisi;Beneficiary;yeni tedarikci boyle yaziyor
+    Bir kez eklemek yeterli, sonraki aylarda calisir.
+
+Masraf merkezi haritasi
+    veri\masraf_merkezi_haritasi.csv dosyasi gorev yerlerini finans
+    kodlarina cevirir. "Haritada tanimli degil" uyarisi aldiginiz gorev
+    yerini bu dosyaya bir satir olarak ekleyin.
+
+"No pyvenv.cfg file" hatasi
+    Gomulu Python baslatilamadi. Iki sebebi olur:
+      1. ZIP eksik acilmis. Otomasyon klasorunu tamamen silin, ZIP'i tekrar
+         acin, cikan klasoru masaustune kopyalayin.
+      2. Bilgisayarinizda PYTHONHOME veya PYTHONPATH degiskeni tanimli.
+         CALISTIR.bat artik bunlari temizliyor, ama TESTET.bat ile
+         dogrulayabilirsiniz.
+    Klasorde .venv ya da baslat.bat varsa onlar eski kurulumdan kalmadir,
+    silin. Bu paketin ikisine de ihtiyaci yok.
+
+Her ay 1_FATURALAR klasorunu bosaltin
+    Eski faturalar orada kalirsa gelecek ay TEKRAR islenir ve tutarlar iki
+    kez sayilir. Islem bittikten sonra dosyalari baska bir klasore tasiyin.
+
+Program ogreniyor mu
+    Evet. veri klasorundeki CSV dosyalarinda bulunan eslesmeler, TC kimlik
+    koprusu ve isim varyantlari saklanir. Her ay biraz daha iyi eslesir.
+
+
+BILINEN SINIRLAMA
+==================
+
+Su anki dosyalariniz icin bir sorun YOKTUR. Asagidaki not, ileride olur da
+parola korumali bir dosya gelirse ne yapacaginizi anlatir.
+
+Bugune kadar gelen dosyalarin hicbiri parola korumali degil. Temmuz 2026
+mailindeki 12 ek ve iki personel dosyasi tek tek kontrol edildi, hepsi acik.
+
+Program, parola korumali bir Excel ya da Outlook dosyasini acamaz. Paketi
+kucuk tutmak icin sifre cozme kutuphanesi cikarildi. Boyle bir dosya gelirse
+program size soyler. Cozum basit: dosyayi Excel'de acin, parolayi girin,
+"Farkli Kaydet" ile parolasiz kaydedin, sonra 1_FATURALAR klasorune atin.
+
+
+GIZLILIK
+=========
+
+Program internete hic cikmaz, yapay zeka kullanmaz. Personel dosyalari ve
+faturalar bilgisayarinizdan disari gitmez.
+
+veri klasorundeki CSV dosyalari ogrenilen eslesmeleri tutar ve KISISEL VERI
+icerir (ad soyad, sicil, TC kimlik). Bu klasoru kimseyle paylasmayin.
+
+2_EXCEL_CIKTI klasorundeki dosyalar da kisisel veri icerir.
