@@ -60,11 +60,15 @@ class CikarilanEk:
         return " > ".join(self.zincir + [self.ad])
 
 
-def _guvenli_ad(ad: str, varsayilan: str = "adsiz") -> str:
+def _guvenli_ad(ad: str, varsayilan: str = "adsiz", azami: int = 80) -> str:
     """Dosya adini isletim sistemi icin guvenli hale getirir.
 
     Outlook ekleri '>>: Konu' gibi adlar tasiyabiliyor, zip icinde de
     '#U0131' seklinde kacislanmis Turkce karakterler cikiyor.
+
+    Kisaltma UZANTIYI KORUR. Onceki surum adi duz kesiyordu; 150 karakterden
+    uzun bir ek adinda '.xlsx' kirpiliyor, dosya uzantisiz kaliyor ve tablo
+    olarak taninmiyordu. Windows'ta uzun mail konulari bunu kolayca tetikler.
     """
     if not ad:
         return varsayilan
@@ -73,7 +77,15 @@ def _guvenli_ad(ad: str, varsayilan: str = "adsiz") -> str:
     # Yol ayiricilarini ve yasak karakterleri temizle
     ad = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", ad)
     ad = ad.strip(" .")
-    return ad[:150] or varsayilan
+    if not ad:
+        return varsayilan
+    if len(ad) <= azami:
+        return ad
+    kok, nokta, uzanti = ad.rpartition(".")
+    if nokta and 0 < len(uzanti) <= 5:
+        pay = max(1, azami - len(uzanti) - 1)
+        return f"{kok[:pay]}.{uzanti}"
+    return ad[:azami]
 
 
 def _tarihe_cevir(v) -> date | None:
@@ -152,7 +164,11 @@ def _msg_yuru(
     tarih = _tarihe_cevir(getattr(msg, "date", None))
     yeni_zincir = zincir + [konu]
 
-    dal = hedef / f"{derinlik:02d}_{konu}"
+    # Klasor adi KISA tutulur. Windows'ta toplam yol 260 karakteri asinca
+    # dosya yazimi patlar; mail konulari uzun olur ve ic ice mesajlarda bu
+    # siniri kolayca gecer. Konunun tamami zaten `zincir` icinde saklaniyor,
+    # klasor adinin uzun olmasina gerek yok.
+    dal = hedef / f"{derinlik:02d}_{konu[:40].strip(' .') or 'dal'}"
     dal.mkdir(parents=True, exist_ok=True)
 
     for ek in getattr(msg, "attachments", []) or []:

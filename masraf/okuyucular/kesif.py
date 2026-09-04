@@ -143,12 +143,25 @@ def oku_tip(yol: str | Path, tip: str) -> list[GiderSatiri]:
     return PARSERLAR[tip](yol)
 
 
+class MesajOkunamadi(Exception):
+    """Outlook mesajindan hic gider satiri cikarilamadi ve sebebi biliniyor.
+
+    Bu istisna KASITLIDIR. Onceki surumde her ek hatasi sessizce yutuluyordu
+    (``except Exception: continue``) ve kullaniciya yalnizca '0 satir' deniyordu.
+    Kullanici bu mesajla ne yapacagini bilemez: ek mi yok, ek var da okunamadi
+    mi, hangi ek, neden? Artik hepsi yaziliyor.
+    """
+
+
 def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderSatiri]:
     """Outlook mesajindaki tum tablo eklerini cikarir ve tek tek okur.
 
     Mesaj bir kapsayicidir: icinde baska mesajlar, zip arsivleri ve Excel
     dosyalari olabilir. Cikarilan her dosyanin tipi ayrica tespit edilir.
     Her satira hangi mailden geldigi `ek['mail_konusu']` icinde yazilir.
+
+    Raises:
+        MesajOkunamadi: Hicbir ekten satir cikmadiysa, sebebiyle birlikte.
     """
     from tempfile import mkdtemp
 
@@ -156,10 +169,27 @@ def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderS
 
     hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="masraf_msg_"))
     satirlar: list[GiderSatiri] = []
-    for ek in msg_aciklarini_cikar(yol, hedef):
+    ekler = msg_aciklarini_cikar(yol, hedef)
+
+    if not ekler:
+        raise MesajOkunamadi(
+            "mesajin icinde okunabilir tablo eki bulunamadi. Aranan uzantilar: "
+            ".xlsx .xls .xlsm .csv .tsv. Mail yalnizca metin/gorsel tasiyor "
+            "olabilir, ya da ekler mailin govdesine gomulu olabilir. Ekleri "
+            "Outlook'ta kaydedip dogrudan 1_FATURALAR klasorune atmayi deneyin."
+        )
+
+    # Her ek icin ne oldugunu ayri ayri tut; hepsi basarisiz olursa raporla.
+    bos_kalanlar: list[str] = []
+    hatalilar: list[str] = []
+    for ek in ekler:
         try:
             ic_satirlar = oku(ek.yol)
-        except Exception:
+        except Exception as hata:  # noqa: BLE001 - kullaniciya gosterilecek
+            hatalilar.append(f"{ek.ad}: {hata.__class__.__name__}: {hata}")
+            continue
+        if not ic_satirlar:
+            bos_kalanlar.append(ek.ad)
             continue
         for s in ic_satirlar:
             # Kaynak dosya adini mesaj + ek olarak yaz, izlenebilirlik icin.
@@ -170,7 +200,22 @@ def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderS
                 s.ek.setdefault("mail_tarihi", ek.mail_tarihi)
                 s.ek.setdefault("mail_zinciri", ek.kaynak_aciklamasi)
         satirlar.extend(ic_satirlar)
-    return satirlar
+
+    if satirlar:
+        return satirlar
+
+    parcalar = [f"mesajdan {len(ekler)} tablo eki cikarildi ama hicbirinden "
+                "gider satiri okunamadi."]
+    if bos_kalanlar:
+        parcalar.append(
+            "Acildi ama bos donenler: " + ", ".join(bos_kalanlar[:8])
+            + (f" (+{len(bos_kalanlar) - 8} tane daha)" if len(bos_kalanlar) > 8 else "")
+            + ". Bu dosyalarin kolon adlari taninmamis olabilir; "
+              "veri/kolon_esanlamlilari.csv dosyasina ekleyin."
+        )
+    if hatalilar:
+        parcalar.append("Hata verenler: " + " | ".join(hatalilar[:5]))
+    raise MesajOkunamadi(" ".join(parcalar))
 
 
 def oku(yol: str | Path, cikarma_dizini: str | Path | None = None) -> list[GiderSatiri]:
