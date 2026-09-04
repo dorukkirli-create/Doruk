@@ -396,3 +396,63 @@ zip cikarma ve klasor duzenleme adimlari ortadan kalkiyor.
 
 Guvenlik notu: arsiv acma sirasinda yol gecisi (path traversal) ve arsiv bombasi kontrolleri
 uygulaniyor. Mail imzalarindaki logo gorselleri atlaniyor.
+
+---
+
+## 11. Uygulamanın ölçülen performansı
+
+Uygulama tamamlandı ve gerçek örnek dosyalarla çalıştırıldı. Aşağıdaki sayılar
+uydurma değil, çalıştırma çıktısıdır.
+
+### Tek bir Outlook mesajından uçtan uca
+
+Mustafa Bey'in gönderdiği mesajın kendisi doğrudan uygulamaya verildi. Uygulama
+iç içe iki mail, altı zip arşivi ve içlerindeki Excel dosyalarını kendi açtı.
+
+| Ölçüm | Değer |
+|---|---|
+| Mesajdan çıkarılan tablo dosyası | 12 |
+| Ayıklanan gider satırı | 405 |
+| Kişi kütüğü olarak ayrılan satır | 20.920 |
+| Otomatik eşleşen | 232, yüzde 57,3 |
+| İncelemeye düşen | 117, yüzde 28,9 |
+| Eşleşmeyen | 56, yüzde 13,8 |
+| Öğrenilen TC kimlik köprüsü | 27 |
+| Öğrenilen alias | 30 |
+
+Sigorta listesinin 20.920 satırı gider satırı sayılmadı. O dosya bir kişi
+kütüğü, fatura değil. Hiçbir satırında tutar yok. Bunları gider olarak işlemek
+binlerce sahte satır üretirdi.
+
+### Dosya bazında sicil bulma oranı
+
+| Kaynak | Satır | Sicil bulundu | Oran |
+|---|---|---|---|
+| Koç Üniversitesi katılımcı | 50 | 50 | yüzde 100 |
+| Arabuluculuk | 25 | 22 | yüzde 88 |
+| Assessment | 6 | 5 | yüzde 83 |
+| Antik ham cari döküm | 134 | 101 | yüzde 75 |
+| Sağlık kontrol listesi | 50 | 34 | yüzde 68 |
+
+### Çözülen masraf merkezleri
+
+| Kod | Satır |
+|---|---|
+| GPP | 212 |
+| HQ-MOSCOW | 40 |
+| ULF-GPC-RHI | 30 |
+| AGPP | 26 |
+| RM-RHI | 20 |
+| ALNG2-GBS | 10 |
+
+### Çıktı
+
+Dört sayfalı Excel üretiliyor: Sonuç, İncele, Eşleşmedi, Özet. Her satır 25 kolon
+taşıyor ve içinde eşleştirme yöntemi, güven skoru ve Türkçe gerekçe var. Böylece
+"bu satır neden bu projeye yazıldı" sorusu her zaman cevaplanabiliyor.
+
+### Testler
+
+23 test yazıldı ve hepsi geçiyor. Yedi tanesi altın örnek: dördü doğum tarihi
+kontrolü olmadan yanlış eşleşen vaka, üçü soyadı farklı yazıldığı için kaçırılan
+doğru vaka. Bu yedi vaka regresyona karşı sabitlendi.
