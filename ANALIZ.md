@@ -250,35 +250,89 @@ yazım farkları var, bunlar eşleme tablosunda ele alınıyor.
 
 ---
 
-## 6. Elle yapılan dağıtımda muhtemel hatalar
+## 6. Elle yapılan dağıtım kendi içinde tutarsız
 
-Otomasyonun asıl değeri sadece zaman kazandırmak değil, elle yapılan işi denetlemek. Temmuz
-dosyasında personel verisiyle çelişen kayıtlar buldum:
+Otomasyon çıktısını elle dağıtılmış dosya ile satır satır karşılaştırdım. Karşılaştırılabilir
+96 satırda uyum sadece yüzde 48 çıktı. Ama bu otomasyonun hata oranı değil. Sebebi şu:
 
-| Kişi | Elle yazılan şantiye | Personel verisine göre | Sicil |
+Elle yazılan ŞANTİYESİ etiketi ile personel verisini çapraz tabloya döktüm:
+
+| Elle etiket | Şirket 2 | Görev Yeri | Satır |
 |---|---|---|---|
-| Coskun Emre | RHI | GPP Project, UST LUGA | 512495 |
-| Irmak Mehmet Veysi (YRMAK MEKHMET VEISI olarak yazılmış) | RENSERVIS | Regional Management RHI | 300973 |
-| Celenligil ailesi | RHI | ALNG2-GBS Project | 423806 |
+| RHI | UST LUGA | GPP Project | 48 |
+| RHI | RHI | RHI Russia Headquarter Moscow | 16 |
+| RHI | RHI | Ust Luga Fabrication GPC (RHI) | 8 |
+| RHI | RHI | Regional Management (RHI) | 7 |
+| RHI | RHI | ALNG2-GBS Project | 5 |
+| UST LUGA GPP | UST LUGA | GPP Project | 8 |
+| RENSERVIS | RHI | Regional Management (RHI) | 2 |
+| RENSTROYDETAL | UST LUGA | GPP Project | 1 |
+| ONE TOWER | UST LUGA | GPP Project | 1 |
 
-Bunlar meşru bir iş kuralından da kaynaklanıyor olabilir. Örneğin kişi UST LUGA bordrolu olup
-masrafı RHI'ya yazılıyor olabilir. Ama şu an bu kural hiçbir yerde yazılı değil, kişilerin
-kafasında. Otomasyon bu farkları her ay listeleyecek ve kural netleştikçe sisteme yazılacak.
+Kritik satır ilk ve altıncı: **aynı şirkette, aynı projede çalışan kişiler 48 kez RHI,
+8 kez UST LUGA GPP olarak etiketlenmiş.** Aynı personel kaydına iki farklı etiket verilmiş.
+
+Bu, elle yapılan işin tutarsız olduğunu gösteriyor. Dolayısıyla o dosya doğruluk referansı
+olarak kullanılamaz. Yüzde 48 rakamı otomasyonun isabetini değil, elle etiketlemenin
+kendi içindeki dağınıklığını ölçüyor.
+
+### Cevaplanması gereken soru
+
+ŞANTİYESİ kolonu ne demek? İki okuma mümkün:
+
+1. **Yansıtılacak tüzel kişi.** Energo bileti alıyor, sonra hangi grup şirketine fatura
+   keseceğini yazıyor. Bu okumada RHI, Renservis, One Tower gibi değerler mantıklı.
+2. **Proje.** Bu okumada UST LUGA GPP mantıklı ama RHI bir proje değil.
+
+Veri her iki okumayı da tam desteklemiyor, çünkü etiket her iki durumda da tutarsız
+uygulanmış. Bu sorunun finans ekibiyle netleştirilmesi gerekiyor. Otomasyon devreye
+girmeden önce cevaplanması gereken tek soru budur.
+
+Not: mahsuplaşma için iki boyut da lazım. Hangi şirket öder ve hangi projeye yazılır.
+Elle dosya sadece birini veriyor, o da tutarsız. Personel verisi ikisini de veriyor:
+Şirket 2 kolonu tüzel kişiyi, Görev Yeri kolonu projeyi söylüyor.
 
 ---
 
-## 7. En yüksek etkili tek hamle
+## 7. TC kimlik köprüsü elle doldurulmak zorunda değil
 
-Şu an tüm zorluk isimle eşleştirmeden geliyor. Bunu bitirecek tek bir değişiklik var:
+Önce bunun elle yapılması gerektiğini düşünmüştüm. Ölçtükten sonra düzeltiyorum:
+köprü otomatik kurulabiliyor.
 
-**Seyahat acentesinden aylık dökümüne TC kimlik veya pasaport numarası kolonu eklemesini isteyin.**
+Sağlık kontrol listesinde ad soyad, TC kimlik ve doğum tarihi var. Personel ana verisinde
+ad soyad ve doğum tarihi var. İkisini isim ve doğum tarihi üzerinden birleştirdim:
 
-Acente bu bilgiye zaten sahip, çünkü bilet kesmek için pasaport gerekiyor. Tek kolon eklemeleri
-eşleştirme problemini büyük ölçüde bitirir. Aynı talep Energo tarafına da yapılabilir.
+| Ölçüm | Değer |
+|---|---|
+| Sağlık listesindeki kişi | 50 |
+| İsimle personel verisinde bulunan | 30 |
+| İsim ve doğum tarihi ile tek adaya inen | 27 |
+| Personel verisinde hiç olmayan | 20 |
 
-İkinci hamle: personel ana verisine TC kimlik numarası kolonu eklemek. Şu an sağlık listesinde
-ve arabuluculuk dosyasında TC var ama personel verisinde yok, dolayısıyla köprü kurulamıyor.
-Bu köprü kurulursa sağlık listesindeki 50 kişi anında sicile bağlanır.
+Yani tek çalıştırmayla **27 kayıtlık bir TC kimlik ve sicil köprüsü** üretiliyor. Bu köprü
+kalıcı olarak saklanıyor ve büyüyor. Her ay yeni sağlık listesi geldikçe genişliyor.
+Arabuluculuk dosyası da aynı şekilde besleyebilir.
+
+Doğum tarihi eşleşmesi bu köprüyü güvenli yapıyor. İsim tek başına yanılabilir, isim artı
+doğum tarihi neredeyse yanılmaz. Ölçtüm: tüm personelde isim çakışması yüzde 3,6 iken
+isim artı doğum tarihinde yüzde 1,68'e düşüyor.
+
+### Yine de en yüksek etkili hamle acentede
+
+Seyahat acentesinden aylık dökümüne TC kimlik veya pasaport numarası kolonu eklemesini
+isteyin. Acente bu bilgiye zaten sahip, çünkü bilet kesmek için pasaport gerekiyor.
+Tek kolon eklemeleri isim eşleştirme probleminin büyük kısmını bitirir. Aynı talep
+Energo tarafına da yapılabilir.
+
+### Bulunan veri çelişkisi
+
+Köprüyü kurarken bir çelişki çıktı. Mehmet Turan, TC 26290978980, doğum 28.12.1983,
+sicil 549718. Personel verisi Temmuz 2026'da görev yerini Amursky Gas Processing Plant
+gösteriyor. Sağlık kontrol listesi ise Ust Luga Gas Processing Complex diyor. Seyahat
+faturasındaki uçuşu da Ankara Petersburg, yani Ust Luga yönü.
+
+Üç kaynaktan ikisi Ust Luga diyor, personel verisi Amur diyor. Bu tek satır bile
+otomasyonun ikinci faydasını gösteriyor: kaynaklar arası çelişkileri yakalıyor.
 
 ---
 
