@@ -125,12 +125,74 @@ Gereken: Python 3.11, `pandas`, `openpyxl`, `xlrd`, `rapidfuzz`, `streamlit`,
    işlenebilir; Outlook `.msg` dosyalarının ekleri otomatik açılır.
 3. **İşleyin.** Dosya tipi otomatik tanınır, doğru okuyucu seçilir. 130 satırlık
    bir dosya birkaç saniye sürer.
-4. **İnceleyin.** *İnceleme* sekmesinde düşük güvenli satırlar tek tek gelir.
+4. **Mahsuplaşmayı okuyun.** *Mahsuplaşma* sekmesi muhasebeye gidecek tabloyu
+   gösterir: her fatura için hangi projeye ne kadar yazılacağı. En üstte
+   mutabakat vardır; yeşilse para kaybolmamış demektir.
+5. **İnceleyin.** *İnceleme* sekmesinde düşük güvenli satırlar tek tek gelir.
    Her satırın yanında sistemin **neden** o sonuca vardığı Türkçe yazar ve
    adaylar listelenir. Doğru kişiyi seçtiğinizde sistem bunu öğrenir.
-5. **Excel'i indirin.** Dört sayfalı çıktı: `Sonuç` (tüm satırlar),
-   `İncele` (elle bakılacaklar), `Eşleşmedi` (kişi bulunamayanlar), `Özet`
+6. **Excel'i indirin.** Altı sayfalı çıktı: `Mahsuplasma` (dağıtım tablosu),
+   `Kontrol` (fatura bazında mutabakat), `Sonuc` (tüm satırlar),
+   `Incele` (elle bakılacaklar), `Eslesmedi` (kişi bulunamayanlar), `Ozet`
    (dağılımlar, oranlar, tutar toplamları).
+
+## Çıktı nasıl görünür
+
+Nihai çıktı satır dökümü değil, **dağıtım tablosudur**. Her fatura için altında
+hangi projeye ne kadar yazılacağı yazar:
+
+| Fatura | Masraf Merkezi | Şirket | Gider Tipi | Tutar | Fatura Payı | Satır | Kişi | Durum |
+|---|---|---|---|---|---|---|---|---|
+| ENERGO TEMMUZ.xls | GPP | UST LUGA | Bilet | 22.327,76 | %45,6 | 62 | 54 | 2 eşleşmeyen satır |
+| ENERGO TEMMUZ.xls | HQ-MOSCOW | RHI | Bilet | 4.428,18 | %9,1 | 12 | 5 | 7 satır incelenecek |
+| ENERGO TEMMUZ.xls | HQ-MOSCOW | RHI | Otel | 2.397,06 | %4,9 | 7 | 4 | |
+| ENERGO TEMMUZ.xls | (DAGITILAMAYAN) | | Diğer | 2.142,05 | %4,4 | 2 | 0 | MASRAF MERKEZI YOK |
+
+Tablonun üç kuralı vardır.
+
+**1. Her fatura kendi içinde kapanır.** Okunan tutar = yinelenen + dağıtılan +
+dağıtılamayan. Kuruşuna kadar. Oransal bölmede kalan artık, faturanın en büyük
+satırına eklenir; `Kontrol` sayfasındaki **Fark** sütunu sıfır olmak zorundadır.
+Sıfır değilse tablo muhasebeye gönderilmemelidir.
+
+**2. Dağıtılamayan tutar görünür kalır.** Kişisi ya da masraf merkezi
+bulunamayan tutar sessizce düşürülmez; `(DAGITILAMAYAN)` satırı olarak durur.
+Toplam her zaman faturaya eşittir.
+
+**3. Yinelenen işlemler bir kez sayılır.** Aynı mail iki dosya taşıyabilir:
+acentenin ham cari dökümü ve aynı işlemlerin elle dağıtılmış hali. İkisi de
+okunursa para **çift sayılır**. Temmuz 2026 mailinde ölçüldü:
+
+| Dosya | Satır | Tutar |
+|---|---|---|
+| ENERGO TEMMUZ.xls (ham döküm) | 134 | 48.946,59 USD |
+| YUZYIL TEMMUZ.xlsx (elle dağıtılmış) | 134 | 48.978,59 USD |
+
+Bu ikisi **aynı** işlemlerdir. Naif toplama 97.925,18 USD verir; gerçek rakam
+yarısıdır. Tek fark 14.07.2026 tarihli bir kalemdir: ham dökümde -16,00 USD
+(iade), elle dağıtılmış halde +16,00 USD. Aradaki 32,00 USD tam olarak budur ve
+işaret çelişkisi olarak ayrıca uyarı verilir.
+
+Eşleştirme kaba bir kova (belge tarihi + mutlak tutar + para birimi) içinde
+yapılır, sonra kova içinde isimler eşleştirilir. İsim anahtar olarak
+kullanılmaz çünkü iki dosya aynı kişiyi farklı yazar: ham döküm
+`OZAKAY MUSTAFAKEMAL`, elle dağıtılmış hal `MUSTAFA KEMAL OZAKAY`, bazen de
+kırpılmış (`OZAKAY MUSTAFAKEMA`) ya da yanlış (`YALCINKAYA ANIL` /
+`ALI YALCINKAYA`). Kişi adı olmayan kurumsal kalemler (cenaze çelengi,
+toplantı organizasyonu) da bu sayede yakalanır.
+
+Elenen kayıt atılmadan önce taşıdığı **dağıtım talimatı** tutulan kayda
+aktarılır. İki dosya birbirini tamamlar: ham döküm tutarı doğru taşır, elle
+dağıtılmış hal insanın aldığı kararı taşır. Örnek: `RHI 1/3 - RENSTROYDETAL
+2/3` paylaşımı yalnızca elle dağıtılmış dosyada vardır; devralınmasa kaybolurdu.
+
+Paylaşım etiketleri pratikte **tüzel kişi** adıdır, proje değil. Bu yüzden
+proje aynı kalır, tutar şirketler arasında bölünür. Etiket masraf merkezi
+haritasında gerçekten bir projeye karşılık geliyorsa o zaman proje de bölünür.
+
+Kişi listeleri (katılımcı listesi, sağlık kontrol listesi) dağılıma girmez;
+bunlar fatura değil kütüktür ve tutar taşımazlar. Temmuz 2026 mailinde 100
+satır bu gruptadır.
 
 ## Desteklenen dosya tipleri
 

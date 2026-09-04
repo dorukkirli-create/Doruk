@@ -47,8 +47,9 @@ ANTIK = KOK / "ornek_veri" / "antik_travel" / "ANTIK_CARI_TEMMUZ_2026.xls"
 CIKTI_DIZINI = KOK / "cikti"
 CIKTI_ADI = "TEST_uctan_uca.xlsx"
 
-#: Excel ciktisinda bulunmasi zorunlu sayfalar.
-BEKLENEN_SAYFALAR = ["Sonuc", "Incele", "Eslesmedi", "Ozet"]
+#: Excel ciktisinda bulunmasi zorunlu sayfalar, gosterildikleri sirada.
+#: Mahsuplasma en basta: muhasebeye giden tablo odur, digerleri onun dayanagi.
+BEKLENEN_SAYFALAR = ["Mahsuplasma", "Kontrol", "Sonuc", "Incele", "Eslesmedi", "Ozet"]
 
 #: 'Sonuc' sayfasinda bulunmasi zorunlu kolonlar.
 ZORUNLU_KOLONLAR = {
@@ -207,6 +208,27 @@ class UctanUcaTest(unittest.TestCase):
             self.assertEqual(calisma.sheetnames, BEKLENEN_SAYFALAR)
         finally:
             calisma.close()
+
+    def test_mahsuplasma_mutabakati_kapaniyor(self):
+        """Uctan uca calismada da para kaybolmamali.
+
+        Bu, ciktinin muhasebeye gonderilebilir olmasinin on sartidir: her
+        fatura icin okunan tutar, yinelenen + dagitilan + dagitilamayan
+        toplamina esit olmali.
+        """
+        mahsup = self.sonuc.get("mahsup")
+        self.assertIsNotNone(mahsup, "calistir() mahsuplasma tablosu dondurmeli")
+        for kontrol in mahsup.kontrol:
+            with self.subTest(fatura=kontrol.kaynak):
+                self.assertTrue(
+                    kontrol.kapali_mi,
+                    f"{kontrol.kaynak}: fark {kontrol.fark:+.2f}",
+                )
+        toplam_mahsup = round(sum(m.tutar for m in mahsup.satirlar), 2)
+        beklenen = round(
+            sum(k.dagitilan + k.dagitilamayan for k in mahsup.kontrol), 2
+        )
+        self.assertAlmostEqual(toplam_mahsup, beklenen, places=2)
 
     @unittest.skipUnless(OPENPYXL_VAR, "openpyxl bulunamadi")
     def test_sonuc_sayfasi_tum_satirlari_icerir(self):

@@ -689,12 +689,18 @@ def masraf_merkezi_coz(
     masraf_merkezi: str | None = None
     masraf_merkezi_adi: str | None = None
     harita_sirketi: str | None = None
+    # Masraf merkezi haritada tanimli bir finans kodu mu, yoksa cozulemedigi
+    # icin oldugu gibi tasinan ham gorev yeri metni mi? Mahsuplasma tablosu
+    # ikisini ayirmak zorundadir: ilki muhasebeye gidebilir, ikincisi once
+    # haritaya eklenmelidir.
+    satir.ek["masraf_merkezi_haritada"] = False
     if gorev_yeri:
         cozum = harita.coz(gorev_yeri)
         if cozum:
             masraf_merkezi = cozum["masraf_merkezi_kodu"]
             masraf_merkezi_adi = cozum["masraf_merkezi_adi"]
             harita_sirketi = cozum["sirket"]
+            satir.ek["masraf_merkezi_haritada"] = True
             if not cozum["aktif"]:
                 uyarilar.append(
                     f"Masraf merkezi '{masraf_merkezi}' haritada pasif isaretli; "

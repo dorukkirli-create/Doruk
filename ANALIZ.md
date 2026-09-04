@@ -449,9 +449,13 @@ binlerce sahte satır üretirdi.
 
 ### Çıktı
 
-Dört sayfalı Excel üretiliyor: Sonuç, İncele, Eşleşmedi, Özet. Her satır 25 kolon
-taşıyor ve içinde eşleştirme yöntemi, güven skoru ve Türkçe gerekçe var. Böylece
-"bu satır neden bu projeye yazıldı" sorusu her zaman cevaplanabiliyor.
+Altı sayfalı Excel üretiliyor: Mahsuplasma, Kontrol, Sonuc, Incele, Eslesmedi,
+Ozet. Satır dökümünde her satır 25 kolon taşıyor ve içinde eşleştirme yöntemi,
+güven skoru ve Türkçe gerekçe var. Böylece "bu satır neden bu projeye yazıldı"
+sorusu her zaman cevaplanabiliyor.
+
+Sayfa sırası iş akışı sırasıdır: önce muhasebeye gidecek olan, sonra kanıtı.
+Ayrıntı için [bölüm 13](#13-nihai-çıktı-mahsuplaşma-tablosu).
 
 ### Testler
 
@@ -501,3 +505,113 @@ Cikis masrafi ise dogru santiyedir, kontrol edin.
 Bu kural için ayrı bir test dosyası yazıldı. İçindeki en önemli test, veride görev yeri
 değiştiren gerçek bir kişiyi buluyor ve dokuz dönemin her birinde o ayın görev yerine
 bağlandığını doğruluyor. Bu test geçtiği sürece kural bozulamaz.
+
+---
+
+## 13. Nihai çıktı: mahsuplaşma tablosu
+
+Satır dökümü ara üründür. Finansın muhasebeye vereceği şey farklı bir şeydir:
+her fatura için **altında** hangi projeye ne kadar yazılacağı. Bu bölüm o
+tablonun neden böyle tasarlandığını anlatıyor.
+
+### Para çift sayılıyordu
+
+Ölçüm bunu ortaya çıkardı. Temmuz 2026 mailinde iki seyahat dosyası var:
+
+| Dosya | Tip | Satır | Tutar |
+|---|---|---|---|
+| ENERGO TEMMUZ.xls | Acentenin ham cari dökümü | 134 | 48.946,59 USD |
+| YUZYIL TEMMUZ.xlsx | Aynı işlemlerin elle dağıtılmış hali | 134 | 48.978,59 USD |
+
+Bunlar aynı işlemlerdir. Naif toplama 97.925,18 USD verir. Gerçek rakam
+yarısıdır ve aradaki 32,00 USD'lik fark tek bir kalemden gelir: 14.07.2026
+tarihli bir bilet bedeli ham dökümde -16,00 USD (iade), elle dağıtılmış halde
++16,00 USD yazılmış. İşaret çelişkisi ayrıca uyarı olarak raporlanıyor;
+ham dökümdeki değer kullanılıyor.
+
+Bu tek başına, otomasyonun elle yapılan işten farkını gösteriyor. İnsan bu iki
+dosyayı gördüğünde hangisinin hangisi olduğunu bilir. Kod bilmez, ölçmesi
+gerekir.
+
+### Eşleştirme neden isim anahtarıyla yapılamıyor
+
+İlk deneme (belge tarihi + tutar + isim) 134 işlemin sadece 48'ini yakaladı.
+Sebep basit: iki dosya aynı kişiyi farklı yazıyor.
+
+| Ham döküm | Elle dağıtılmış | Sorun |
+|---|---|---|
+| `OZAKAY MUSTAFAKEMAL` | `MUSTAFA KEMAL OZAKAY` | Sıra ters, ad bitişik |
+| `OZAKAY MUSTAFAKEMA` | `MUSTAFA KEMAL OZAKAY` | Kırpılmış (18 karakter) |
+| `YALCINKAYA ANIL` | `ALI YALCINKAYA` | Ad yanlış yazılmış |
+| (boş) | (boş) | Kurumsal kalem, kişi yok |
+
+Çözüm iki katmanlı. Önce kaba bir kova: belge tarihi + mutlak tutar + para
+birimi. Bu üçlü tek başına 134 işlemin 133'ünü eşliyor. Sonra kova içinde
+isimler eşleştiriliyor: önce harf imzası birebir aynı olanlar, sonra kırpılmış
+olanlar, sonra ortak kelimesi olanlar, en sonda kalanlar sırayla. Kova zaten
+tarih ve tutar eşitliğini garanti ettiği için isimsiz kalemler de doğru bağlanıyor.
+
+Yanlış eşleştirme riski ölçüldü: aynı dosya içinde 20 grup aynı (tarih, tutar)
+değerini taşıyor, en büyüğü 6 kişilik. Bunlar aynı uçuşa binen farklı kişiler ve
+**gerçek tekrarlardır**, yineleme değil. Kod aynı dosya içindeki tekrarları
+hiçbir zaman elemiyor; sadece farklı dosyalar arasında 1:1 eşleştirme yapıyor.
+
+### Elenen kayıt bilgisiyle birlikte atılmıyor
+
+İki dosya birbirini tamamlıyor: ham döküm **tutarı** doğru taşır, elle
+dağıtılmış hal insanın aldığı **kararı** taşır. Veride tam olarak bir satır
+`RHI 1/3 - RENSTROYDETAL 2/3` paylaşımı taşıyor (NEVZAT GULER, 201,42 USD) ve
+bu paylaşım yalnızca elle dağıtılmış dosyada var. Naif eleme onu kaybederdi.
+
+Kod, elenen kaydın dağıtım talimatını tutulan kayda aktarıyor. Sonuç: o satır
+iki mahsup satırı üretiyor, 67,14 ve 134,28 USD.
+
+Paylaşım etiketleri (`RHI`, `RENSTROYDETAL`) tüzel kişi adıdır, proje değil.
+Bu yüzden proje aynı kalıyor, tutar şirketler arasında bölünüyor. Etiket masraf
+merkezi haritasında gerçekten bir projeye karşılık gelirse o zaman proje de
+bölünüyor.
+
+### Mutabakat tanım gereği kapanıyor
+
+Her fatura ve her para birimi için:
+
+```
+okunan = yinelenen + dağıtılan + dağıtılamayan
+```
+
+Oransal bölme kuruş altında artık bırakır (100 / 3 üç kez 33,33 eder, toplam
+99,99). Muhasebe bunu kabul etmez. Artık, faturanın en büyük satırına ekleniyor.
+Hedef tutar bağımsız ölçülen iki değerden türetiliyor (okunan eksi yinelenen),
+bu yüzden gerçek bir kayıp yuvarlama farkı olarak gizlenemiyor.
+
+Kontrol sayfasındaki **Fark** sütunu sıfır olmak zorunda. Sıfır değilse arayüz
+kırmızı uyarı veriyor ve tablo muhasebeye gönderilmemeli.
+
+### Ölçülen sonuç
+
+Temmuz 2026, tek Outlook mesajı, 405 satır okundu:
+
+| Ölçüm | Değer |
+|---|---|
+| Okunan toplam | 106.297,78 USD |
+| Yinelenen (düşülen) | 48.978,59 USD |
+| Net dağıtılacak | 57.319,19 USD |
+| Dağıtılan | 54.432,90 USD |
+| Dağıtılamayan | 2.886,29 USD |
+| Dağıtım oranı | %94,96 |
+| Mahsup satırı | 34 |
+| Kişi kütüğü (dağılıma girmeyen) | 100 satır |
+| Tutarı okunamayan | 7 satır |
+| İşaret çelişkisi | 1 |
+
+Bütün faturalar kapanıyor. 34 mahsup satırı, 405 satırlık ham dökümün yerine
+geçiyor; finans ekibinin muhasebeye vereceği tablo bu.
+
+### Haritada olmayan masraf merkezleri işaretleniyor
+
+1C personel listesinden gelen kişilerin görev yeri değerleri
+(`Renservis - Lytkarino - Renservis`, `One Tower`, `Bsk Management Group`)
+masraf merkezi haritasında tanımlı değil. Kod bunları olduğu gibi taşıyor ama
+`HARITADA TANIMLI DEGIL` diye işaretliyor. Finans kodlarına çevrilene kadar o
+satırlar muhasebeye ham metinle gitmemeli. Temmuz 2026'da 7 masraf merkezi bu
+durumda, toplam 4.619,16 USD (dağıtılamayan tutar bunun dışında).

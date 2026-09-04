@@ -1,16 +1,23 @@
 """Excel ve CSV cikti uretimi.
 
-Uretilen Excel dosyasi finans ekibinin dogrudan calisacagi belgedir; dort
-sayfa icerir:
+Uretilen Excel dosyasi finans ekibinin dogrudan calisacagi belgedir. Sayfalar
+IS AKISI SIRASINDADIR: once muhasebeye gidecek olan, sonra kaniti.
 
-    Sonuc     - tum satirlar, tum kolonlar
-    Incele    - durum = INCELE (guven dusuk veya uyari var)
-    Eslesmedi - durum = ESLESMEDI (kisi bulunamadi)
-    Ozet      - durum/yontem dagilimi, masraf merkezi bazinda tutar toplami
+    Mahsuplasma - NIHAI CIKTI. Her fatura icin hangi projeye ne kadar
+                  yazilacagi. Muhasebeye giden tablo budur.
+    Kontrol     - Mutabakat. Her fatura icin okunan / yinelenen / dagitilan /
+                  dagitilamayan tutar. 'Fark' sutunu sifir olmak zorundadir.
+    Sonuc       - tum satirlar, tum kolonlar (mahsuplasmanin dayanagi)
+    Incele      - durum = INCELE (guven dusuk veya uyari var)
+    Eslesmedi   - durum = ESLESMEDI (kisi bulunamadi)
+    Ozet        - durum/yontem dagilimi, masraf merkezi bazinda tutar toplami
 
 Tasarim ilkesi: kullanici HER satirda neden o sonuca varildigini gorebilmeli.
 Bu yuzden 'Eslestirme Yontemi', 'Guven', 'Eslestirme Aciklamasi' ve 'Uyarilar'
 kolonlari ciktida her zaman yer alir ve satirlar duruma gore renklendirilir.
+
+Mahsuplasma sayfasi DUZ bir tablodur, gruplu bir rapor degil. Sebebi pratiktir:
+finans bu sayfada filtreleyip pivot yapar. Alt toplamlar Kontrol sayfasindadir.
 
 Yalniz ``xlsxwriter`` ve standart kutuphane kullanilir; modul tek basina
 import edilebilir.
@@ -25,7 +32,10 @@ from typing import Any, Iterable, Sequence
 
 from masraf.modeller import DURUM_ESLESMEDI, DURUM_INCELE, DURUM_OTOMATIK, Sonuc
 
-__all__ = ["excel_yaz", "csv_yaz", "KOLONLAR", "varsayilan_cikti_adi"]
+__all__ = [
+    "excel_yaz", "csv_yaz", "mahsuplasma_csv_yaz",
+    "KOLONLAR", "MAHSUP_KOLONLARI", "KONTROL_KOLONLARI", "varsayilan_cikti_adi",
+]
 
 #: (baslik, tip, genislik). Tip: metin | tarih | sayi | tamsayi | yuzde
 KOLONLAR: tuple[tuple[str, str, int], ...] = (
@@ -56,6 +66,59 @@ KOLONLAR: tuple[tuple[str, str, int], ...] = (
     ("Durum", "metin", 12),
     ("Uyarilar", "metin", 70),
 )
+
+#: Mahsuplasma sayfasi kolonlari: (baslik, tip, genislik).
+#: Sira muhasebecinin okuma sirasidir: once hangi fatura, sonra hangi proje,
+#: sonra ne kadar, en sonda kalite isaretleri.
+MAHSUP_KOLONLARI: tuple[tuple[str, str, int], ...] = (
+    ("Fatura / Kaynak Dosya", "metin", 34),
+    ("Masraf Merkezi Kodu", "metin", 22),
+    ("Masraf Merkezi Adi", "metin", 34),
+    ("Sirket", "metin", 18),
+    ("Gider Tipi", "metin", 13),
+    ("Paylasim", "metin", 20),
+    ("Tutar", "sayi", 14),
+    ("Para Birimi", "metin", 10),
+    ("Fatura Payi %", "sayi", 12),
+    ("Satir", "tamsayi", 7),
+    ("Kisi", "tamsayi", 7),
+    ("Otomatik", "tamsayi", 9),
+    ("Incele", "tamsayi", 8),
+    ("Eslesmedi", "tamsayi", 10),
+    ("Gider Donemi", "metin", 18),
+    ("Durum", "metin", 34),
+)
+
+#: Kontrol (mutabakat) sayfasi kolonlari.
+KONTROL_KOLONLARI: tuple[tuple[str, str, int], ...] = (
+    ("Fatura / Kaynak Dosya", "metin", 34),
+    ("Para Birimi", "metin", 10),
+    ("Okunan Tutar", "sayi", 15),
+    ("Yinelenen (baska dosyada sayildi)", "sayi", 18),
+    ("Net Tutar", "sayi", 15),
+    ("Dagitilan", "sayi", 15),
+    ("Dagitilamayan", "sayi", 15),
+    ("Fark", "sayi", 11),
+    ("Satir", "tamsayi", 7),
+    ("Yinelenen Satir", "tamsayi", 14),
+    ("Dagitim Orani %", "sayi", 14),
+    ("Mutabakat", "metin", 16),
+)
+
+#: Mahsup satirinin 'Durum' sutununda gosterilecek kisa uyarilar.
+MAHSUP_DURUM_ETIKETLERI: tuple[tuple[str, str], ...] = (
+    ("dagitilamadi", "MASRAF MERKEZI YOK"),
+    ("haritada_yok", "HARITADA TANIMLI DEGIL"),
+    ("incele", "INCELENECEK SATIR VAR"),
+    ("eslesmedi", "ESLESMEYEN SATIR VAR"),
+)
+
+#: Mahsuplasma sayfasindaki satir renkleri (duruma gore).
+MAHSUP_RENKLERI: dict[str, str] = {
+    "tamam": "#E2EFDA",
+    "uyari": "#FFF2CC",
+    "engel": "#FCE4D6",
+}
 
 #: Duruma gore satir arka plan renkleri.
 DURUM_RENKLERI: dict[str, str] = {
@@ -174,6 +237,13 @@ class _Bicimler:
             "bg_color": BASLIK_RENGI,
         })
         self.kalin = calisma.add_format({"bold": True})
+        self.toplam_metin = calisma.add_format({
+            "bold": True, "top": 6, "border_color": BASLIK_RENGI,
+        })
+        self.toplam_sayi = calisma.add_format({
+            "bold": True, "top": 6, "border_color": BASLIK_RENGI,
+            "num_format": TUTAR_BICIMI,
+        })
         self.ozet_metin = calisma.add_format({"align": "left"})
         self.ozet_sayi = calisma.add_format({"num_format": "#,##0"})
         self.ozet_tutar = calisma.add_format({"num_format": TUTAR_BICIMI})
@@ -198,6 +268,31 @@ class _Bicimler:
         elif tip == "yuzde":
             ozellikler["num_format"] = YUZDE_BICIMI
 
+        bicim = self._calisma.add_format(ozellikler)
+        self._onbellek[anahtar] = bicim
+        return bicim
+
+    def mahsup(self, tip: str, renk_anahtari: str) -> Any:
+        """Mahsuplasma/Kontrol sayfalari icin hucre bicimi.
+
+        ``al`` durum kodlarina baglidir; bu sayfalarda satirin durumu farkli
+        bir eksende olculur (dagitildi mi, haritada var mi), o yuzden ayri.
+        """
+        anahtar = (f"mahsup:{tip}", renk_anahtari)
+        if anahtar in self._onbellek:
+            return self._onbellek[anahtar]
+        ozellikler: dict[str, Any] = {"border": 1, "border_color": "#D9D9D9"}
+        renk = MAHSUP_RENKLERI.get(renk_anahtari)
+        if renk:
+            ozellikler["bg_color"] = renk
+        if tip == "tarih":
+            ozellikler["num_format"] = TARIH_BICIMI
+        elif tip == "sayi":
+            ozellikler["num_format"] = TUTAR_BICIMI
+        elif tip == "tamsayi":
+            ozellikler["num_format"] = "0"
+        elif tip == "yuzde":
+            ozellikler["num_format"] = YUZDE_BICIMI
         bicim = self._calisma.add_format(ozellikler)
         self._onbellek[anahtar] = bicim
         return bicim
@@ -368,13 +463,229 @@ def _ozet_yaz(calisma: Any, ozet: dict, sonuclar: Sequence[Sonuc], bicimler: _Bi
                 cift(str(kayit), "")
 
 
-def excel_yaz(sonuclar: list[Sonuc], yol: str, ozet: dict) -> str:
-    """Sonuclari bicimlendirilmis dort sayfali Excel dosyasina yazar.
+def mahsup_durumu(satir: Any) -> tuple[str, str]:
+    """Bir mahsup satirinin kalite durumu: (renk anahtari, okunakli etiket).
+
+    Muhasebeci bu sutunu okuyup satiri oldugu gibi kaydedip kaydedemeyecegini
+    anlar. Bos etiket 'kontrol gerekmez' demektir.
+    """
+    from masraf.mahsuplasma import DAGITILAMAYAN
+
+    sorunlar: list[str] = []
+    if satir.masraf_merkezi == DAGITILAMAYAN:
+        sorunlar.append("MASRAF MERKEZI YOK")
+    elif not satir.haritada_var:
+        sorunlar.append("HARITADA TANIMLI DEGIL")
+    if satir.eslesmedi:
+        sorunlar.append(f"{satir.eslesmedi} eslesmeyen satir")
+    if satir.incele:
+        sorunlar.append(f"{satir.incele} satir incelenecek")
+
+    if not sorunlar:
+        return "tamam", ""
+    engel = (satir.masraf_merkezi == DAGITILAMAYAN) or bool(satir.eslesmedi)
+    return ("engel" if engel else "uyari"), " | ".join(sorunlar)
+
+
+def mahsup_satir_degerleri(satir: Any, fatura_toplami: float) -> list[Any]:
+    """Bir ``MahsupSatiri``ni MAHSUP_KOLONLARI sirasina cevirir."""
+    _renk, etiket = mahsup_durumu(satir)
+    pay = (satir.tutar / fatura_toplami * 100.0) if fatura_toplami else 0.0
+    return [
+        satir.kaynak,
+        satir.masraf_merkezi,
+        satir.masraf_merkezi_adi or "",
+        satir.sirket or "",
+        satir.gider_tipi,
+        satir.pay_notu or "",
+        round(satir.tutar, 2),
+        satir.para_birimi,
+        round(pay, 2),
+        satir.satir_sayisi,
+        satir.kisi_sayisi,
+        satir.otomatik,
+        satir.incele,
+        satir.eslesmedi,
+        satir.gider_donemi,
+        etiket,
+    ]
+
+
+def kontrol_satir_degerleri(kontrol: Any) -> list[Any]:
+    """Bir ``KontrolSatiri``ni KONTROL_KOLONLARI sirasina cevirir."""
+    return [
+        kontrol.kaynak,
+        kontrol.para_birimi,
+        kontrol.gelen,
+        kontrol.yinelenen_tutar,
+        kontrol.net,
+        kontrol.dagitilan,
+        kontrol.dagitilamayan,
+        kontrol.fark,
+        kontrol.satir_sayisi,
+        kontrol.yinelenen_satir,
+        round(kontrol.dagitim_orani, 2),
+        "KAPANDI" if kontrol.kapali_mi else "ACIK - KONTROL EDIN",
+    ]
+
+
+def _tablo_yaz(
+    calisma: Any,
+    ad: str,
+    kolonlar: Sequence[tuple[str, str, int]],
+    satirlar: Sequence[Sequence[Any]],
+    renkler: Sequence[str],
+    bicimler: "_Bicimler",
+    bos_mesaj: str = "(Bu sayfada satir yok)",
+    toplam_sutunlari: Sequence[int] = (),
+) -> Any:
+    """Basliklari, filtresi, renkleri ve istege bagli toplam satiri olan tablo yazar."""
+    sayfa = calisma.add_worksheet(ad)
+    sayfa.freeze_panes(1, 0)
+    sayfa.set_row(0, 30)
+    for sutun, (baslik, _tip, genislik) in enumerate(kolonlar):
+        sayfa.write_string(0, sutun, baslik, bicimler.baslik)
+        sayfa.set_column(sutun, sutun, genislik)
+
+    for indeks, (degerler, renk) in enumerate(zip(satirlar, renkler), start=1):
+        for sutun, ((_baslik, tip, _g), deger) in enumerate(zip(kolonlar, degerler)):
+            bicim = bicimler.mahsup(tip, renk)
+            if deger is None or deger == "":
+                sayfa.write_blank(indeks, sutun, None, bicim)
+            elif tip == "tarih":
+                sayfa.write_datetime(
+                    indeks, sutun, datetime(deger.year, deger.month, deger.day), bicim
+                )
+            elif tip in ("sayi", "tamsayi", "yuzde"):
+                try:
+                    sayfa.write_number(indeks, sutun, float(deger), bicim)
+                except (TypeError, ValueError):
+                    sayfa.write_string(indeks, sutun, str(deger), bicim)
+            else:
+                sayfa.write_string(indeks, sutun, str(deger), bicim)
+
+    son = len(satirlar)
+    sayfa.autofilter(0, 0, max(1, son), len(kolonlar) - 1)
+    if not satirlar:
+        sayfa.write_string(1, 0, bos_mesaj, bicimler.ozet_metin)
+        return sayfa
+
+    if toplam_sutunlari:
+        satir_no = son + 1
+        sayfa.write_string(satir_no, 0, "TOPLAM", bicimler.toplam_metin)
+        for sutun in range(1, len(kolonlar)):
+            if sutun in toplam_sutunlari:
+                harf = _sutun_harfi(sutun)
+                sayfa.write_formula(
+                    satir_no, sutun, f"=SUM({harf}2:{harf}{son + 1})",
+                    bicimler.toplam_sayi,
+                )
+            else:
+                sayfa.write_blank(satir_no, sutun, None, bicimler.toplam_metin)
+    return sayfa
+
+
+def _sutun_harfi(indeks: int) -> str:
+    """0 tabanli sutun indeksini Excel harfine cevirir (0 -> A)."""
+    harfler = ""
+    indeks += 1
+    while indeks:
+        indeks, kalan = divmod(indeks - 1, 26)
+        harfler = chr(65 + kalan) + harfler
+    return harfler
+
+
+def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
+    """'Mahsuplasma' ve 'Kontrol' sayfalarini yazar."""
+    fatura_toplami: dict[tuple[str, str], float] = {}
+    for m in tablo.satirlar:
+        anahtar = (m.kaynak, m.para_birimi)
+        fatura_toplami[anahtar] = fatura_toplami.get(anahtar, 0.0) + m.tutar
+
+    degerler, renkler = [], []
+    for m in tablo.satirlar:
+        renk, _etiket = mahsup_durumu(m)
+        degerler.append(mahsup_satir_degerleri(m, fatura_toplami[(m.kaynak, m.para_birimi)]))
+        renkler.append(renk)
+    _tablo_yaz(
+        calisma, "Mahsuplasma", MAHSUP_KOLONLARI, degerler, renkler, bicimler,
+        bos_mesaj="(Dagitilacak tutarli satir bulunamadi)",
+        toplam_sutunlari=(6, 9, 10, 11, 12, 13),
+    )
+
+    k_degerler = [kontrol_satir_degerleri(k) for k in tablo.kontrol]
+    k_renkler = ["tamam" if k.kapali_mi else "engel" for k in tablo.kontrol]
+    sayfa = _tablo_yaz(
+        calisma, "Kontrol", KONTROL_KOLONLARI, k_degerler, k_renkler, bicimler,
+        bos_mesaj="(Kontrol edilecek fatura yok)",
+        toplam_sutunlari=(2, 3, 4, 5, 6, 7, 8, 9),
+    )
+
+    # Kontrol sayfasinin altina aciklamalar ve isaret celiskileri.
+    satir = len(k_degerler) + 3
+    sayfa.write_string(satir, 0, "Nasil okunur", bicimler.bolum)
+    satir += 1
+    for metin in (
+        "Okunan Tutar = dosyada gorulen her seyin toplami.",
+        "Yinelenen = ayni islem baska bir dosyada zaten sayildigi icin bu "
+        "dosyadan dusuldu. Ayni mailde hem acentenin ham dokumu hem de o "
+        "islemlerin elle dagitilmis hali gelirse para cift sayilir; bu sutun "
+        "onu engeller.",
+        "Net Tutar = Okunan - Yinelenen. Bu dosyanin gercekten kattigi tutar.",
+        "Fark = Okunan - (Yinelenen + Dagitilan + Dagitilamayan). SIFIR olmali. "
+        "Sifir degilse dagitimda kayip var demektir, muhasebeye gonderilmemeli.",
+        "Dagitilamayan = kisi veya masraf merkezi bulunamadigi icin projeye "
+        "yazilamayan tutar. Silinmez; Mahsuplasma sayfasinda "
+        "'(DAGITILAMAYAN)' satiri olarak durur.",
+    ):
+        sayfa.write_string(satir, 0, metin, bicimler.ozet_metin)
+        satir += 1
+
+    if getattr(tablo, "isaret_celiskileri", None):
+        satir += 1
+        sayfa.write_string(satir, 0, "Isaret celiskileri", bicimler.bolum)
+        satir += 1
+        for celiski in tablo.isaret_celiskileri:
+            sayfa.write_string(satir, 0, celiski.aciklama(), bicimler.ozet_metin)
+            satir += 1
+
+    if tablo.kutuk_satir_sayisi or tablo.tutarsiz_satir_sayisi:
+        satir += 1
+        sayfa.write_string(satir, 0, "Dagilima girmeyen satirlar", bicimler.bolum)
+        satir += 1
+        if tablo.kutuk_satir_sayisi:
+            sayfa.write_string(
+                satir, 0,
+                f"{tablo.kutuk_satir_sayisi} satir kisi kutugunden geldi "
+                "(katilimci listesi, saglik kontrol listesi). Bunlar fatura "
+                "degildir, tutar tasimazlar.",
+                bicimler.ozet_metin)
+            satir += 1
+        if tablo.tutarsiz_satir_sayisi:
+            sayfa.write_string(
+                satir, 0,
+                f"{tablo.tutarsiz_satir_sayisi} satirda tutar okunamadi; "
+                "dagilima girmediler. Kaynak dosyada tutar kolonu bos olabilir "
+                "ya da kolon adi taninmamis olabilir.",
+                bicimler.ozet_metin)
+            satir += 1
+
+
+def excel_yaz(
+    sonuclar: list[Sonuc],
+    yol: str,
+    ozet: dict,
+    mahsup: Any = None,
+) -> str:
+    """Sonuclari bicimlendirilmis cok sayfali Excel dosyasina yazar.
 
     Args:
         sonuclar: Boru hattinin urettigi sonuc listesi.
         yol: Yazilacak .xlsx dosyasinin yolu.
         ozet: ``Boru.ozet()`` ciktisi.
+        mahsup: ``mahsuplasma_uret`` ciktisi olan ``MahsupTablosu``. Verilirse
+            'Mahsuplasma' ve 'Kontrol' sayfalari EN BASA eklenir; muhasebeye
+            giden tablo odur, satir dokumu onun dayanagidir.
 
     Returns:
         Yazilan dosyanin tam yolu (str).
@@ -389,6 +700,8 @@ def excel_yaz(sonuclar: list[Sonuc], yol: str, ozet: dict) -> str:
     )
     try:
         bicimler = _Bicimler(calisma)
+        if mahsup is not None:
+            _mahsuplasma_yaz(calisma, mahsup, bicimler)
         _sayfa_yaz(calisma, "Sonuc", list(sonuclar), bicimler)
         _sayfa_yaz(
             calisma, "Incele", [s for s in sonuclar if s.durum == DURUM_INCELE], bicimler
@@ -430,4 +743,38 @@ def csv_yaz(sonuclar: Iterable[Sonuc], yol: str) -> str:
                     hucreler.append(str(deger))
             yazici.writerow(hucreler)
 
+    return str(hedef)
+
+
+def mahsuplasma_csv_yaz(mahsup: Any, yol: str) -> str:
+    """Mahsuplasma tablosunu UTF-8 BOM'lu CSV olarak yazar.
+
+    Excel'i olmayan ya da tabloyu baska bir sisteme aktaracak kullanicilar
+    icin. Ayirici noktali virguldur.
+    """
+    fatura_toplami: dict[tuple[str, str], float] = {}
+    for m in mahsup.satirlar:
+        anahtar = (m.kaynak, m.para_birimi)
+        fatura_toplami[anahtar] = fatura_toplami.get(anahtar, 0.0) + m.tutar
+
+    hedef = Path(yol)
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    with hedef.open("w", encoding="utf-8-sig", newline="") as akis:
+        yazici = csv.writer(akis, delimiter=";")
+        yazici.writerow([baslik for baslik, _tip, _g in MAHSUP_KOLONLARI])
+        for m in mahsup.satirlar:
+            degerler = mahsup_satir_degerleri(
+                m, fatura_toplami[(m.kaynak, m.para_birimi)]
+            )
+            hucreler: list[str] = []
+            for (_baslik, tip, _g), deger in zip(MAHSUP_KOLONLARI, degerler):
+                if deger is None or deger == "":
+                    hucreler.append("")
+                elif tip == "tarih":
+                    hucreler.append(deger.strftime("%d.%m.%Y"))
+                elif tip == "sayi":
+                    hucreler.append(f"{float(deger):.2f}")
+                else:
+                    hucreler.append(str(deger))
+            yazici.writerow(hucreler)
     return str(hedef)

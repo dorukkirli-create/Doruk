@@ -81,6 +81,12 @@ try:
 except Exception:
     CIKTI_MODULU = None
 
+MAHSUP_MODULU: Any = None
+try:
+    from masraf import mahsuplasma as MAHSUP_MODULU  # type: ignore
+except Exception:
+    MAHSUP_MODULU = None
+
 
 # --------------------------------------------------------------------------
 # Sabitler
@@ -783,14 +789,38 @@ def tabloyu_boya(df: pd.DataFrame):
         return df
 
 
+def mahsup_tablosu(sonuclar: Sequence["Sonuc"]) -> Any:
+    """Sonuclardan mahsuplasma (dagitim) tablosunu uretir; modul yoksa None.
+
+    Masraf merkezi haritasi ``Boru`` ornegi uzerinden verilir; boylece
+    'RHI 1/3 - RENSTROYDETAL 2/3' gibi paylasim etiketlerinin proje mi sirket
+    mi oldugu ayirt edilebilir.
+    """
+    if MAHSUP_MODULU is None or not sonuclar:
+        return None
+    harita = None
+    try:
+        boru = st.session_state.get("boru")
+        if boru is not None:
+            harita = getattr(boru, "harita", None)
+    except Exception:
+        harita = None
+    try:
+        return MAHSUP_MODULU.mahsuplasma_uret(list(sonuclar), harita)
+    except Exception:
+        return None
+
+
 def excel_uret(
     sonuclar: Sequence["Sonuc"], hedef: Path, boru_ozeti: dict | None = None
 ) -> Path:
-    """Sonuclari 4 sayfali Excel dosyasina yazar.
+    """Sonuclari cok sayfali Excel dosyasina yazar.
 
     Once ``masraf.cikti.excel_yaz`` denenir (renkli, bicimli, gerekce
     kolonlariyla birlikte); modul yoksa buradaki yerel yazici kullanilir.
-    Sayfalar her iki durumda da: Sonuc / Incele / Eslesmedi / Ozet.
+    Cekirdek yazici varsa sayfalar: Mahsuplasma / Kontrol / Sonuc / Incele /
+    Eslesmedi / Ozet. Yerel yedek yazici yalnizca Sonuc / Incele / Eslesmedi
+    uretir.
     """
     hedef = Path(hedef)
     hedef.parent.mkdir(parents=True, exist_ok=True)
@@ -798,7 +828,8 @@ def excel_uret(
     yazici = getattr(CIKTI_MODULU, "excel_yaz", None) if CIKTI_MODULU else None
     if callable(yazici):
         try:
-            yazici(list(sonuclar), str(hedef), dict(boru_ozeti or {}))
+            yazici(list(sonuclar), str(hedef), dict(boru_ozeti or {}),
+                   mahsup_tablosu(sonuclar))
             if hedef.exists():
                 return hedef
         except Exception:
@@ -1522,7 +1553,211 @@ def sekme_fatura() -> None:
 
 
 # --------------------------------------------------------------------------
-# Sekme 3: Inceleme (en onemli sekme)
+# Sekme 3: Mahsuplasma (muhasebeye giden tablo)
+# --------------------------------------------------------------------------
+
+
+def _mahsup_dataframe(mahsup: Any) -> "pd.DataFrame":
+    """Mahsup satirlarini ekranda gosterilecek tabloya cevirir."""
+    if CIKTI_MODULU is None:
+        return pd.DataFrame()
+    fatura_toplami: dict[tuple[str, str], float] = {}
+    for m in mahsup.satirlar:
+        anahtar = (m.kaynak, m.para_birimi)
+        fatura_toplami[anahtar] = fatura_toplami.get(anahtar, 0.0) + m.tutar
+    basliklar = [baslik for baslik, _t, _g in CIKTI_MODULU.MAHSUP_KOLONLARI]
+    satirlar = [
+        CIKTI_MODULU.mahsup_satir_degerleri(m, fatura_toplami[(m.kaynak, m.para_birimi)])
+        for m in mahsup.satirlar
+    ]
+    return pd.DataFrame(satirlar, columns=basliklar)
+
+
+def _kontrol_dataframe(mahsup: Any) -> "pd.DataFrame":
+    if CIKTI_MODULU is None:
+        return pd.DataFrame()
+    basliklar = [baslik for baslik, _t, _g in CIKTI_MODULU.KONTROL_KOLONLARI]
+    satirlar = [CIKTI_MODULU.kontrol_satir_degerleri(k) for k in mahsup.kontrol]
+    return pd.DataFrame(satirlar, columns=basliklar)
+
+
+def sekme_mahsuplasma() -> None:
+    """Her fatura icin hangi projeye ne kadar yazilacagini gosterir.
+
+    Bu sekme finansin muhasebeye gonderecegi tablodur. Ustte mutabakat
+    vardir: para kaybolmadigi burada gorulur. Altta dagitim tablosu.
+    """
+    st.subheader("Mahsuplaşma")
+    st.caption(
+        "Her fatura için hangi projeye ne kadar yazılacağı. Muhasebeye giden "
+        "tablo budur; alttaki satır dökümü bunun dayanağıdır."
+    )
+
+    sonuclar = st.session_state.get("sonuclar") or []
+    if not sonuclar:
+        st.info("Önce **Fatura İşle** sekmesinden dosyaları işleyin.")
+        return
+    if MAHSUP_MODULU is None:
+        st.error(
+            "Mahsuplaşma modülü yüklenemedi (`masraf/mahsuplasma.py`). "
+            "Kurulum eksik olabilir."
+        )
+        return
+
+    mahsup = mahsup_tablosu(sonuclar)
+    if mahsup is None:
+        st.error("Mahsuplaşma tablosu üretilemedi.")
+        return
+
+    # --- Mutabakat: para kayboldu mu? ---
+    blok_baslik("Mutabakat")
+    if mahsup.kapali_mi:
+        st.success(
+            "Bütün faturalar kapandı. Okunan tutar = yinelenen + dağıtılan + "
+            "dağıtılamayan. Para kaybolmadı."
+        )
+    else:
+        st.error(
+            "**Mutabakat açık.** Aşağıdaki faturalarda dağıtım toplamı okunan "
+            "tutara eşit değil. Bu tablo muhasebeye gönderilmemeli: "
+            + ", ".join(f"{k.kaynak} ({k.fark:+.2f})" for k in mahsup.acik_kontroller)
+        )
+
+    toplamlar = mahsup.toplamlar()
+    for para, deger in toplamlar.items():
+        sutunlar = st.columns(5)
+        sutunlar[0].metric(f"Okunan ({para})", f"{deger['gelen']:,.2f}")
+        sutunlar[1].metric(
+            "Yinelenen", f"{deger['yinelenen']:,.2f}",
+            help="Aynı işlem başka bir dosyada zaten sayıldı; çift saymamak "
+                 "için düşüldü.",
+        )
+        sutunlar[2].metric(
+            "Net", f"{deger['net']:,.2f}",
+            help="Okunan eksi yinelenen. Gerçekten dağıtılacak tutar.",
+        )
+        sutunlar[3].metric("Dağıtılan", f"{deger['dagitilan']:,.2f}")
+        sutunlar[4].metric(
+            "Dağıtılamayan", f"{deger['dagitilamayan']:,.2f}",
+            help="Kişi veya masraf merkezi bulunamadı. Silinmedi, tabloda "
+                 "'(DAGITILAMAYAN)' satırı olarak duruyor.",
+        )
+
+    if mahsup.yinelenen_sayisi:
+        st.info(
+            f"**{mahsup.yinelenen_sayisi} satır yinelenen olarak düşüldü.** "
+            "Aynı mailde hem acentenin ham dökümü hem de o işlemlerin elle "
+            "dağıtılmış hali gelirse para iki kez sayılır; bu eleme onu "
+            "engeller. Ayrıntı aşağıdaki kontrol tablosunda."
+        )
+    for celiski in mahsup.isaret_celiskileri:
+        st.warning(celiski.aciklama())
+
+    kontrol_df = _kontrol_dataframe(mahsup)
+    if not kontrol_df.empty:
+        with st.expander("Fatura bazında kontrol tablosu", expanded=not mahsup.kapali_mi):
+            st.dataframe(kontrol_df, hide_index=True, width="stretch")
+            st.caption(
+                "**Fark** sütunu sıfır olmak zorundadır. Sıfır değilse "
+                "dağıtımda kayıp var demektir."
+            )
+
+    if mahsup.kutuk_satir_sayisi or mahsup.tutarsiz_satir_sayisi:
+        notlar = []
+        if mahsup.kutuk_satir_sayisi:
+            notlar.append(
+                f"{mahsup.kutuk_satir_sayisi} satır kişi kütüğünden geldi "
+                "(katılımcı listesi, sağlık kontrol listesi). Bunlar fatura "
+                "değil, tutar taşımıyorlar."
+            )
+        if mahsup.tutarsiz_satir_sayisi:
+            notlar.append(
+                f"{mahsup.tutarsiz_satir_sayisi} satırda tutar okunamadı. "
+                "Kaynak dosyada tutar kolonu boş olabilir ya da kolon adı "
+                "tanınmamış olabilir; **Ayarlar → Kolon Sözlüğü**'nden ekleyin."
+            )
+        st.caption(" ".join(notlar))
+
+    # --- Dagitim tablosu ---
+    st.divider()
+    blok_baslik("Dağıtım")
+
+    df = _mahsup_dataframe(mahsup)
+    if df.empty:
+        st.info("Dağıtılacak tutarlı satır bulunamadı.")
+        return
+
+    faturalar = ["(hepsi)"] + sorted({m.kaynak for m in mahsup.satirlar})
+    sutun_a, sutun_b = st.columns([2, 1])
+    with sutun_a:
+        secilen = st.selectbox("Fatura", faturalar, key="mahsup_fatura")
+    with sutun_b:
+        yalniz_sorunlu = st.checkbox(
+            "Yalnızca kontrol gerekenler", key="mahsup_sorunlu",
+            help="Masraf merkezi bulunamayan, haritada tanımlı olmayan veya "
+                 "içinde incelenecek satır bulunan dağıtım satırları.",
+        )
+
+    gosterilecek = df
+    if secilen != "(hepsi)":
+        gosterilecek = gosterilecek[gosterilecek["Fatura / Kaynak Dosya"] == secilen]
+    if yalniz_sorunlu:
+        gosterilecek = gosterilecek[gosterilecek["Durum"].astype(str) != ""]
+
+    st.dataframe(gosterilecek, hide_index=True, width="stretch")
+    if not gosterilecek.empty:
+        st.caption(
+            f"{len(gosterilecek)} dağıtım satırı, toplam "
+            f"{gosterilecek['Tutar'].sum():,.2f}."
+        )
+
+    # --- Proje bazinda ozet ---
+    merkezler = mahsup.merkez_ozeti()
+    if merkezler:
+        st.divider()
+        blok_baslik("Proje bazında toplam")
+        ozet_df = pd.DataFrame([
+            {
+                "Masraf Merkezi": k["masraf_merkezi"],
+                "Adı": k["masraf_merkezi_adi"] or "",
+                "Şirket": k["sirket"] or "",
+                "Tutar": k["tutar"],
+                "Para Birimi": k["para_birimi"],
+                "Pay %": k["pay_yuzde"],
+                "Satır": k["satir_sayisi"],
+                "Kişi": k["kisi_sayisi"],
+                "Haritada": "evet" if k["haritada_var"] else "HAYIR",
+            }
+            for k in merkezler
+        ])
+        st.dataframe(ozet_df, hide_index=True, width="stretch")
+        haritasizlar = [k for k in merkezler if not k["haritada_var"]]
+        if haritasizlar:
+            st.warning(
+                f"{len(haritasizlar)} masraf merkezi haritada tanımlı değil; "
+                "görev yeri metni olduğu gibi kullanıldı. Finans kodlarına "
+                "çevrilmesi için **Masraf Merkezi Haritası** sekmesine ekleyin: "
+                + ", ".join(str(k["masraf_merkezi"]) for k in haritasizlar[:10])
+            )
+
+    # --- CSV indirme ---
+    st.divider()
+    blok_baslik("Dışa aktar")
+    st.caption(
+        "Tam Excel dosyası (Mahsuplaşma, Kontrol ve satır dökümü sayfalarıyla) "
+        "**Fatura İşle** sekmesindeki 'Excel oluştur' düğmesinden alınır. "
+        "Aşağıdaki CSV yalnızca dağıtım tablosunu içerir."
+    )
+    st.download_button(
+        "Mahsuplaşma CSV indir",
+        data=df.to_csv(index=False, sep=";").encode("utf-8-sig"),
+        file_name=f"mahsuplasma_{datetime.now():%Y%m%d_%H%M%S}.csv",
+        mime="text/csv",
+    )
+
+
+# --------------------------------------------------------------------------
+# Sekme 4: Inceleme (en onemli sekme)
 # --------------------------------------------------------------------------
 
 
@@ -2016,12 +2251,14 @@ def main() -> None:
         [
             "Ayarlar",
             "Fatura İşle",
+            "Mahsuplaşma",
             "İnceleme",
             "Masraf Merkezi Haritası",
             "Yardım",
         ]
     )
-    ciziciler = (sekme_ayarlar, sekme_fatura, sekme_inceleme, sekme_harita, sekme_yardim)
+    ciziciler = (sekme_ayarlar, sekme_fatura, sekme_mahsuplasma,
+                 sekme_inceleme, sekme_harita, sekme_yardim)
     for sekme, cizici in zip(sekmeler, ciziciler):
         with sekme:
             try:

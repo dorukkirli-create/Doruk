@@ -106,6 +106,22 @@ def _bildir(ilerleme: Ilerleme | None, yuzde: float, mesaj: str) -> None:
         pass  # Arayuz hatasi is akisini durdurmamali.
 
 
+def _mahsup_ozeti(mahsup) -> dict:
+    """Mahsuplasma tablosunun ozet gostergeleri (arayuz ve rapor icin)."""
+    return {
+        "mahsup_satiri": len(mahsup.satirlar),
+        "fatura_sayisi": len({k.kaynak for k in mahsup.kontrol}),
+        "yinelenen_satir": mahsup.yinelenen_sayisi,
+        "kutuk_satir": mahsup.kutuk_satir_sayisi,
+        "tutarsiz_satir": mahsup.tutarsiz_satir_sayisi,
+        "isaret_celiskisi": len(mahsup.isaret_celiskileri),
+        "kapali_mi": mahsup.kapali_mi,
+        "acik_fatura": [k.kaynak for k in mahsup.acik_kontroller],
+        "toplamlar": mahsup.toplamlar(),
+        "merkezler": mahsup.merkez_ozeti(),
+    }
+
+
 def _kaynak_proje_ozeti(sonuclar: Iterable[Sonuc]) -> dict:
     """Kaynak dosyadaki santiye etiketi ile cozulen projeyi karsilastirir.
 
@@ -499,26 +515,55 @@ class Boru:
     # Kolaylik
     # ------------------------------------------------------------------
 
+    def mahsuplasma(self, sonuclar: Sequence[Sonuc]):
+        """Satir sonuclarindan mahsuplasma (dagitim) tablosunu uretir.
+
+        Muhasebeye giden cikti budur: her fatura icin hangi projeye ne kadar
+        yazilacagi. Masraf merkezi haritasi verilir ki paylasim etiketlerinin
+        proje mi yoksa sirket mi oldugu ayirt edilebilsin.
+        """
+        from masraf.mahsuplasma import mahsuplasma_uret
+
+        return mahsuplasma_uret(list(sonuclar), self.harita)
+
     def calistir(
         self,
         dosya_yollari: list[str] | Sequence[str | Path],
         cikti_adi: str | None = None,
         ilerleme: Ilerleme | None = None,
     ) -> dict:
-        """Isle + ozet + Excel ciktisi; arayuzun cagirdigi tek fonksiyon.
+        """Isle + ozet + mahsuplasma + Excel ciktisi; arayuzun tek giris noktasi.
 
         Returns:
-            {'sonuclar': [...], 'ozet': {...}, 'excel_yolu': '...'}
+            {'sonuclar': [...], 'ozet': {...}, 'mahsup': MahsupTablosu,
+             'excel_yolu': '...'}
         """
         from masraf.cikti import excel_yaz, varsayilan_cikti_adi
 
         sonuclar = self.isle(dosya_yollari, ilerleme)
         ozet = self.ozet(sonuclar)
+        mahsup = self.mahsuplasma(sonuclar)
+        if mahsup.acik_kontroller:
+            self.uyarilar.append(
+                "MUTABAKAT ACIK: "
+                + "; ".join(
+                    f"{k.kaynak} ({k.para_birimi}) fark {k.fark:+.2f}"
+                    for k in mahsup.acik_kontroller
+                )
+                + ". Mahsuplasma tablosu muhasebeye gonderilmeden once kontrol edilmeli."
+            )
+        for celiski in mahsup.isaret_celiskileri:
+            self.uyarilar.append(celiski.aciklama())
+        ozet["mahsuplasma"] = _mahsup_ozeti(mahsup)
+
         cikti_dizini = Path(self.ayarlar.cikti_dizini)
         cikti_dizini.mkdir(parents=True, exist_ok=True)
         yol = cikti_dizini / (cikti_adi or varsayilan_cikti_adi())
-        excel_yolu = excel_yaz(sonuclar, str(yol), ozet) if sonuclar else ""
-        return {"sonuclar": sonuclar, "ozet": ozet, "excel_yolu": excel_yolu}
+        excel_yolu = excel_yaz(sonuclar, str(yol), ozet, mahsup) if sonuclar else ""
+        return {
+            "sonuclar": sonuclar, "ozet": ozet,
+            "mahsup": mahsup, "excel_yolu": excel_yolu,
+        }
 
     def istatistik(self) -> dict:
         """Yuklu bilesenlerin ozeti (arayuzde 'sistem durumu' panelinde)."""
