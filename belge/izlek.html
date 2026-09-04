@@ -1,0 +1,435 @@
+<title>Bir Faturanın Yolculuğu</title>
+<style>
+:root{
+  --navy:#051C2C; --white:#FFFFFF; --blue:#1F40E6; --cyan:#00A9F4;
+  --teal:#3C96B4; --deep-teal:#027AB1; --coral:#FAA082; --red:#E5546C;
+  --gray-d:#4D4D4D; --gray-m:#7F7F7F; --border:#D0D0D0; --gray-l:#E6E6E6;
+  --ok:#4E7C3F; --ok-f:#E2EFDA; --warn:#9C7A16; --warn-f:#FFF2CC;
+  --stop:#B4562E; --stop-f:#FCE4D6;
+  --bg:var(--white); --surface:var(--white); --alt:#F6F8F9; --code-bg:#F2F5F7;
+  --text:var(--gray-d); --strong:var(--navy); --dim:var(--gray-m);
+  --rule:var(--border); --rule-s:var(--navy);
+  --f-head:Georgia,"Times New Roman",serif;
+  --f-body:Arial,Helvetica,sans-serif;
+  --f-mono:"Consolas","SF Mono",Menlo,"DejaVu Sans Mono",monospace;
+  --s1:4px;--s2:8px;--s3:16px;--s4:24px;--s5:32px;--s6:48px;--s7:72px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#04151F; --surface:#08222F; --alt:#0C2A38; --code-bg:#0A2634;
+  --text:#C9D4DA; --strong:#FFFFFF; --dim:#8FA3AD;
+  --rule:#1C3A4A; --rule-s:#2C5A70;
+  --ok:#7FBF6A; --ok-f:#16321C; --warn:#D9B64A; --warn-f:#37300F;
+  --stop:#E0895F; --stop-f:#3A2116;
+}}
+:root[data-theme="dark"]{
+  --bg:#04151F; --surface:#08222F; --alt:#0C2A38; --code-bg:#0A2634;
+  --text:#C9D4DA; --strong:#FFFFFF; --dim:#8FA3AD;
+  --rule:#1C3A4A; --rule-s:#2C5A70;
+  --ok:#7FBF6A; --ok-f:#16321C; --warn:#D9B64A; --warn-f:#37300F;
+  --stop:#E0895F; --stop-f:#3A2116;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--f-body);
+     font-size:15px;line-height:1.62;margin:0}
+h1,h2,h3{font-family:var(--f-head);color:var(--strong);font-weight:700;
+         margin:0;text-wrap:balance}
+h1{font-size:clamp(29px,4.2vw,48px);line-height:1.1}
+h2{font-size:clamp(20px,2.4vw,26px);line-height:1.22}
+h3{font-size:17px}
+h4{font-family:var(--f-body);font-size:12px;letter-spacing:.1em;
+   text-transform:uppercase;color:var(--dim);font-weight:700;margin:0}
+p{margin:0}strong{color:var(--strong)}
+.mono{font-family:var(--f-mono);font-size:.92em;background:var(--code-bg);padding:1px 5px;border:1px solid var(--rule);white-space:nowrap}
+.wrap{max-width:1000px;margin:0 auto;padding:0 var(--s4)}
+.topbar{display:flex;justify-content:space-between;align-items:baseline;
+  gap:var(--s3);border-bottom:1px solid var(--rule-s);padding:var(--s3) 0;flex-wrap:wrap}
+.topbar .brand{font-weight:700;color:var(--strong)}
+.topbar .tag{font-size:12px;color:var(--dim);letter-spacing:.06em}
+.head{padding:var(--s7) 0 var(--s6);border-bottom:1px solid var(--rule-s)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+         color:var(--deep-teal);font-weight:700;margin-bottom:var(--s3)}
+.lede{margin-top:var(--s4);font-size:17px;max-width:60ch}
+
+/* Yanlis anlama duzeltmeleri */
+.myths{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);
+       margin-top:var(--s5)}
+.myth{border:1px solid var(--rule);border-left:4px solid var(--red);
+      padding:var(--s4);background:var(--alt);display:grid;gap:var(--s2)}
+.myth .q{font-family:var(--f-head);font-size:16px;color:var(--strong)}
+.myth .a{font-size:14px}
+.no{color:var(--red);font-weight:700}
+.yes{color:var(--ok);font-weight:700}
+
+/* Istasyonlar */
+.station{display:grid;grid-template-columns:64px 1fr;gap:var(--s4);
+         padding:var(--s6) 0;border-bottom:1px solid var(--rule)}
+.station:last-of-type{border-bottom:none}
+.marker{display:flex;flex-direction:column;align-items:center;gap:var(--s2)}
+.marker .n{font-family:var(--f-head);font-size:19px;color:#fff;background:var(--navy);
+  width:40px;height:40px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;line-height:1;font-variant-numeric:tabular-nums}
+.marker .line{flex:1;width:1px;background:var(--rule);min-height:20px}
+.body h2{margin-bottom:var(--s2)}
+.body>p{max-width:70ch}
+.gap{height:var(--s4)}
+
+/* Kod / veri dokumu */
+.cap{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);
+     background:var(--navy);color:#CFE2EC;font-family:var(--f-mono);font-size:11.5px;
+     padding:7px var(--s3);letter-spacing:.03em;flex-wrap:wrap}
+.cap .dot{color:var(--cyan)}
+pre{margin:0;background:var(--code-bg);border:1px solid var(--rule);border-top:none;
+    padding:var(--s3);overflow-x:auto;font-family:var(--f-mono);
+    font-size:12.6px;line-height:1.62;color:var(--text)}
+.shot{margin:var(--s3) 0}
+pre b{color:var(--strong);font-weight:700}
+pre .hi{background:rgba(0,169,244,.18);color:var(--strong);font-weight:700;padding:0 2px}
+pre .mut{color:var(--dim)}
+pre .bad{color:var(--stop);font-weight:700}
+pre .good{color:var(--ok);font-weight:700}
+
+.note{font-size:13.5px;color:var(--dim);max-width:74ch;margin-top:var(--s3)}
+.key{border-left:4px solid var(--cyan);background:var(--alt);padding:var(--s3) var(--s4);
+     margin-top:var(--s4);font-size:14.5px;max-width:74ch}
+.key strong{color:var(--strong)}
+
+.tw{overflow-x:auto;border:1px solid var(--rule);margin-top:var(--s3)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:480px}
+th{text-align:left;font-weight:700;color:var(--strong);padding:9px var(--s3);
+   border-bottom:1.5px solid var(--rule-s);white-space:nowrap}
+td{padding:8px var(--s3);border-bottom:1px solid var(--rule);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.mono{font-family:var(--f-mono);font-size:12.5px}
+.pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;
+      padding:2px 8px;border:1px solid currentColor;white-space:nowrap}
+.pill--ok{color:var(--ok)} .pill--no{color:var(--stop)} .pill--in{color:var(--deep-teal)}
+
+.final{background:var(--navy);color:#E8F1F6;padding:var(--s6);margin-top:var(--s5)}
+.final h2{color:#fff;margin-bottom:var(--s3)}
+.final p{color:#B9CEDA;max-width:68ch}
+.final pre{background:#03121B;border-color:#12303F;color:#CFE2EC}
+.final .cap{background:#12303F}
+footer{padding:var(--s5) 0 var(--s6);color:var(--dim);font-size:12.5px;
+       border-top:1px solid var(--rule-s);margin-top:var(--s6)}
+@media (max-width:820px){
+  .myths{grid-template-columns:1fr}
+  .station{grid-template-columns:44px 1fr;gap:var(--s3)}
+  .marker .n{width:34px;height:34px;font-size:16px}
+  .final{padding:var(--s5) var(--s4);margin-left:calc(-1*var(--s4));
+         margin-right:calc(-1*var(--s4))}
+}
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">Rencons Heavy Industries</div>
+    <div class="tag">Finans &rsaquo; Otomasyon &rsaquo; Teknik izlek</div>
+  </div>
+
+  <div class="head">
+    <div class="eyebrow">Adım adım</div>
+    <h1>Bir faturanın yolculuğu</h1>
+    <p class="lede">Outlook mailinden muhasebe satırına kadar, dokuz durak.
+    Aşağıdaki dökümlerin hepsi <strong>Temmuz 2026 mailinizden</strong> gerçek
+    veriyle alınmıştır. Uydurma ekran görüntüsü yok; her kutu kodun o adımda
+    gerçekten ürettiği çıktıdır.</p>
+
+    <div class="myths">
+      <div class="myth">
+        <span class="q">“Fatura numarasını mı eşleştiriyor?”</span>
+        <span class="a"><span class="no">Hayır.</span> Fatura ve bilet numarası
+        okunur ama yalnızca <em>iz kaydı</em> olarak saklanır. Eşleştirme
+        <strong>kişinin adı</strong> üzerinden yapılır. Faturada projenin adı
+        yazmaz; yazan tek şey kimin uçtuğudur.</span>
+      </div>
+      <div class="myth">
+        <span class="q">“PDF’leri açıp okuyor mu?”</span>
+        <span class="a"><span class="no">Hayır.</span> Sadece tablo dosyaları
+        okunur: <span class="mono">.xlsx .xls .xlsm .csv .tsv</span>. Temmuz
+        mailinizdeki <strong>6 PDF atlandı</strong>. Bunlar resmi fatura
+        nüshalarıdır; satır kırılımı yanlarındaki Excel’de gelir.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1 -->
+  <div class="station">
+    <div class="marker"><span class="n">1</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Giriş</h4>
+      <h2>Mail açılır</h2>
+      <p>Klasöre attığınız <span class="mono">.msg</span> dosyası bir kapsayıcıdır.
+      Kod önce gönderen, konu ve ek listesini çıkarır.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> mail ağacı</span><span>Yuzyilturizm Bilet Ve Vize Alimlari HK..msg</span></div>
+<pre>MAIL: Yuzyilturizm Bilet Ve Vize Alimlari HK. (01.07.2026 - 31.07.2026)
+      gonderen: Onur Soyler &lt;Onur.Soyler@energo-cons.com&gt;
+  +-- <b>ENERGO TEMMUZ.xls</b>    (76 KB)
+  +-- <b>YUZYIL TEMMUZ.xlsx</b>   (20 KB)</pre>
+      </div>
+      <p>Bu mail basit. Diğeri değil.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> mail ağacı</span><span>Energo Taahhüt Mayıs - Haziran Yansıtma.msg</span></div>
+<pre>MAIL: &gt;&gt;: Energo Taahhüt Mayıs - Haziran Yansıtma
+      gonderen: Furkat Kulbayev &lt;Furkat.Kulbayev@rencons.com&gt;
+  +-- <b>Arabulucu.zip</b>                      (82 KB)
+  +-- <b>Assessment.zip</b>                     (1.208 KB)
+  +-- <b>Ferdi Kaza.zip</b>                     (3.519 KB)
+  +-- <b>Koç Üniversitesi.zip</b>               (246 KB)
+  +-- <b>Kerem Koçkesen.zip</b>                 (206 KB)
+  +-- <span class="bad">ENE_ONUR BOZ_09.06.2026.pdf</span>       (818 KB)  <span class="mut">&lt;- atlanir</span>
+  +-- <b>SAGLIK KONTROL LISTE 22.07.2026.xlsx</b> (22 KB)</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="station">
+    <div class="marker"><span class="n">2</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Kazma</h4>
+      <h2>Zip açılır, içinden çıkan mail de açılır</h2>
+      <p>Beş zip var. Zip’lerin içinde başka mailler var, onların içinde de
+      Excel’ler. Kod bu ağacı sonuna kadar yürür.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> Ferdi Kaza.zip içi</span><span>üç kat derinlik</span></div>
+<pre>Energo Taahhüt Mayıs - Haziran Yansıtma.msg      <span class="mut">1. kat: mail</span>
+   └── Ferdi Kaza.zip                            <span class="mut">2. kat: arsiv</span>
+        └── RENAISSANCE PA Policy for Russia.msg <span class="mut">3. kat: mail</span>
+             ├── <span class="hi">РХИ Ferdi Kaza Sigorta Listesi.xlsx</span>
+             └── <span class="hi">Russia Split between policies 06-2026.xlsx</span></pre>
+      </div>
+      <p>Zip bombasına karşı sınır var: en fazla 500 MB açılmış içerik, 2.000 dosya
+      ve 6 kat derinlik. Zip içindeki dosya adı klasör dışına çıkmaya çalışırsa
+      reddedilir.</p>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="station">
+    <div class="marker"><span class="n">3</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Ayıklama</h4>
+      <h2>Hangi dosya okunur, hangisi atlanır</h2>
+      <p>Karar uzantıya bakılarak verilir. Assessment.zip’in içi bunun iyi bir örneği.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> Assessment.zip içeriği</span><span>14 dosya</span></div>
+<pre><span class="good">TABLO  -> okunur </span>  As Ölçme Yansıtma 2026-05 06.xlsx
+<span class="good">TABLO  -> okunur </span>  ASS2026000002187 - 220520261131 ENERGO Fatura Detayı.xlsx
+<span class="bad">.pdf   -> ATLANIR</span>  ASS2026000002187.pdf
+<span class="hi">MAIL   -> icine girilir</span>  RE_ Assessment Fatura Detayı Hk.msg
+<span class="good">TABLO  -> okunur </span>  ASS2026000002468 080620260931 ENERGO Fatura Detayı.xlsx
+<span class="bad">.pdf   -> ATLANIR</span>  ASS2026000002468.pdf
+<span class="good">TABLO  -> okunur </span>  ASS2026000002501 150620261006 ENERGO Fatura Detayı.xlsx
+<span class="bad">.pdf   -> ATLANIR</span>  ASS2026000002501.pdf
+<span class="good">TABLO  -> okunur </span>  ASS2026000002867 300620261013 ENERGO Fatura Detayı.xlsx
+<span class="bad">.pdf   -> ATLANIR</span>  ASS2026000002867.pdf
+<span class="hi">MAIL   -> icine girilir</span>  RE_ Assessment Fatura Detayı Hk_ASS2026000002501.msg</pre>
+      </div>
+      <p class="note">Dikkat: dosya adında <span class="mono">ASS2026000002187</span>
+      fatura numarası geçiyor. Kod bu numarayı <strong>eşleştirme için
+      kullanmaz</strong>. Aynı numaralı PDF ve XLSX yan yana durur; kırılım
+      XLSX’tedir, PDF ise resmi nüshadır.</p>
+      <div class="key">Sonuç: iki mailden toplam <strong>12 tablo dosyası</strong>
+      çıkarıldı, <strong>6 PDF</strong> atlandı. Her dosya nereden geldiğini taşır,
+      böylece çıktıda “bu satır hangi mailin hangi zip’inden geldi” sorusu
+      cevaplanabilir.</div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="station">
+    <div class="marker"><span class="n">4</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Ham veri</h4>
+      <h2>Faturanın içi neye benziyor</h2>
+      <p>Acentenin cari dökümü. Başlık satırı 7’de, veri 9’dan başlıyor. Tek bir
+      gider satırının bütün kolonları:</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> ENERGO TEMMUZ.xls</span><span>144 satır × 13 kolon &middot; satır 9</span></div>
+<pre>kolon  0  İşlem Tarihi : 46204.0                     <span class="mut">&lt;- Excel seri numarasi</span>
+kolon  3  İşlem        : Bilet İşlem
+kolon  5  Evrak No     : TK 4093099626                <span class="mut">&lt;- bilet numarasi</span>
+kolon  6  Açıklama     : <span class="hi">TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI</span>
+kolon 10  Döviz        : USD
+kolon 11  Borc         : 47.30103346435598
+kolon 12  Alacak       : 0.0</pre>
+      </div>
+      <div class="key">Kritik nokta: <strong>hiçbir kolonda proje adı yok.</strong>
+      Şantiye yok, masraf merkezi yok. Elde olan tek ipucu, açıklama metninin
+      içine gömülü kişi adıdır.</div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="station">
+    <div class="marker"><span class="n">5</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Ayrıştırma</h4>
+      <h2>Metinden kişi çekilir</h2>
+      <p>Havayolu formatı bellidir: bilet numarası, sonra
+      <span class="mono">SOYAD/AD</span>, sonra unvan, sonra güzergâh. Kod bu kalıbı
+      tanır ve adı ayırır.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> parser çıktısı</span><span>kaynak tip: antik_cari</span></div>
+<pre>belge tarihi   : 2026-07-01          <span class="mut">&lt;- 46204 cevrildi</span>
+gider tipi     : Bilet               <span class="mut">&lt;- 'Bilet Islem' kolonundan</span>
+tutar          : 47.30 USD
+CIKARILAN KISI : <span class="hi">'OZAKAY MUSTAFAKEMAL'</span>
+sicil_ham      : None                <span class="mut">&lt;- faturada sicil YOK</span>
+tckn_ham       : None                <span class="mut">&lt;- faturada TC kimlik YOK</span>
+ek alanlar     : evrak_no, guzergah, borc, alacak, kisiler, kisi_sayisi</pre>
+      </div>
+      <p class="note"><span class="mono">evrak_no</span> saklanır ama eşleştirmede
+      kullanılmaz. Denetim izidir: bir satırı sorguladığınızda hangi bilete ait
+      olduğunu görürsünüz.</p>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="station">
+    <div class="marker"><span class="n">6</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Eşleştirme</h4>
+      <h2>Personel verisinde kim bu</h2>
+      <p>Ad bitişik yazılmış: <span class="mono">MUSTAFAKEMAL</span>. Personel
+      verisinde böyle biri yok. Kod, çalışan adlarından kurduğu sözlükle kelimeyi
+      açmayı dener.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> eşleştirme kademesi</span><span>tam_isim</span></div>
+<pre>normalize   : OZAKAY MUSTAFAKEMAL
+tokenlar    : ['MUSTAFAKEMAL', 'OZAKAY']
+              |
+              |  <span class="mut">'MUSTAFAKEMAL' sozlukte yok, acilmayi dene</span>
+              v
+acilan      : MUSTAFAKEMAL -> <span class="hi">MUSTAFA KEMAL</span>
+              |
+              v
+<span class="good">BULUNDU</span>      : Ozakay Mustafa Kemal  /  sicil <b>100003</b>
+yontem      : tam_isim        guven <b>0,92</b>
+gerekce     : "Bitisik yazilmis ad acildi (MUSTAFAKEMAL -> MUSTAFA KEMAL)"</pre>
+      </div>
+      <p class="note">Gerekçe metni çıktıda o satırın yanında durur. Sistemin
+      neden o kişiye karar verdiği her zaman okunabilir.</p>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="station">
+    <div class="marker"><span class="n">7</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Dönem</h4>
+      <h2>O ay neredeydi</h2>
+      <p>Personel dosyası aylık fotoğraflardan oluşur. Elimizde dokuz dönem var:
+      Kasım 2025’ten Temmuz 2026’ya. Kişinin projesi aylar arasında değişebilir,
+      o yüzden <strong>giderin yapıldığı ayın</strong> fotoğrafı seçilir.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> gerçek bir çalışanın dönem geçmişi</span><span>kimlik gizli</span></div>
+<pre>2025-11-01  ->  Udokan (GMK)
+2025-12-01  ->  Udokan (GMK)
+2026-01-01  ->  Udokan (GMK)
+2026-02-01  ->  Udokan (GMK)
+2026-03-01  ->  Udokan (GMK)
+2026-04-01  ->  <span class="hi">GPP Project</span>   <span class="bad">&lt;-- PROJE DEGISTI</span>
+2026-05-01  ->  GPP Project
+2026-06-01  ->  GPP Project
+2026-07-01  ->  GPP Project</pre>
+      </div>
+      <div class="key">Bu kişinin <strong>Şubat</strong> ayında yaptığı bir masraf
+      <strong>Udokan</strong>’a yazılır, Temmuz’daki masraf <strong>GPP</strong>’ye.
+      En güncel kayda göre yazsaydık Şubat masrafı da GPP’ye giderdi ve yanlış
+      olurdu. Ölçüldü: çalışanların yüzde 1,4’ünün görev yeri, yüzde 3,5’inin
+      şirketi dönemler arasında değişiyor.</div>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> bizim satırımız için dönem seçimi</span><span>sicil 100003</span></div>
+<pre>gider tarihi  : 2026-07-01
+secilen donem : 2026-07-01   <span class="good">(tam eslesme)</span>
+gorev yeri    : RHI Russia - Headquarter (Moscow)
+sirket        : RHI</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="station">
+    <div class="marker"><span class="n">8</span><span class="line"></span></div>
+    <div class="body">
+      <h4>Kodlama</h4>
+      <h2>Görev yeri finans koduna çevrilir</h2>
+      <p>Personel verisi metin tutar, muhasebe kod ister. Çeviri
+      <span class="mono">veri\masraf_merkezi_haritasi.csv</span> dosyasındadır ve
+      siz düzenleyebilirsiniz.</p>
+      <div class="shot">
+        <div class="cap"><span><span class="dot">●</span> harita araması</span><span>masraf_merkezi_haritasi.csv</span></div>
+<pre>gorev yeri     : RHI Russia - Headquarter (Moscow)
+                 |
+                 v  <span class="mut">harita dosyasi</span>
+MASRAF MERKEZI : <span class="hi">HQ-MOSCOW</span>
+sirket         : RHI
+donem eslesmesi: tam
+DURUM          : <span class="good">OTOMATIK</span>
+uyarilar       : yok</pre>
+      </div>
+      <p class="note">Haritada karşılığı olmayan bir görev yeri gelirse metin olduğu
+      gibi taşınır ve “haritada tanımlı değil” diye işaretlenir. Sessizce
+      düşürülmez.</p>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="station">
+    <div class="marker"><span class="n">9</span></div>
+    <div class="body">
+      <h4>Çıkış</h4>
+      <h2>Satır mahsup tablosuna düşer</h2>
+      <p>Aynı fatura, aynı proje ve aynı gider tipindeki satırlar tek bir mahsup
+      satırında toplanır. 405 satırlık döküm 34 mahsup satırına iner.</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Fatura</th><th>Masraf merkezi</th><th>Tip</th><th>Tutar</th><th>Satır</th><th>Kişi</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">ENERGO TEMMUZ.xls</td><td class="mono">HQ-MOSCOW</td><td>Bilet</td><td class="mono">4.428,18</td><td class="mono">12</td><td class="mono">5</td></tr>
+            <tr><td class="mono">ENERGO TEMMUZ.xls</td><td class="mono">GPP</td><td>Bilet</td><td class="mono">22.327,76</td><td class="mono">62</td><td class="mono">54</td></tr>
+            <tr><td class="mono">ENERGO TEMMUZ.xls</td><td class="mono">HQ-MOSCOW</td><td>Otel</td><td class="mono">2.397,06</td><td class="mono">7</td><td class="mono">4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Bizim 47,30 USD’lik satırımız ilk satırın içinde, o 12 satırdan
+      biri olarak duruyor. Kırılımı görmek isterseniz <strong>Sonuc</strong>
+      sayfasında her satır tek tek, gerekçesiyle birlikte durur.</p>
+    </div>
+  </div>
+
+  <div class="final">
+    <h4 style="color:#7FB4CE">Özet</h4>
+    <h2>Dokuz durak, tek cümle</h2>
+    <p>Mail açılır, zip’ler ve içindeki mailler kazılır, tablo dosyaları ayıklanır,
+    her satırın açıklama metninden kişi çekilir, kişi personel verisinde bulunur,
+    <em>giderin yapıldığı ayın</em> kaydı seçilir, görev yeri finans koduna çevrilir
+    ve satır mahsup tablosuna düşer.</p>
+    <div class="shot">
+      <div class="cap"><span><span class="dot">●</span> tek satırın tam yolculuğu</span><span>47,30 USD</span></div>
+<pre>Yuzyilturizm ... .msg
+  └── ENERGO TEMMUZ.xls  satir 9
+        "TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI"   47,30 USD
+          |
+          |  isim cekildi        OZAKAY MUSTAFAKEMAL
+          |  ad acildi           MUSTAFAKEMAL -> MUSTAFA KEMAL
+          |  personel bulundu    Ozakay Mustafa Kemal / 100003   guven 0,92
+          |  donem secildi       2026-07-01  (giderin yapildigi ay)
+          |  gorev yeri          RHI Russia - Headquarter (Moscow)
+          |  harita              -> HQ-MOSCOW
+          v
+        MAHSUP: <b>HQ-MOSCOW</b> / Bilet / RHI            <b>OTOMATIK</b></pre>
+    </div>
+  </div>
+
+  <footer>
+    <p><strong>Kaynak:</strong> Temmuz 2026 dönemi, iki Outlook maili, 5 zip arşivi,
+    12 tablo dosyası, 405 satır. Sayfadaki bütün dökümler bu veriden çalıştırılarak
+    alınmıştır.</p>
+    <p style="margin-top:var(--s2)"><strong>Okunmayan biçimler:</strong> PDF, Word,
+    görsel. Fatura kırılımı Excel ekinde gelmiyorsa otomasyon o faturayı dağıtamaz;
+    böyle bir durumda tutar “dağıtılamayan” olarak görünür, sessizce kaybolmaz.</p>
+  </footer>
+</div>
