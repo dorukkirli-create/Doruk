@@ -71,7 +71,8 @@ curl -sSL -o pywin.tar.gz \
 pip download --dest wheels --platform win_amd64 --only-binary=:all: --python-version 3.11 \
   "pandas==3.0.5" "numpy==2.4.6" "openpyxl==3.1.5" "xlrd==2.0.2" "rapidfuzz==3.14.6" \
   "xlsxwriter==3.2.9" "olefile==0.47" "tzlocal<6,>=4.2" "compressed-rtf<2,>=1.0.6" \
-  "ebcdic<3,>=1.1.1" "beautifulsoup4<5,>=4.11.1" "RTFDE<0.2,>=0.1.1"
+  "ebcdic<3,>=1.1.1" "beautifulsoup4<5,>=4.11.1" "RTFDE<0.2,>=0.1.1" \
+  tzdata   # <-- Windows icin ZORUNLU, isaret yuzunden otomatik gelmez
 pip download --dest wheels --no-deps --platform win_amd64 --only-binary=:all: \
   --python-version 3.11 "extract-msg==0.56.1"
 ```
@@ -83,6 +84,49 @@ Paket saf Python'dur; kaynak arsivinden `red_black_dict_mod.py` ve
 Sonra tekerlekleri `program/Lib/site-packages` icine acin, `masraf/` ve
 `calistir.py` dosyalarini `program/kod/` altina koyun, klasor yapisini
 olusturun ve zipleyin.
+
+## Windows'a ozgu bagimlilik tuzagi
+
+Bu tuzak gercek bir hataya yol acti ve tekrar etmesi cok kolaydir.
+
+`pip download --platform win_amd64` yalnizca TEKERLEK UYUMLULUK ETIKETLERINI
+degistirir. **Ortam isaretlerini degistirmez**; onlar calisan yorumlayiciya
+gore degerlendirilir. Yani Linux'ta su isaret:
+
+```
+tzdata; platform_system == "Windows"
+```
+
+False cikar ve pip `tzdata` paketini **sessizce atlar**. Uyari da vermez.
+
+Sonuc: paket Linux'ta kusursuz test edilir, kullanicinin Windows makinesinde
+ilk mailde patlar:
+
+```
+Mesaj acilamadi: Error occured using tzlocal. If you are seeing this, this is
+likely a problem with your installation of tzlocal or tzdata.
+```
+
+Sebep basit. Windows'ta IANA saat dilimi veritabani isletim sisteminde
+YOKTUR, `tzdata` paketinden gelir. Linux'ta `/usr/share/zoneinfo` zaten
+vardir, bu yuzden eksiklik hicbir yerel testte gorunmez. `tzdata` hem
+`tzlocal` hem de `pandas` tarafindan Windows'ta isteniyor.
+
+**Bu yuzden `paketle/paket_denetle.py` var.** Paketi gondermeden once
+calistirin:
+
+```bash
+python paketle/paket_denetle.py /yol/Otomasyon
+```
+
+Betik butun dist-info METADATA dosyalarini tarar, Windows isaretli
+bagimliliklari bulur ve pakette olmayanlari listeler. Ayrica zorunlu
+modullerin varligini ve tzdata'nin gercekten saat dilimi verisi tasidigini
+dogrular. Cikis kodu 0 degilse paket gonderilmemelidir.
+
+Bilerek atlanan tek paket `win-unicode-console`. `pcodedmp`'in bagimliligi;
+`pcodedmp`, `extract_msg` ice aktarilirken yuklenmiyor (olculdu) ve
+tekerlegi de yok.
 
 ## Surum uyumu
 
