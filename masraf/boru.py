@@ -103,6 +103,44 @@ def _bildir(ilerleme: Ilerleme | None, yuzde: float, mesaj: str) -> None:
         pass  # Arayuz hatasi is akisini durdurmamali.
 
 
+def _kaynak_proje_ozeti(sonuclar: Iterable[Sonuc]) -> dict:
+    """Kaynak dosyadaki santiye etiketi ile cozulen projeyi karsilastirir.
+
+    Kaynak etiket PROJE olarak yorumlanir. Dort grup cikar:
+
+    ``uyusan``
+        Kaynak projesi ile personel kaydindan cozulen proje ayni.
+    ``uyusmayan``
+        Ikisi farkli. Satir uyari alir ve incelemeye duser; elle yapilan
+        atama hatalarini yakalayan grup budur.
+    ``proje_yok``
+        Kaynak dosyada proje yerine SIRKET adi yazilmis (RHI, RENSERVIS
+        gibi). Bu satirda karsilastirilacak proje bilgisi yoktur; celiski
+        de yoktur, bu yuzden satir incelemeye dusurulmez.
+    ``etiketsiz``
+        Kaynak dosyada santiye kolonu bos.
+    """
+    ozet = {"uyusan": 0, "uyusmayan": 0, "proje_yok": 0, "etiketsiz": 0,
+            "sirket_etiketleri": {}}
+    for sonuc in sonuclar:
+        etiket = (sonuc.satir.masraf_merkezi_kaynak or "").strip()
+        if not etiket:
+            ozet["etiketsiz"] += 1
+            continue
+        ek = sonuc.satir.ek if isinstance(sonuc.satir.ek, dict) else {}
+        sirket_etiketi = ek.get("kaynak_proje_yerine_sirket")
+        if sirket_etiketi:
+            ozet["proje_yok"] += 1
+            ozet["sirket_etiketleri"][sirket_etiketi] = (
+                ozet["sirket_etiketleri"].get(sirket_etiketi, 0) + 1)
+            continue
+        if any("PROJE UYUSMAZLIGI" in str(u) for u in (sonuc.uyarilar or [])):
+            ozet["uyusmayan"] += 1
+        else:
+            ozet["uyusan"] += 1
+    return ozet
+
+
 class Boru:
     """Personel defteri, ogrenen defterler, eslestirici ve masraf merkezi
     haritasini tek bir is akisinda birlestirir.
@@ -430,6 +468,7 @@ class Boru:
                 merkez_ozeti.values(), key=lambda k: (-k["adet"], k["kod"])
             ),
             "para_birimi_toplamlari": para_toplamlari,
+            "kaynak_proje_karsilastirmasi": _kaynak_proje_ozeti(sonuclar),
             "eslesmeyen_kisiler": dict(
                 sorted(eslesmeyenler.items(), key=lambda p: (-p[1], p[0]))
             ),

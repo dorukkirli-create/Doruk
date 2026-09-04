@@ -19,20 +19,32 @@ bagimli degildir.
 
 Kaynak dosyadaki santiye etiketi hakkinda
 -----------------------------------------
-Bazi kaynak dosyalarda insan tarafindan doldurulmus bir santiye/proje kolonu
-bulunur (``GiderSatiri.masraf_merkezi_kaynak``). Bu etiket iki farkli seyi
-karistirarak icerir:
+Bazi kaynak dosyalarda insan tarafindan doldurulmus bir santiye kolonu bulunur
+(``GiderSatiri.masraf_merkezi_kaynak``). ISLETME KARARI: bu kolon PROJE olarak
+yorumlanir ve personel kaydindan cozulen proje ile karsilastirilir.
 
-* PROJE adi ('GPP Proje', 'Udokan GMK', 'AMURSKI GAZ ISLETME FABRIKASI')
-* TUZEL KISI adi ('RHI', 'RENSERVIS', 'ONE TOWER', 'RC PETER')
+Pratikte kolon iki tur deger tasiyor:
 
-Proje etiketi ile hesaplanan masraf merkezi celisiyorsa bu gercek bir bulgudur
-ve satir incelemeye gonderilir (elle yapilan hatalari yakalar). Tuzel kisi
-etiketi ise proje ile karsilastirilamaz; onun karsiligi personel kaydindaki
-'Sirket 2' kolonudur ve varsayilan olarak UYARI URETMEZ, cunku elle etiketleme
-kendi icinde tutarsizdir (ayni projede calisan kisiler bir yerde 'RHI', baska
-yerde 'UST LUGA GPP' yazilmistir). Bu karsilastirma
-``tuzel_kisi_uyar=True`` ile acilabilir.
+* PROJE adi ('GPP Proje', 'Udokan GMK', 'AMURSKI GAZ ISLETME FABRIKASI').
+  Bunlar ``EK_ESANLAMLILAR`` uzerinden personel verisindeki 'Gorev Yeri'
+  degerlerine cevrilir ve cozulen proje ile karsilastirilir. Farklilarsa
+  satir ``PROJE UYUSMAZLIGI`` uyarisi alir ve incelemeye duser. Elle yapilan
+  atama hatalarini yakalayan grup budur.
+
+* TUZEL KISI adi ('RHI', 'RENSERVIS', 'ONE TOWER', 'RC PETER'). Bunlar proje
+  degildir; o satirda karsilastirilacak proje bilgisi YOKTUR. Celiski de
+  yoktur, bu yuzden satir incelemeye DUSURULMEZ. Satir
+  ``ek['kaynak_proje_yerine_sirket']`` ile isaretlenir ve ozetteki
+  ``kaynak_proje_karsilastirmasi['proje_yok']`` sayacinda toplu raporlanir.
+  Boylece finans ekibi kaynak dosyalarda kac satirda proje yerine sirket
+  yazildigini gorur, ama operator ayni bilgiyi yuzlerce kez elle onaylamaz.
+
+Olculen sonuc (Temmuz 2026, tek Outlook mesaji, 405 satir):
+uyusan 109, uyusmayan 4, proje yerine sirket yazilmis 98, etiketsiz 194.
+
+Tuzel kisi etiketinin personel kaydindaki 'Sirket 2' ile karsilastirilmasi
+ayri bir konudur ve ``tuzel_kisi_uyar=True`` ile acilabilir; varsayilan
+kapalidir cunku elle etiketleme sirket duzeyinde kendi icinde tutarsizdir.
 """
 
 from __future__ import annotations
@@ -113,7 +125,11 @@ EK_ESANLAMLILAR: dict[str, str] = {
     "UST LUGA GPP": "GPP Project",
     "UST LUGA GPP PROJESI": "GPP Project",
     "UST LUGA GAS PROCESSING COMPLEX GPP": "GPP Project",
-    "UST LUGA GAS PROCESSING COMPLEX GPC": "Ust Luga Fabrication - GPC (RHI)",
+    # Olculdu: saglik kontrol listesinde bu etiketi tasiyan 7 kisiden 6'si
+    # personel verisinde "GPP Project" gorunuyor. Etiket fabrikayi degil
+    # kompleksin tamamini kastediyor.
+    "UST LUGA GAS PROCESSING COMPLEX GPC": "GPP Project",
+    "UST LUGA GAS PROCESSING COMPLEX": "GPP Project",
     "AMURSKI GAZ ISLETME FABRIKASI": "Amursky Gas Processing Plant",
     "AMURSKIY GAZ ISLETME FABRIKASI": "Amursky Gas Processing Plant",
     "CATERING AMURSKY GAS PROCESSING PLANT": "Amursky Gas Processing Plant",
@@ -689,6 +705,10 @@ def masraf_merkezi_coz(
     kaynak_etiket = _metin(satir.masraf_merkezi_kaynak)
     if kaynak_etiket and masraf_merkezi:
         if harita.tuzel_kisi_mi(kaynak_etiket):
+            # Kaynak dosyada proje yerine SIRKET adi yazilmis. Bu satirda proje
+            # bilgisi yoktur; celiski de yoktur. Satiri incelemeye dusurmez,
+            # sadece isaretlenir ve ozette toplu olarak raporlanir.
+            satir.ek["kaynak_proje_yerine_sirket"] = kaynak_etiket
             if tuzel_kisi_uyar and sirket2 and _anahtar(kaynak_etiket) != _anahtar(sirket2):
                 uyarilar.append(
                     f"Kaynak dosyada tuzel kisi '{kaynak_etiket}' yaziyor, personel "
@@ -698,16 +718,20 @@ def masraf_merkezi_coz(
             kaynak_cozum = harita.coz(kaynak_etiket)
             kaynak_kodu = kaynak_cozum["masraf_merkezi_kodu"] if kaynak_cozum else None
             if kaynak_kodu is None:
-                if _anahtar(kaynak_etiket) != _anahtar(gorev_yeri):
+                # Cozulen deger kaynak etiketin kendisiyse (haritada karsiligi
+                # olmadigi icin oldugu gibi kullanilmis) uyusmazlik yoktur.
+                ayni = (_anahtar(kaynak_etiket) == _anahtar(gorev_yeri)
+                        or _anahtar(kaynak_etiket) == _anahtar(masraf_merkezi))
+                if not ayni:
                     uyarilar.append(
-                        f"Kaynak dosyada '{kaynak_etiket}' yaziyor; bu deger masraf merkezi "
-                        f"haritasinda tanimli degil. Personel kaydina gore '{masraf_merkezi}'. "
-                        "Kontrol edin."
+                        f"Kaynak dosyada proje '{kaynak_etiket}' yaziyor; bu deger masraf "
+                        f"merkezi haritasinda tanimli degil. Personel kaydina gore "
+                        f"'{masraf_merkezi}'. Kontrol edin."
                     )
             elif kaynak_kodu != masraf_merkezi:
                 uyarilar.append(
-                    f"Kaynak dosyada '{kaynak_etiket}' ({kaynak_kodu}) yaziyor, personel "
-                    f"kaydina gore '{masraf_merkezi}'. Kontrol edin."
+                    f"PROJE UYUSMAZLIGI: kaynak dosyada '{kaynak_etiket}' ({kaynak_kodu}) "
+                    f"yaziyor, personel kaydina gore '{masraf_merkezi}'. Kontrol edin."
                 )
 
     durum = _durum_belirle(eslesme.guven, uyarilar, masraf_merkezi, guven_esigi, alt_esik)
