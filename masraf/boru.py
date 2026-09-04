@@ -295,7 +295,9 @@ class Boru:
         satirlar = [s for s in tum_satirlar if s.kaynak_tip != "referans_liste"]
         referanslar = [s for s in tum_satirlar if s.kaynak_tip == "referans_liste"]
         if referanslar:
-            self.hatalar.append(
+            # Bu bir hata degil, beklenen davranistir: kullaniciya 'hata' diye
+            # gostermek yanlis alarm uretir.
+            self.uyarilar.append(
                 f"{len(referanslar)} satir kisi kutugu olarak ayrildi ve gider "
                 "satiri sayilmadi; defter beslemesinde kullanildi."
             )
@@ -332,7 +334,8 @@ class Boru:
                 yeni_alias = aliaslari_deftere_yaz(
                     alias_turet(tum_satirlar, self.defter), self.defterler)
                 if yeni_kopru or yeni_alias:
-                    self.hatalar.append(
+                    # Basari bildirimi; hata listesine girmemeli.
+                    self.uyarilar.append(
                         f"Ogrenildi: {yeni_kopru} yeni TC kimlik koprusu, "
                         f"{yeni_alias} yeni dogum tarihiyle dogrulanmis alias."
                     )
