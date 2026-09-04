@@ -58,11 +58,11 @@ Akış:
             +--> isim alt kümesi tek kişide mi?   --> EŞLEŞTİ  (0,90)
             +--> bitişik ad açılıyor mu?          --> EŞLEŞTİ  (0,92)
             |        (MUSTAFAKEMAL -> MUSTAFA KEMAL)
-            +--> transliterasyon varyantı tutuyor mu? --> EŞLEŞTİ (0,88)
+            +--> transliterasyon varyantı tutuyor mu? --> İNCELE  (0,88)
             |        (IYLMAZ GEKHAN -> YILMAZ GOKHAN)
-            +--> kesik isim öneki tutuyor mu?     --> EŞLEŞTİ  (0,85)
+            +--> kesik isim öneki tutuyor mu?     --> İNCELE   (0,85)
             +--> ek kişi defterinde mi?           --> İNCELE   (0,70)
-            +--> bulanık benzerlik yeterli mi?    --> EŞLEŞTİ  (0,79-0,90)
+            +--> bulanık benzerlik yeterli mi?    --> İNCELE   (0,79-0,90)
             +--> soyadı bir çalışanla aynı mı?    --> İNCELE   (0,60) "aile bireyi"
             +--> hiçbiri                          --> EŞLEŞMEDİ (0,00)
             |
@@ -75,6 +75,9 @@ Akış:
             v
   [6] Excel çıktısı: Sonuç | İncele | Eşleşmedi | Özet
 ```
+
+Yukarıdaki "EŞLEŞTİ" yalnızca **0,90 ve üstü** kademeler için otomatik kabul
+demektir; altındakiler kişiyi bulur ama kararı insana bırakır.
 
 Birden fazla aday çıkarsa güven skoru 0,58'in üstüne **çıkamaz** ve sicil
 doldurulmaz; satır adaylarıyla birlikte incelemeye düşer. Tek istisna: bütün
@@ -316,6 +319,70 @@ Bu yüzden doğruluk üç ayrı okumayla raporlanır:
 Elle dosyada **düzeltilmesi gereken bir insan hatası bulunmadı.** Uyuşmazlıkların
 tamamı ya taksonomi farkı, ya veri kapsamı dışı kişi, ya da yukarıdaki iki
 otomasyon hatasıdır.
+
+## İki personel dosyası kullanın
+
+Ana personel dosyası (`2025_2026_giris_cikis.xlsx`) aylık snapshot serisidir ve
+**sadece RHI ile UST LUGA tüzel kişilerini** kapsar. Giderin yapıldığı ayın
+kaydını buradan okuruz.
+
+1C personel listesi (`1C Personnel List ...xlsx`) tek tarihlidir ama **bütün grup
+şirketlerini** kapsar. Renservis, Renstroydetal, RC, One Tower, Top Tower ve BSK
+personeli ancak burada bulunur.
+
+Ölçülen katkı: 1C listesindeki 17.517 isimli kaydın 5.234'ü ana veride yoktur.
+İki dosya aynı sicil uzayını kullanır (12.283 ortak sicil), bu yüzden güvenle
+birlikte kullanılırlar.
+
+| Ölçüm | Sadece ana veri | Ana veri + 1C listesi |
+|---|---|---|
+| Masraf merkezi çözülen satır | 362 / 405 | 397 / 405 |
+| Oran | yüzde 89,4 | yüzde 98,0 |
+| Hiç eşleşmeyen | 52 | 14 |
+
+Ayarlar sekmesinde ikinci dosya yolunu da verin. Zorunlu değildir, olmadan da
+çalışır; ama olmadan grup şirketi personeli bulunamaz.
+
+1C listesinden gelen bir kayıt her zaman şu uyarıyı taşır: *"1C listesi tek
+tarihli olduğu için gider ayındaki durum doğrulanamadı."* Bu kasıtlıdır. O kişi
+için ay bazlı kontrol yapılamaz, karar insana bırakılır.
+
+---
+
+## Yeni bir format geldiğinde
+
+Üç durum var ve üçünde de yapmanız gereken farklı.
+
+**1. Bilinen şablon.** Altı dosya ailesi otomatik tanınır. Hiçbir şey yapmayın.
+
+**2. Yeni tedarikçi, tanıdık kolon adları.** Genel okuyucu kolon adlarını
+anahtar kelimeyle bulur. Türkçe (`Personel Adı Soyadı`, `Net Tutar`, `Proje`) ve
+İngilizce (`Employee Name`, `Amount`, `Cost Center`) adların çoğu zaten tanınır.
+Yine bir şey yapmanız gerekmez.
+
+**3. Kolon adları hiç tanıdık değil.** Örneğin `Ref, Dt, Beneficiary, Note, Val`.
+Uygulama sessizce boş dönmez; dosyadaki kolon adlarını listeler ve hangi alanın
+eksik olduğunu söyler. Siz `veri/kolon_esanlamlilari.csv` dosyasına satır
+eklersiniz:
+
+```
+alan;kolon_adi;not
+kisi;Beneficiary;Yeni tedarikci X boyle yaziyor
+tarih;Dt;
+tutar;Val;
+```
+
+Geçerli `alan` değerleri: `kisi`, `sicil`, `tckn`, `tutar`, `tarih`, `santiye`.
+Bir kez eklemek yeterlidir, sonraki bütün dosyalarda çalışır. Doğrulandı: hiç
+tanınmayan kolon adlarıyla sıfır satır dönen bir dosya, üç satır eklendikten
+sonra tam okundu.
+
+**4. Dosyanın şekli tamamen farklı.** Kişi adı serbest metnin içine gömülüyse
+(seyahat dökümündeki `TK4093099626 OZAKAY/MUSTAFAKEMAL MR IST-CDG BILET BEDELI`
+gibi) kolon sözlüğü yetmez, o kalıp için kod yazmak gerekir. Yılda bir iki kez
+karşılaşılacak bir durumdur.
+
+---
 
 ## Bilinen kısıtlar
 
