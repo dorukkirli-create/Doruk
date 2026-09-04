@@ -381,38 +381,54 @@ class PersonelDefteri:
     def donem_kaydi(self, sicil: str, tarih: date | None) -> dict | None:
         """Verilen tarihe ait donem kaydini dondurur.
 
-        Tarihe esit veya ondan kucuk EN BUYUK donem secilir. Tarih tum
-        donemlerden onceyse EN ERKEN donem dondurulur ve kayda
-        {'_donem_tahmini': True} isareti konur. Tarih None ise en guncel
-        kayit dondurulur ve yine tahmin olarak isaretlenir.
+        Masraf mahsuplasmasinin temel kurali: giderin YAPILDIGI AY ile
+        personel kaydinin DONEMI ayni ay olmalidir. Kisinin projesi ve
+        masraf merkezi aydan aya degisebilir, bu yuzden "en guncel kayit"
+        degil "o ayki kayit" kullanilir.
+
+        Kayda konulan ``_donem_eslesme`` alani hangi durumun gerceklestigini
+        soyler ve cikti tablosunda gosterilir:
+
+        ``tam``
+            Gider ayi ile donem ayi birebir ayni. Normal durum.
+        ``onceki_donem``
+            Kisinin gider ayinda kaydi YOK, daha eski bir donem kullanildi.
+            Pratikte bu kisinin o tarihten once isten ayrilmis olmasi
+            demektir; kullanilan donem cikis ayidir, yani cikis bileti /
+            cikis masrafi hangi santiyeden yapildiysa o.
+        ``ilk_donem_oncesi``
+            Gider, kisinin ilk kaydindan ONCE yapilmis. Kisi o tarihte
+            henuz ise baslamamis; mobilizasyon veya aday seyahati olabilir.
+        ``tarihsiz``
+            Gider satirinda tarih yok, en guncel kayit kullanildi.
+
+        ``_donem_tahmini`` geriye donuk uyumluluk icin korunur: ``tam``
+        disindaki her durumda True olur.
         """
         anahtar = sicil_normalize(sicil)
         konumlar = self._sicil_konumlar.get(anahtar)
         if not konumlar:
             return None
 
-        donemler = self._sicil_donemler.get(anahtar, [])
-        if tarih is None or not donemler:
-            kayit = dict(self._kayitlar[konumlar[-1]])
-            kayit["_donem_tahmini"] = True
+        def _isaretle(konum: int, eslesme: str) -> dict:
+            kayit = dict(self._kayitlar[konum])
+            kayit["_donem_eslesme"] = eslesme
+            kayit["_donem_tahmini"] = eslesme != "tam"
             return kayit
 
-        hedef = _tarihe_cevir(tarih)
-        if hedef is None:
-            kayit = dict(self._kayitlar[konumlar[-1]])
-            kayit["_donem_tahmini"] = True
-            return kayit
+        donemler = self._sicil_donemler.get(anahtar, [])
+        hedef = _tarihe_cevir(tarih) if tarih is not None else None
+        if hedef is None or not donemler:
+            return _isaretle(konumlar[-1], "tarihsiz")
 
         yer = bisect.bisect_right(donemler, hedef)
         if yer == 0:
-            # Tarih tum donemlerden once: en erken donemi dondur, tahmin isaretle.
-            kayit = dict(self._kayitlar[konumlar[0]])
-            kayit["_donem_tahmini"] = True
-            return kayit
+            # Gider, kisinin ilk kaydindan once yapilmis (henuz ise girmemis).
+            return _isaretle(konumlar[0], "ilk_donem_oncesi")
 
-        kayit = dict(self._kayitlar[konumlar[yer - 1]])
-        kayit["_donem_tahmini"] = False
-        return kayit
+        secilen = donemler[yer - 1]
+        ayni_ay = (secilen.year, secilen.month) == (hedef.year, hedef.month)
+        return _isaretle(konumlar[yer - 1], "tam" if ayni_ay else "onceki_donem")
 
     # ------------------------------------------------------------------
     # Yardimcilar

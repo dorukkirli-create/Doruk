@@ -207,6 +207,18 @@ def _gecerli_tarih(deger: Any) -> date | None:
     return None
 
 
+_AYLAR = ("Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran",
+          "Temmuz", "Agustos", "Eylul", "Ekim", "Kasim", "Aralik")
+
+
+def _ay_metni(deger) -> str:
+    """Tarihi 'Temmuz 2026' bicimine cevirir; gider ayini okunakli yazmak icin."""
+    t = _gecerli_tarih(deger)
+    if t is None:
+        return "?"
+    return f"{_AYLAR[t.month - 1]} {t.year}"
+
+
 def _tarih_metni(deger: date | None) -> str:
     """Tarihi GG.AA.YYYY olarak yazar; None ise bos metin."""
     gecerli = _gecerli_tarih(deger)
@@ -522,6 +534,7 @@ def _sicilsiz_sonuc(
         cikis_tarihi=None,
         durum=durum,
         uyarilar=uyarilar,
+        donem_eslesme="yok",
     )
 
 
@@ -591,6 +604,7 @@ def masraf_merkezi_coz(
             cikis_tarihi=None,
             durum=DURUM_ESLESMEDI,
             uyarilar=uyarilar,
+            donem_eslesme="yok",
         )
 
     donem: date | None = _gecerli_tarih(kayit.get("donem"))
@@ -600,18 +614,28 @@ def masraf_merkezi_coz(
     kategori: str | None = kayit.get("kategori")
     cikis_tarihi: date | None = _gecerli_tarih(kayit.get("cikis_tarihi"))
 
-    # 1) Donem secimi guvenilir mi?
-    if kayit.get("_donem_tahmini"):
-        if belge_tarihi is None:
-            uyarilar.append(
-                "Belge tarihi okunamadi; personel kaydinin en guncel donemi kullanildi."
-            )
-        else:
-            uyarilar.append(
-                f"Belge tarihi ({_tarih_metni(belge_tarihi)}) bu kisinin personel "
-                f"kayitlarindaki donemlerin disinda; en yakin donem "
-                f"({_tarih_metni(donem)}) kullanildi (yeni giren olabilir)."
-            )
+    # 1) Gider ayi ile donem ayi ortusuyor mu?
+    #    Kural: masraf, giderin YAPILDIGI AYDAKI kayda gore mahsuplasir.
+    #    Kisinin projesi ve masraf merkezi aydan aya degisebilir.
+    donem_eslesme = kayit.get("_donem_eslesme")
+    if donem_eslesme == "tarihsiz":
+        uyarilar.append(
+            "Belge tarihi okunamadi; personel kaydinin en guncel donemi kullanildi. "
+            "Gider ayi dogrulanamadi."
+        )
+    elif donem_eslesme == "ilk_donem_oncesi":
+        uyarilar.append(
+            f"Gider tarihi ({_tarih_metni(belge_tarihi)}) kisinin ilk personel "
+            f"kaydindan ({_tarih_metni(donem)}) ONCE. Kisi o tarihte henuz ise "
+            "baslamamis; mobilizasyon veya aday seyahati olabilir. Ilk donemin "
+            "masraf merkezi kullanildi."
+        )
+    elif donem_eslesme == "onceki_donem":
+        uyarilar.append(
+            f"Kisinin gider ayinda ({_ay_metni(belge_tarihi)}) personel kaydi yok. "
+            f"Kayitli son donemi {_ay_metni(donem)}; o donemin masraf merkezi "
+            "kullanildi. Cikis masrafi ise dogru santiyedir, kontrol edin."
+        )
     elif (
         son_donem is not None
         and belge_tarihi is not None
@@ -704,4 +728,5 @@ def masraf_merkezi_coz(
         cikis_tarihi=cikis_tarihi,
         durum=durum,
         uyarilar=uyarilar,
+        donem_eslesme=donem_eslesme or "yok",
     )

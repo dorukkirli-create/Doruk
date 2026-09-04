@@ -113,6 +113,9 @@ class Sonuc:
     cikis_tarihi: date | None
     durum: str                 # 'OTOMATIK' | 'INCELE' | 'ESLESMEDI'
     uyarilar: list = field(default_factory=list)
+    # Gider ayi ile personel kaydinin donemi ortusuyor mu:
+    # 'tam' | 'onceki_donem' | 'ilk_donem_oncesi' | 'tarihsiz' | 'yok'
+    donem_eslesme: str = "yok"
 
 
 def bos_eslesme(aciklama: str = "Kisi bulunamadi") -> Eslesme:

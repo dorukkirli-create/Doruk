@@ -42,6 +42,7 @@ KOLONLAR: tuple[tuple[str, str, int], ...] = (
     ("Aday Sayisi", "tamsayi", 11),
     ("Eslestirme Aciklamasi", "metin", 62),
     ("Donem", "tarih", 11),
+    ("Donem Eslesmesi", "metin", 18),
     ("Gorev Yeri", "metin", 32),
     ("Masraf Merkezi Kodu", "metin", 20),
     ("Masraf Merkezi Adi", "metin", 34),
@@ -61,6 +62,15 @@ DURUM_RENKLERI: dict[str, str] = {
     DURUM_OTOMATIK: "#E2EFDA",
     DURUM_INCELE: "#FFF2CC",
     DURUM_ESLESMEDI: "#FCE4D6",
+}
+
+#: Gider ayi ile personel donemi iliskisinin okunakli karsiliklari.
+DONEM_ESLESME_ETIKETLERI: dict[str, str] = {
+    "tam": "Ayni ay",
+    "onceki_donem": "Onceki donem (ayrilmis)",
+    "ilk_donem_oncesi": "Ise girmeden once",
+    "tarihsiz": "Tarih yok",
+    "yok": "",
 }
 
 BASLIK_RENGI = "#1F3864"
@@ -122,6 +132,10 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
         eslesme.aday_sayisi,
         _metin(eslesme.aciklama),
         _tarih(sonuc.donem),
+        DONEM_ESLESME_ETIKETLERI.get(
+            getattr(sonuc, "donem_eslesme", "yok"),
+            getattr(sonuc, "donem_eslesme", "") or "",
+        ),
         _metin(sonuc.gorev_yeri),
         _metin(sonuc.masraf_merkezi),
         _metin(satir.ek.get("masraf_merkezi_adi") if isinstance(satir.ek, dict) else ""),
