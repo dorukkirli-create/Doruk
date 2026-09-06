@@ -284,13 +284,13 @@ class _Bicimler:
         self.ozet_tutar = f(num_format=TUTAR_BICIMI)
         self.ozet_yuzde = f(num_format=YUZDE_BICIMI)
         self.kpi_sayi = calisma.add_format({
-            "font_name": BASLIK_YAZI, "font_size": 20, "bold": True,
+            "font_name": BASLIK_YAZI, "font_size": 15, "bold": True,
             "font_color": LACIVERT, "num_format": TUTAR_BICIMI, "valign": "vcenter"})
         self.kpi_tamsayi = calisma.add_format({
-            "font_name": BASLIK_YAZI, "font_size": 20, "bold": True,
+            "font_name": BASLIK_YAZI, "font_size": 15, "bold": True,
             "font_color": LACIVERT, "num_format": TAMSAYI_BICIMI, "valign": "vcenter"})
         self.kpi_metin = calisma.add_format({
-            "font_name": BASLIK_YAZI, "font_size": 20, "bold": True,
+            "font_name": BASLIK_YAZI, "font_size": 15, "bold": True,
             "font_color": LACIVERT, "valign": "vcenter"})
         self.kpi_etiket = f(font_size=9, font_color=ORTA_GRI, valign="top")
         self.durum_iyi = f(bold=True, font_color=BEYAZ, bg_color="#2E7D32", align="center",
@@ -403,7 +403,7 @@ def _ozet_yaz(
     sayfa.hide_gridlines(2)
     sayfa.set_column(0, 0, 3)          # sol bosluk
     sayfa.set_column(1, 1, 34)
-    sayfa.set_column(2, 7, 17)
+    sayfa.set_column(2, 7, 19)
     sayfa.set_column(8, 8, 3)
     sayfa.set_landscape()
     sayfa.fit_to_pages(1, 0)
@@ -414,11 +414,11 @@ def _ozet_yaz(
         for c in range(0, 9):
             sayfa.write_blank(r, c, None, bicimler.kapak_bant)
     sayfa.set_row(1, 34)
-    sayfa.merge_range(1, 1, 1, 7, "Masraf Merkezi Dagitimi", bicimler.kapak_baslik)
+    sayfa.merge_range(1, 1, 1, 7, "Masraf Merkezi Dağıtımı", bicimler.kapak_baslik)
     donem = _gider_donemi(sonuclar)
     dosya_sayisi = ozet.get("dosya_sayisi", 0)
-    alt = (f"{donem}  |  {dosya_sayisi} dosya, {len(sonuclar)} satir  |  "
-           f"uretim {datetime.now():%d.%m.%Y %H:%M}  |  Rencons Heavy Industries")
+    alt = (f"{donem}   |   {dosya_sayisi} kaynak dosya, {len(sonuclar)} satır   |   "
+           f"üretim {datetime.now():%d.%m.%Y %H:%M}   |   Rencons Heavy Industries")
     sayfa.merge_range(2, 1, 2, 7, alt, bicimler.kapak_alt)
 
     satir = 5
@@ -426,16 +426,16 @@ def _ozet_yaz(
     # --- Para birimi bazinda KPI satiri ---------------------------------
     toplamlar = mahsup.toplamlar() if mahsup is not None else {}
     if not toplamlar:
-        sayfa.write_string(satir, 1, "Dagitilacak tutarli satir bulunamadi.", bicimler.ozet_metin)
+        sayfa.write_string(satir, 1, "Dağıtılacak tutarlı satır bulunamadı.", bicimler.ozet_metin)
         satir += 2
     for para, d in toplamlar.items():
         kpi = (
-            ("Okunan", d["gelen"], bicimler.kpi_sayi, "dosyalarda gorulen toplam"),
-            ("Yinelenen", d["yinelenen"], bicimler.kpi_sayi, "baska dosyada zaten sayildi"),
-            ("Net", d["net"], bicimler.kpi_sayi, "gercekten dagitilacak"),
-            ("Dagitilan", d["dagitilan"], bicimler.kpi_sayi, "projelere yazildi"),
-            ("Dagitilamayan", d["dagitilamayan"], bicimler.kpi_sayi, "kisi/merkez bulunamadi"),
-            ("Dagitim orani", d["oran"] / 100.0, None, "dagitilan / net"),
+            ("Okunan", d["gelen"], bicimler.kpi_sayi, "dosyalarda görülen toplam"),
+            ("Yinelenen", d["yinelenen"], bicimler.kpi_sayi, "başka dosyada zaten sayıldı"),
+            ("Net", d["net"], bicimler.kpi_sayi, "gerçekten dağıtılacak"),
+            ("Dağıtılan", d["dagitilan"], bicimler.kpi_sayi, "projelere yazıldı"),
+            ("Dağıtılamayan", d["dagitilamayan"], bicimler.kpi_sayi, "kişi / merkez bulunamadı"),
+            ("Dağıtım oranı", d["oran"] / 100.0, None, "dağıtılan / net"),
         )
         sayfa.set_row(satir, 14)
         sayfa.write_string(satir, 1, f"TUTARLAR ({para})", bicimler.kalin)
@@ -445,7 +445,7 @@ def _ozet_yaz(
             c = 1 + i
             if bicim is None:
                 yuzde = calisma.add_format({
-                    "font_name": BASLIK_YAZI, "font_size": 20, "bold": True,
+                    "font_name": BASLIK_YAZI, "font_size": 15, "bold": True,
                     "font_color": CANLI_MAVI, "num_format": YUZDE_BICIMI, "valign": "vcenter"})
                 sayfa.write_number(satir, c, float(deger), yuzde)
             else:
@@ -461,13 +461,13 @@ def _ozet_yaz(
         sayfa.set_row(satir, 26)
         if mahsup.kapali_mi:
             sayfa.merge_range(satir, 1, satir, 7,
-                              "MUTABAKAT KAPALI  -  Okunan = Yinelenen + Dagitilan + Dagitilamayan. "
-                              "Para kaybolmadi; tablo muhasebeye gonderilebilir.",
+                              "MUTABAKAT KAPALI   |   Okunan = Yinelenen + Dağıtılan + Dağıtılamayan. "
+                              "Para kaybolmadı; tablo muhasebeye gönderilebilir.",
                               bicimler.durum_iyi)
         else:
             acik = ", ".join(f"{k.kaynak} ({k.fark:+.2f})" for k in mahsup.acik_kontroller)
             sayfa.merge_range(satir, 1, satir, 7,
-                              f"MUTABAKAT ACIK  -  {acik}. Tablo muhasebeye GONDERILMEMELI.",
+                              f"MUTABAKAT AÇIK   |   {acik}. Tablo muhasebeye GÖNDERİLMEMELİ.",
                               bicimler.durum_kotu)
         satir += 2
 
@@ -486,12 +486,16 @@ def _ozet_yaz(
         sayfa.merge_range(satir, 1, satir, 7, baslik, bicimler.bolum)
         satir += 1
 
-    bolum("Satir durumu")
-    tablo_basligi(("Durum", "Satir", "Oran", "Ne demek"))
+    bolum("Satır durumu")
+    sayfa.set_row(satir, 20)
+    for i, b in enumerate(("Durum", "Satır", "Oran")):
+        sayfa.write_string(satir, 1 + i, b, bicimler.baslik)
+    sayfa.merge_range(satir, 4, satir, 7, "Ne demek", bicimler.baslik)
+    satir += 1
     aciklama = {
-        DURUM_OTOMATIK: "Kimlik kesin, uyari yok; oldugu gibi kaydedilebilir",
-        DURUM_INCELE: "Sistem sonuc buldu ama emin degil; gerekcesi satirda yazili",
-        DURUM_ESLESMEDI: "Kisi bulunamadi; tutar (DAGITILAMAYAN) satirinda duruyor",
+        DURUM_OTOMATIK: "Kimlik kesin, uyarı yok; olduğu gibi kaydedilebilir",
+        DURUM_INCELE: "Sistem sonuç buldu ama emin değil; gerekçesi satırda yazılı",
+        DURUM_ESLESMEDI: "Kişi bulunamadı; tutar (DAGITILAMAYAN) satırında duruyor",
     }
     dagilim = ozet.get("durum_dagilimi", {})
     toplam_satir = max(1, sum(dagilim.get(d, 0) for d in aciklama))
@@ -508,8 +512,8 @@ def _ozet_yaz(
     if mahsup is not None and hasattr(mahsup, "sirket_ozeti"):
         gruplar = mahsup.sirket_ozeti()
         if gruplar:
-            bolum("Sirket kirilimi  (tuzel kisi ustte, en buyuk projesi yaninda)")
-            tablo_basligi(("Sirket", "Tutar", "Para", "Pay", "Kisi", "En buyuk proje", "Proje payi"))
+            bolum("Şirket kırılımı   (tüzel kişi ve en büyük projesi)")
+            tablo_basligi(("Şirket", "Tutar", "Para", "Pay", "Kişi", "En büyük proje", "Proje payı"))
             for i, g in enumerate(gruplar):
                 zebra = i % 2 == 1
                 en = g["projeler"][0] if g["projeler"] else None
@@ -525,31 +529,32 @@ def _ozet_yaz(
         # --- En buyuk masraf merkezleri ---------------------------------
         merkezler = mahsup.merkez_ozeti()[:10]
         if merkezler:
-            bolum("En buyuk masraf merkezleri  (ilk 10)")
-            tablo_basligi(("Masraf merkezi", "Tutar", "Para", "Pay", "Kisi", "Sirket", "Durum"))
+            bolum("En büyük masraf merkezleri   (ilk 10)")
+            tablo_basligi(("Masraf merkezi", "Tutar", "Para", "Pay", "Kişi", "Şirket", "Durum"))
             for i, m in enumerate(merkezler):
                 zebra = i % 2 == 1
-                renk = "" if m["haritada_var"] else "uyari"
+                dagitilamayan = str(m["masraf_merkezi"]) == "(DAGITILAMAYAN)"
+                renk = "" if m["haritada_var"] else ("engel" if dagitilamayan else "uyari")
+                durum_metni = "" if m["haritada_var"] else ("kişi bulunamadı" if dagitilamayan else "haritada yok")
                 sayfa.write_string(satir, 1, str(m["masraf_merkezi"]), bicimler.mahsup("metin", renk, zebra))
                 sayfa.write_number(satir, 2, m["tutar"], bicimler.mahsup("sayi", renk, zebra))
                 sayfa.write_string(satir, 3, m["para_birimi"], bicimler.mahsup("metin", renk, zebra))
                 sayfa.write_number(satir, 4, m["pay_yuzde"] / 100.0, bicimler.mahsup("yuzde", renk, zebra))
                 sayfa.write_number(satir, 5, m["kisi_sayisi"], bicimler.mahsup("tamsayi", renk, zebra))
                 sayfa.write_string(satir, 6, str(m.get("sirket") or ""), bicimler.mahsup("metin", renk, zebra))
-                sayfa.write_string(satir, 7, "" if m["haritada_var"] else "haritada tanimli degil",
-                                   bicimler.mahsup("metin", renk, zebra))
+                sayfa.write_string(satir, 7, durum_metni, bicimler.mahsup("metin", renk, zebra))
                 satir += 1
 
     # --- Dikkat ----------------------------------------------------------
     dikkat: list[str] = []
     if mahsup is not None:
         for c in getattr(mahsup, "isaret_celiskileri", []) or []:
-            dikkat.append("Isaret celiskisi: " + c.aciklama())
+            dikkat.append("İşaret çelişkisi: " + c.aciklama())
         if getattr(mahsup, "tutarsiz_satir_sayisi", 0):
-            dikkat.append(f"{mahsup.tutarsiz_satir_sayisi} satirda tutar okunamadi; dagilima girmedi.")
+            dikkat.append(f"{mahsup.tutarsiz_satir_sayisi} satırda tutar okunamadı; dağılıma girmedi.")
     if oneriler:
-        dikkat.append(f"{len(oneriler)} gorev yeri masraf merkezi haritasinda tanimli degil. "
-                      "'Harita Onerileri' sayfasinda hazir satirlar var.")
+        dikkat.append(f"{len(oneriler)} görev yeri masraf merkezi haritasında tanımlı değil. "
+                      "'Harita Onerileri' sayfasında hazır satırlar var.")
     for u in (ozet.get("uyarilar") or []):
         metin = str(u)
         if "Ogrenildi" in metin or "kisi kutugu" in metin:
@@ -565,14 +570,14 @@ def _ozet_yaz(
             sayfa.merge_range(satir, 1, satir, 7, metin, bicimler.not_metni)
             satir += 1
         if len(dikkat) > 12:
-            sayfa.merge_range(satir, 1, satir, 7, f"... ve {len(dikkat) - 12} not daha (Kontrol ve Sonuc sayfalarinda).",
+            sayfa.merge_range(satir, 1, satir, 7, f"... ve {len(dikkat) - 12} not daha (Kontrol ve Sonuc sayfalarında).",
                               bicimler.not_metni)
             satir += 1
 
     # --- Islenen dosyalar ------------------------------------------------
     dosyalar = ozet.get("dosyalar") or []
     if dosyalar:
-        bolum("Islenen dosyalar")
+        bolum("İşlenen dosyalar")
         for i, yol in enumerate(dosyalar):
             zebra = i % 2 == 1
             sayfa.merge_range(satir, 1, satir, 7, Path(str(yol)).name, bicimler.mahsup("metin", "", zebra))
@@ -580,23 +585,23 @@ def _ozet_yaz(
     bolum("Kaynak veri")
     for ad, deger in (
         ("Personel ana verisi", Path(str(ozet.get("personel_dosyasi") or "")).name or "-"),
-        ("Personel son donemi", ozet["son_donem"].strftime("%d.%m.%Y") if isinstance(ozet.get("son_donem"), date) else "-"),
-        ("Otomatik kabul esigi", f"guven >= {ozet.get('guven_esigi', '')} ve uyari yok"),
+        ("Personel son dönemi", ozet["son_donem"].strftime("%d.%m.%Y") if isinstance(ozet.get("son_donem"), date) else "-"),
+        ("Otomatik kabul eşiği", f"güven ≥ {ozet.get('guven_esigi', '')} ve uyarı yok"),
     ):
         sayfa.write_string(satir, 1, ad, bicimler.ozet_metin)
         sayfa.merge_range(satir, 2, satir, 7, str(deger), bicimler.ozet_metin)
         satir += 1
 
     # --- Sayfa rehberi ---------------------------------------------------
-    bolum("Bu dosyada ne var")
+    bolum("Bu dosyada ne var   (sayfa adına tıklayın)")
     rehber = (
-        ("Mahsuplasma", "MUHASEBEYE GIDEN TABLO. Her fatura icin sirket ve projeye ne kadar yazilacagi."),
-        ("Sirket Kirilimi", "Tuzel kisi ustte, projeleri altinda."),
-        ("Kontrol", "Mutabakat. Fark sutunu sifir olmak zorunda."),
-        ("Harita Onerileri", "Tanimsiz gorev yerleri ve haritaya yapistirmaya hazir satirlar."),
-        ("Sonuc", "Butun satirlar: kisinin nasil bulundugu, guven, gerekce, evrak no, mail konusu."),
-        ("Incele", "Elle bakilacak satirlar."),
-        ("Eslesmedi", "Kisi bulunamayan satirlar."),
+        ("Mahsuplasma", "MUHASEBEYE GİDEN TABLO. Her fatura için şirkete ve projeye ne kadar yazılacağı."),
+        ("Sirket Kirilimi", "Tüzel kişi üstte, projeleri altında."),
+        ("Kontrol", "Mutabakat. Fark sütunu sıfır olmak zorunda."),
+        ("Harita Onerileri", "Tanımsız görev yerleri ve haritaya yapıştırmaya hazır satırlar."),
+        ("Sonuc", "Bütün satırlar: kişinin nasıl bulunduğu, güven, gerekçe, evrak no, mail konusu."),
+        ("Incele", "Elle bakılacak satırlar."),
+        ("Eslesmedi", "Kişi bulunamayan satırlar."),
     )
     for i, (ad, aciklama) in enumerate(rehber):
         zebra = i % 2 == 1
@@ -606,19 +611,19 @@ def _ozet_yaz(
 
     satir += 1
     sayfa.merge_range(satir, 1, satir, 7,
-                      "Otomasyon cevrimdisi calisir; personel ve fatura verisi bilgisayardan disari cikmaz. "
-                      "Bu dosya kisisel veri icerir, paylasirken dikkat edin.",
+                      "Otomasyon çevrimdışı çalışır; personel ve fatura verisi bilgisayardan dışarı çıkmaz. "
+                      "Bu dosya kişisel veri içerir, paylaşırken dikkat edin.",
                       bicimler.not_metni)
 
 
 def _gider_donemi(sonuclar: Sequence[Sonuc]) -> str:
     """Satirlardaki belge tarihlerinden okunakli donem etiketi ('Temmuz 2026')."""
-    aylar = ("Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz",
-             "Agustos", "Eylul", "Ekim", "Kasim", "Aralik")
+    aylar = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
+             "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
     tarihler = [s.satir.belge_tarihi for s in sonuclar
                 if getattr(s.satir, "belge_tarihi", None) and getattr(s.satir, "tutar", None) is not None]
     if not tarihler:
-        return "Donem belirsiz"
+        return "Dönem belirsiz"
     from collections import Counter
     (yil, ay), _ = Counter((t.year, t.month) for t in tarihler).most_common(1)[0]
     return f"{aylar[ay - 1]} {yil}"

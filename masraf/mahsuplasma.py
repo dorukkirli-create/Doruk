@@ -257,7 +257,9 @@ class MahsupTablosu:
         """
         gruplar: dict[tuple[str, str], dict] = {}
         for s in self.satirlar:
-            sirket = s.sirket or "(sirket yok)"
+            # Masraf merkezi cozulemeyen satirlarin sirketi de yoktur; onlari
+            # "(sirket yok)" yerine ne olduklariyla adlandirmak daha durust.
+            sirket = s.sirket or ("(dagitilamayan)" if s.masraf_merkezi == DAGITILAMAYAN else "(sirket yok)")
             anahtar = (sirket, s.para_birimi)
             grup = gruplar.setdefault(anahtar, {
                 "sirket": sirket, "para_birimi": s.para_birimi,

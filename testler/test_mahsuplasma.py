@@ -478,7 +478,8 @@ class SirketKirilimiTest(unittest.TestCase):
         s = [sonuc(gider(tutar=60.0), merkez=None, durum=DURUM_ESLESMEDI,
                    sicil=None, sirket=None)]
         ozet = mahsuplasma_uret(s).sirket_ozeti()
-        self.assertEqual(ozet[0]["sirket"], "(sirket yok)")
+        # Masraf merkezi cozulemeyen satirlar ne olduklariyla adlandirilir.
+        self.assertEqual(ozet[0]["sirket"], "(dagitilamayan)")
 
     def test_kisi_sayisi_sirket_bazinda_benzersiz(self):
         """Ayni kisi iki projede gorunse de sirket duzeyinde bir kez sayilmali."""
