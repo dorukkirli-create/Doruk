@@ -93,7 +93,11 @@ Sekiz sayfa var. Sirasi okuma sirasidir.
 
   Eslesmedi     Kisi hic bulunamayan satirlar.
 
-  Ozet          Dagilimlar, oranlar, toplamlar.
+  Kapaktaki mutabakat satiri uc renkte gelir:
+    YESIL  "MUTABAKAT KAPALI"          para kaybolmadi, inceleme bekleyen yok
+    SARI   "MUTABAKAT KAPALI, TASLAK"  para kaybolmadi ama Incele/Eslesmedi
+                                       sayfalarinda karar bekleyen satir var
+    KIRMIZI "MUTABAKAT ACIK"           bir fatura kapanmadi; gonderilmemeli
 
 
 KONSOLDA NE YAZAR
@@ -167,8 +171,19 @@ Masraf merkezi haritasi
     verdiginiz dosyalara dokunulmaz; onlar kendi klasorunuzde kalir.
 
 Program ogreniyor mu
-    Evet. veri klasorundeki CSV dosyalarinda bulunan eslesmeler, TC kimlik
-    koprusu ve isim varyantlari saklanir. Her ay biraz daha iyi eslesir.
+    Kismen, ve kendiliginden. Saglik ve katilimci listelerinden TC kimlik
+    koprusu ile dogum tarihiyle dogrulanmis isim varyantlari, guveni 0,85 ve
+    ustu olan eslesmeler veri klasorundeki CSV dosyalarina yazilir; ay ay
+    daha iyi eslesir. Bu pakette secim yapilacak bir ekran YOKTUR: Incele
+    sayfasindaki bir satiri kalici cozmek icin veri\aliases.csv (calisan)
+    ya da veri\harici_kisiler.csv (calisan olmayan) dosyasina bir satir
+    eklersiniz; ornekleri dosyalarin icinde.
+
+Ayni faturayi yanlislikla iki kez islersem
+    Program her islenen dosyanin parmak izini 3_ISLENENLER\ISLENEN_DOSYALAR.txt
+    icinde tutar. Ayni icerik tekrar gelirse konsolda ve Excel kapaginda
+    "DAHA ONCE ISLENDI" uyarisi cikar. Mutabakat ACIK cikan calistirmada
+    faturalar arsive TASINMAZ, 1_FATURALAR'da kalir; okunamayan dosya da kalir.
 
 
 BILINEN SINIRLAMA

@@ -463,11 +463,63 @@ _MERKEZ_ADAYLARI = (
 # Tarih kolonu ararken asla secilmemesi gereken kolonlar.
 _TARIH_HARIC = ("dogum tarihi", "dogum")
 
-# Bu oneklerle baslayan 'isim' degerleri veri degil ozet satiridir.
-_OZET_ONEKLERI: tuple[str, ...] = (
-    "toplam", "genel toplam", "ara toplam", "odenecek", "iade", "total",
-    "satir etiketleri", "genel", "ozet",
+#: Baslik satiri bu kadar satir icinde aranir. Kesif (dosya tipi tespiti) de
+#: AYNI siniri kullanir; iki sinir ayrisirsa dosya 'genel' tanilip 0 satir
+#: doner (olculdu: baslik 12. satirdayken).
+BASLIK_ARAMA_SINIRI = 15
+
+# Ozet satiri tespiti. 'GENEL', 'IADE', 'OZET' Turkiye'de gercek soyadlaridir;
+# bu yuzden onek olarak DEGIL, tam kelime/ifade olarak aranir. 'TOPLAM ...'
+# ve 'TOTAL ...' ile baslayan hucre ise her zaman ozettir.
+_OZET_TAM: frozenset[str] = frozenset({
+    "toplam", "genel toplam", "ara toplam", "odenecek", "odenecek tutar", "iade",
+    "total", "grand total", "sub total", "subtotal", "satir etiketleri", "ozet",
+    "genel", "toplam tutar", "net toplam", "kdv", "kdv dahil", "kdv haric",
+})
+_OZET_ONEKLERI: tuple[str, ...] = ("genel toplam", "ara toplam", "grand total")
+#: 'TOPLAM USD', 'TOTAL AMOUNT' gibi: onek + ozet kelimesi. 'TOTAL MEHMET' degil.
+_OZET_KUYRUKLARI: frozenset[str] = frozenset({
+    "usd", "eur", "rub", "try", "tl", "tutar", "amount", "sum", "kdv", "dahil", "haric",
+    "net", "brut", "genel", "ara", "bakiye", "borc", "alacak", "fatura", "invoice",
+})
+
+# Para birimi kolonu adaylari. Bulunmazsa tutar basligindaki doviz koduna bakilir.
+_DOVIZ_ADAYLARI: tuple[str, ...] = (
+    "para birimi", "doviz", "doviz cinsi", "currency", "ccy", "cur", "pb", "валюта",
 )
+_DOVIZ_KODLARI: dict[str, str] = {
+    "usd": "USD", "$": "USD", "dolar": "USD", "eur": "EUR", "euro": "EUR", "€": "EUR",
+    "rub": "RUB", "rur": "RUB", "ruble": "RUB", "руб": "RUB", "try": "TRY", "tl": "TRY",
+    "₺": "TRY", "gbp": "GBP", "kzt": "KZT", "cny": "CNY",
+}
+
+
+def _ozet_satiri_mi(kimlik: str) -> bool:
+    k = kimlik.strip()
+    if k in _OZET_TAM or any(k.startswith(o) for o in _OZET_ONEKLERI):
+        return True
+    parcalar = k.split()
+    if len(parcalar) >= 2 and parcalar[0] in ("toplam", "total"):
+        # 'TOPLAM USD' ozet, 'TOTAL MEHMET' kisi: kalan kelimeler ozet
+        # kelimesiyse ozettir.
+        return all(pk in _OZET_KUYRUKLARI for pk in parcalar[1:])
+    return False
+
+
+def _doviz_coz(deger: Any, tutar_basligi: str | None = None) -> str | None:
+    """Hucredeki ya da tutar basligindaki doviz kodunu ISO'ya cevirir."""
+    for aday in (deger, tutar_basligi):
+        if aday is None:
+            continue
+        metin = kolon_anahtari(str(aday))
+        if not metin:
+            continue
+        if metin.upper() in ("USD", "EUR", "RUB", "TRY", "GBP", "KZT", "CNY"):
+            return metin.upper()
+        for parca in metin.replace("(", " ").replace(")", " ").split():
+            if parca in _DOVIZ_KODLARI:
+                return _DOVIZ_KODLARI[parca]
+    return None
 
 # Dosya adi / aciklama anahtar kelimesinden gider tipi tahmini.
 _TIP_IPUCLARI: tuple[tuple[str, str], ...] = (
@@ -510,7 +562,7 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
     sonuclar: list[GiderSatiri] = []
 
     for sayfa_adi, satirlar in calisma.sayfalar.items():
-        baslik_i = baslik_satiri_bul(satirlar, sinir=10)
+        baslik_i = baslik_satiri_bul(satirlar, sinir=BASLIK_ARAMA_SINIRI)
         if baslik_i < 0:
             continue
         harita = kolon_haritasi(satirlar[baslik_i])
@@ -532,6 +584,19 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
         i_tutar = kolon_ara(harita, *_genislet("tutar", _TUTAR_ADAYLARI))
         i_tarih = kolon_ara(harita, *_genislet("tarih", _TARIH_ADAYLARI), haric=_TARIH_HARIC)
         i_merkez = kolon_ara(harita, *_genislet("santiye", _MERKEZ_ADAYLARI))
+        i_doviz = kolon_ara(harita, *_genislet("doviz", _DOVIZ_ADAYLARI))
+        if i_doviz is not None and i_doviz in (i_tutar, i_isim):
+            i_doviz = None
+        # Tutar basligi 'Tutar (USD)' gibi doviz tasiyorsa satirlara o yazilir.
+        tutar_basligi = None
+        if i_tutar is not None:
+            for ham_ad, indeks in harita.items():
+                if indeks == i_tutar:
+                    tutar_basligi = ham_ad
+                    break
+        # Iki ayri tutar kolonu (RUB ve USD gibi) varsa ilki secilir; bunu
+        # sessizce yapmak yanlis: satir ek'ine not dusulur, ozet uyari uretir.
+        tutar_adaylari = [ad for ad in harita if kolon_ara({ad: harita[ad]}, *_genislet("tutar", _TUTAR_ADAYLARI)) is not None]
 
         # Ayni kolon hem isim hem masraf merkezi olarak secilmesin.
         if i_merkez is not None and i_merkez == i_isim:
@@ -560,12 +625,11 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
             if isim is None and sicil is None and tckn is None:
                 continue  # bos satir
             if tckn is None:
-                # TOPLAM / IADE / ODENECEK gibi ozet satirlarini ele.
+                # TOPLAM / ODENECEK gibi ozet satirlarini ele. Tam kelime
+                # aranir: 'GENEL AHMET' bir kisidir, 'GENEL TOPLAM' degildir.
                 # TCKN varsa satir kesin bir kisiye aittir, elenmez.
                 kimlikler = [kolon_anahtari(k) for k in (isim, sicil) if k]
-                if any(
-                    k.startswith(o) for k in kimlikler for o in _OZET_ONEKLERI
-                ):
+                if any(_ozet_satiri_mi(k) for k in kimlikler):
                     continue
 
             aciklama = isim or " | ".join(
@@ -582,7 +646,7 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
                     sicil_ham=sicil,
                     tckn_ham=tckn,
                     tutar=hucre_sayisi(al(i_tutar)),
-                    para_birimi=None,
+                    para_birimi=_doviz_coz(al(i_doviz), tutar_basligi),
                     masraf_merkezi_kaynak=hucre_metni(al(i_merkez)),
                     gider_tipi=_gider_tipi_tahmin(p.name, sayfa_adi),
                     ek={
@@ -591,7 +655,10 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
                         "cozulen_kolonlar": {
                             "isim": i_isim, "sicil": i_sicil, "tckn": i_tckn,
                             "tutar": i_tutar, "tarih": i_tarih, "merkez": i_merkez,
+                            "doviz": i_doviz,
                         },
+                        **({"tutar_kolonu_secenekleri": tutar_adaylari}
+                           if len(tutar_adaylari) > 1 else {}),
                     },
                 )
             )

@@ -17,6 +17,8 @@ Onemli veri gercekleri (olculmus):
 
 from __future__ import annotations
 
+import re
+
 import bisect
 import pickle
 from datetime import date, datetime
@@ -153,6 +155,21 @@ def _kategori_normalize(deger: Any) -> str | None:
         return "Aktif"
     return metin
 
+
+
+def _init_alanlari(sinif: type) -> set[str]:
+    """__init__ icinde 'self.x = ...' ile atanan alan adlari (kaynaktan okunur).
+
+    Onbellek dogrulamasi icin: pickle'dan gelen nesnede bu alanlardan biri
+    yoksa nesne eski koddan kalmadir ve kullanilmamalidir.
+    """
+    import inspect
+
+    try:
+        kaynak = inspect.getsource(sinif.__init__)
+    except (OSError, TypeError):
+        return set()
+    return set(re.findall(r"^\s+self\.([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=", kaynak, re.M))
 
 class PersonelDefteri:
     """Personel ana verisi uzerinde eslestirme indeksleri sunan defter.
@@ -317,6 +334,11 @@ class PersonelDefteri:
                     paket = pickle.load(dosya)
                 if paket.get("imza") == imza:
                     defter = paket["defter"]
+                    eksik = _init_alanlari(cls) - set(vars(defter))
+                    if eksik:
+                        # Kod yeni alan eklemis, onbellek eski surumden: ilk
+                        # sorguda AttributeError yerine simdi yeniden oku.
+                        raise ValueError(f"onbellek eski: eksik alanlar {sorted(eksik)}")
                     defter._kaynak_yol = str(kaynak)
                     return defter
             except Exception:  # noqa: BLE001

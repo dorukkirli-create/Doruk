@@ -153,8 +153,14 @@ def _msg_yuru(
     zincir: list[str],
     derinlik: int,
     sonuc: list[CikarilanEk],
+    atlananlar: list[str] | None = None,
 ) -> None:
-    """Bir mesaj nesnesinin eklerini yurur, tablo dosyalarini sonuc listesine ekler."""
+    """Bir mesaj nesnesinin eklerini yurur, tablo dosyalarini sonuc listesine ekler.
+
+    Tablo olmayan ekler (PDF fatura, docx...) okunmaz ama ``atlananlar``
+    listesine 'ad (mail konusu)' olarak yazilir; kullanici neyin okunmadigini
+    Excel'de gorur. Sessiz atlama yok.
+    """
     if derinlik > AZAMI_DERINLIK:
         _log.warning("Azami derinlik asildi, dal atlandi: %s", " > ".join(zincir))
         return
@@ -183,7 +189,7 @@ def _msg_yuru(
         # Ekli mesaj: ic ice in
         gomulu = getattr(ek, "data", None)
         if hasattr(gomulu, "attachments"):
-            _msg_yuru(gomulu, dal, yeni_zincir, derinlik + 1, sonuc)
+            _msg_yuru(gomulu, dal, yeni_zincir, derinlik + 1, sonuc, atlananlar)
             continue
 
         # Diske yaz
@@ -207,31 +213,49 @@ def _msg_yuru(
                         mail_gonderen=gonderen, mail_tarihi=tarih,
                         zincir=yeni_zincir + [yol.name], derinlik=derinlik + 1))
                 elif ic_uzanti == ".msg":
-                    _msg_ac_ve_yuru(icerik, dal, yeni_zincir + [yol.name], derinlik + 1, sonuc)
+                    _msg_ac_ve_yuru(icerik, dal, yeni_zincir + [yol.name], derinlik + 1,
+                                    sonuc, atlananlar)
+                elif ic_uzanti not in GORSEL_UZANTILARI and atlananlar is not None:
+                    atlananlar.append(f"{icerik.name}  [{yol.name} icinde, mail: {konu}]")
             continue
 
         if uzanti == ".msg":
-            _msg_ac_ve_yuru(yol, dal, yeni_zincir, derinlik + 1, sonuc)
+            _msg_ac_ve_yuru(yol, dal, yeni_zincir, derinlik + 1, sonuc, atlananlar)
             continue
 
         if uzanti in TABLO_UZANTILARI:
             sonuc.append(CikarilanEk(
                 yol=yol, ad=yol.name, mail_konusu=konu, mail_gonderen=gonderen,
                 mail_tarihi=tarih, zincir=yeni_zincir, derinlik=derinlik))
+        elif atlananlar is not None:
+            atlananlar.append(f"{yol.name}  [mail: {konu}]")
+
+
+class MesajAcilamadi(Exception):
+    """Kullanicinin verdigi .msg dosyasi Outlook mesaji olarak acilamadi."""
 
 
 def _msg_ac_ve_yuru(
-    yol: Path, hedef: Path, zincir: list[str], derinlik: int, sonuc: list[CikarilanEk]
+    yol: Path, hedef: Path, zincir: list[str], derinlik: int, sonuc: list[CikarilanEk],
+    atlananlar: list[str] | None = None,
 ) -> None:
     import extract_msg
 
     try:
         m = extract_msg.openMsg(str(yol))
     except Exception as e:
-        _log.warning("Mesaj acilamadi %s: %s", yol.name, e)
+        if derinlik == 0:
+            # Kullanicinin verdigi dosyanin kendisi acilmiyor: bos, bozuk ya da
+            # .msg degil. 'Tablo eki bulunamadi' demek yaniltir; nedeni soyle.
+            raise MesajAcilamadi(
+                f"dosya Outlook mesaji olarak acilamadi ({e.__class__.__name__}). "
+                "Dosya bos, bozuk ya da .msg uzantili baska bir dosya olabilir; "
+                "Outlook'ta acip 'Farkli Kaydet' ile yeniden kaydedin."
+            ) from e
+        _log.warning("Ic mesaj acilamadi %s: %s", yol.name, e)
         return
     try:
-        _msg_yuru(m, hedef, zincir, derinlik, sonuc)
+        _msg_yuru(m, hedef, zincir, derinlik, sonuc, atlananlar)
     finally:
         try:
             m.close()
@@ -239,12 +263,14 @@ def _msg_ac_ve_yuru(
             pass
 
 
-def msg_aciklarini_cikar(msg_yolu: str | Path, hedef_dizin: str | Path) -> list[CikarilanEk]:
+def msg_aciklarini_cikar(msg_yolu: str | Path, hedef_dizin: str | Path,
+                         atlananlar: list[str] | None = None) -> list[CikarilanEk]:
     """Bir .msg dosyasindaki butun tablo eklerini ic ice arsiv ve mesajlarla birlikte cikarir.
 
     Args:
         msg_yolu: Outlook mesaj dosyasi.
         hedef_dizin: Cikarilan dosyalarin yazilacagi dizin. Yoksa olusturulur.
+        atlananlar: Verilirse tablo olmayan ekler (PDF vb.) bu listeye yazilir.
 
     Returns:
         Bulunan tablo dosyalarinin listesi. Her biri hangi mailden geldigini tasir.
@@ -269,7 +295,7 @@ def msg_aciklarini_cikar(msg_yolu: str | Path, hedef_dizin: str | Path) -> list[
     hedef.mkdir(parents=True, exist_ok=True)
 
     sonuc: list[CikarilanEk] = []
-    _msg_ac_ve_yuru(msg_yolu, hedef, [], 0, sonuc)
+    _msg_ac_ve_yuru(msg_yolu, hedef, [], 0, sonuc, atlananlar)
 
     # Ayni dosyanin iki kez cikmasini onle (ayni mail iki kez forward edilmis olabilir)
     gorulen: set[tuple[str, int]] = set()

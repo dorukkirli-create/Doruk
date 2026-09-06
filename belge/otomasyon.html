@@ -170,14 +170,14 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
         <span class="stat__s">2 Outlook maili, 12 ek dosya</span>
       </div>
       <div class="stat">
-        <span class="stat__n">34</span>
+        <span class="stat__n">33</span>
         <span class="stat__l">mahsup satırı üretildi</span>
         <span class="stat__s">muhasebeye giden tablo</span>
       </div>
       <div class="stat">
-        <span class="stat__n">15 sn</span>
-        <span class="stat__l">toplam süre</span>
-        <span class="stat__s">elle yapıldığında yarım gün</span>
+        <span class="stat__n">~6 sn</span>
+        <span class="stat__l">iki mail için süre</span>
+        <span class="stat__s">ilk çalıştırmada +30 sn personel yüklemesi; elle yarım gün</span>
       </div>
     </div>
   </div>
@@ -240,14 +240,17 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
           <th>Kademe</th><th>Ne yapar</th><th class="num">Satır</th><th style="width:26%">Pay</th>
         </tr></thead>
         <tbody>
-          <tr><td><strong>Sicil</strong></td><td>Dosyada sicil numarası var</td><td class="num">50</td><td><span class="bar" style="width:22%"></span></td></tr>
-          <tr><td><strong>TC kimlik</strong></td><td>Dosyada TC kimlik var</td><td class="num">27</td><td><span class="bar" style="width:12%"></span></td></tr>
-          <tr><td><strong>Tam isim</strong></td><td>İsim personel verisinde birebir bulundu</td><td class="num">225</td><td><span class="bar" style="width:100%"></span></td></tr>
-          <tr><td><strong>1C listesi</strong></td><td>Grup şirketi personeli (Renservis, RC, One Tower…)</td><td class="num">56</td><td><span class="bar" style="width:25%"></span></td></tr>
+          <tr><td><strong>Sicil</strong></td><td>Dosyada sicil numarası var</td><td class="num">50</td><td><span class="bar" style="width:27%"></span></td></tr>
+          <tr><td><strong>TC kimlik</strong></td><td>Dosyada TC kimlik var</td><td class="num">27</td><td><span class="bar" style="width:15%"></span></td></tr>
+          <tr><td><strong>Tam isim</strong></td><td>İsim personel verisinde birebir bulundu</td><td class="num">184</td><td><span class="bar" style="width:100%"></span></td></tr>
+          <tr><td><strong>Öğrenilmiş yazım</strong></td><td>Daha önce doğrulanmış isim varyantı (aliases.csv)</td><td class="num">17</td><td><span class="bar" style="width:9%"></span></td></tr>
+          <tr><td><strong>Alt küme / kesik / bulanık</strong></td><td>İsmin bir parçası, kesilmiş yazım, yakın yazım</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+          <tr><td><strong>1C listesi</strong></td><td>Grup şirketi personeli (Renservis, RC, One Tower…)</td><td class="num">56</td><td><span class="bar" style="width:30%"></span></td></tr>
+          <tr><td><strong>Ek kişi defteri</strong></td><td>Yardımcı listelerden öğrenilmiş, sicilsiz kişi</td><td class="num">11</td><td><span class="bar bar--dim" style="width:6%"></span></td></tr>
           <tr><td><strong>Transliterasyon</strong></td><td>Rusça yazım farkı (<span class="mono">NATALIIA / NATALIA</span>)</td><td class="num">9</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
           <tr><td><strong>Harici kişiler</strong></td><td>Çalışan değil; elle tutulan defterde kayıtlı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
-          <tr><td><strong>Aile</strong></td><td>Aynı soyadlı çalışan var, aile bileti olabilir</td><td class="num">36</td><td><span class="bar bar--dim" style="width:16%"></span></td></tr>
-          <tr><td><strong>Bulunamadı</strong></td><td>Hiçbir kademe tutmadı</td><td class="num">10</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+          <tr><td><strong>Aile</strong></td><td>Aynı soyadlı çalışan var, aile bileti olabilir</td><td class="num">27</td><td><span class="bar bar--dim" style="width:15%"></span></td></tr>
+          <tr><td><strong>Bulunamadı</strong></td><td>Hiçbir kademe tutmadı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -292,18 +295,18 @@ uyarı : Kişi belge tarihinden önce işten ayrılmış (çıkış: 27.11.2025)
     <div class="verdicts">
       <div class="v v--ok">
         <span class="v__t">OTOMATİK</span>
-        <span class="v__n">224</span>
+        <span class="v__n">225</span>
         <span class="v__r">Kimlik kesin, uyarı yok. Olduğu gibi kaydedilebilir.</span>
       </div>
       <div class="v v--warn">
         <span class="v__t">İNCELE</span>
-        <span class="v__n">156</span>
+        <span class="v__n">166</span>
         <span class="v__r">Sistem bir sonuç buldu ama emin değil. Gerekçesi her satırda
         Türkçe yazılı; onaylayın ya da düzeltin.</span>
       </div>
       <div class="v v--stop">
         <span class="v__t">EŞLEŞMEDİ</span>
-        <span class="v__n">25</span>
+        <span class="v__n">14</span>
         <span class="v__r">Kişi hiç bulunamadı. Tutar kaybolmaz, tabloda
         <span class="mono">(DAGITILAMAYAN)</span> satırı olarak durur.</span>
       </div>
@@ -349,11 +352,11 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         <caption>Temmuz 2026, USD. Okunan = yinelenen + dağıtılan + dağıtılamayan.</caption>
         <thead><tr><th>Adım</th><th class="num">Tutar</th><th>Ne anlama gelir</th></tr></thead>
         <tbody>
-          <tr><td><strong>Okunan</strong></td><td class="num">106.297,78</td><td>Dosyalarda görülen her şeyin toplamı</td></tr>
+          <tr><td><strong>Okunan</strong></td><td class="num">106.374,56</td><td>Dosyalarda görülen her şeyin toplamı</td></tr>
           <tr><td>Yinelenen</td><td class="num">−48.978,59</td><td>Aynı işlem diğer dosyada zaten sayıldı</td></tr>
-          <tr><td><strong>Net</strong></td><td class="num">57.319,19</td><td>Gerçekten dağıtılacak tutar</td></tr>
-          <tr><td>Dağıtılan</td><td class="num">53.718,89</td><td>Projelere yazıldı (%93,7)</td></tr>
-          <tr><td>Dağıtılamayan</td><td class="num">3.600,30</td><td>Kişi ya da masraf merkezi bulunamadı</td></tr>
+          <tr><td><strong>Net</strong></td><td class="num">57.395,97</td><td>Gerçekten dağıtılacak tutar</td></tr>
+          <tr><td>Dağıtılan</td><td class="num">53.981,84</td><td>Projelere yazıldı (%94,1)</td></tr>
+          <tr><td>Dağıtılamayan</td><td class="num">3.414,13</td><td>Kişi bulunamadı; görünür biçimde bekler</td></tr>
         </tbody>
       </table>
     </div>
@@ -364,17 +367,17 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         1C personel listesinin “Firm 2” kolonundan gelir.</caption>
         <thead><tr><th>Şirket / Proje</th><th class="num">Tutar</th><th class="num">Pay</th><th class="num">Kişi</th></tr></thead>
         <tbody>
-          <tr><td><strong>UST LUGA</strong></td><td class="num"><strong>29.742,50</strong></td><td class="num"><strong>51,9%</strong></td><td class="num"><strong>74</strong></td></tr>
-          <tr><td style="padding-left:2em">GPP Project</td><td class="num">29.587,06</td><td class="num">99,5%</td><td class="num">73</td></tr>
+          <tr><td><strong>UST LUGA</strong></td><td class="num"><strong>29.310,44</strong></td><td class="num"><strong>51,1%</strong></td><td class="num"><strong>74</strong></td></tr>
+          <tr><td style="padding-left:2em">GPP Project</td><td class="num">29.155,00</td><td class="num">99,5%</td><td class="num">72</td></tr>
           <tr><td style="padding-left:2em">Ust-Luga - Reshetnikova</td><td class="num">155,44</td><td class="num">0,5%</td><td class="num">2</td></tr>
-          <tr><td><strong>RHI</strong></td><td class="num"><strong>19.779,84</strong></td><td class="num"><strong>34,5%</strong></td><td class="num"><strong>35</strong></td></tr>
+          <tr><td><strong>RHI</strong></td><td class="num"><strong>19.760,84</strong></td><td class="num"><strong>34,4%</strong></td><td class="num"><strong>35</strong></td></tr>
           <tr><td style="padding-left:2em">RHI Russia - Headquarter</td><td class="num">6.905,24</td><td class="num">34,9%</td><td class="num">7</td></tr>
           <tr><td style="padding-left:2em">Ust Luga Fabrication</td><td class="num">4.231,83</td><td class="num">21,4%</td><td class="num">10</td></tr>
           <tr><td style="padding-left:2em">Regional Management</td><td class="num">3.821,34</td><td class="num">19,3%</td><td class="num">4</td></tr>
           <tr><td><strong>RSS</strong> <span style="color:var(--deep-teal)">(Renservis / Renstroydetal)</span></td><td class="num"><strong>3.075,96</strong></td><td class="num"><strong>5,4%</strong></td><td class="num"><strong>6</strong></td></tr>
           <tr><td><strong>RC</strong> <span style="color:var(--deep-teal)">(One Tower / Top Tower / Icity)</span></td><td class="num"><strong>1.441,09</strong></td><td class="num"><strong>2,5%</strong></td><td class="num"><strong>6</strong></td></tr>
           <tr><td><strong>BSK</strong></td><td class="num"><strong>259,23</strong></td><td class="num"><strong>0,5%</strong></td><td class="num"><strong>1</strong></td></tr>
-          <tr><td>(dağıtılamayan)</td><td class="num">2.886,29</td><td class="num">5,0%</td><td class="num">&mdash;</td></tr>
+          <tr><td>(dağıtılamayan)</td><td class="num">3.414,13</td><td class="num">5,9%</td><td class="num">&mdash;</td></tr>
         </tbody>
       </table>
     </div>
@@ -403,7 +406,6 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
           <tr><td>Sonuc</td><td>Bütün satırlar, 28 kolon. Kişinin nasıl bulunduğu, güven skoru, Türkçe gerekçe, ayrıca <strong>Evrak / Fatura No</strong> ve <strong>Mail Konusu</strong>. Detay isteyen buradan izler.</td></tr>
           <tr><td>Incele</td><td>Elle bakılacak satırlar.</td></tr>
           <tr><td>Eslesmedi</td><td>Kişi bulunamayanlar.</td></tr>
-          <tr><td>Ozet</td><td>Dağılımlar, oranlar, toplamlar.</td></tr>
         </tbody>
       </table>
     </div>
@@ -467,10 +469,14 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         <p style="margin-top:var(--s3)">Yeni bir tedarikçi farklı bir kolon adı kullanırsa
         dosya okunur ama satır çıkmaz. <span class="mono">kolon_esanlamlilari.csv</span>
         dosyasına o kolon adını bir kez yazın, sonraki aylarda çalışır.</p>
-        <h3 style="margin-top:var(--s5)">İnceleme kararları</h3>
-        <p style="margin-top:var(--s3)">İncelemede doğru kişiyi seçtiğinizde eşleşme
-        kaydedilir ve aynı isim bir daha sorulmaz. Temmuz faturasında sistem kendiliğinden
-        27 TC kimlik köprüsü ve 30 isim varyantı öğrendi.</p>
+        <h3 style="margin-top:var(--s5)">Öğrenme nasıl olur</h3>
+        <p style="margin-top:var(--s3)">Masaüstü paketinde seçim ekranı yoktur; öğrenme
+        kendiliğindendir. Temmuz faturasında sistem sağlık ve katılımcı listelerinden
+        27 TC kimlik köprüsü ve doğum tarihiyle doğrulanmış 30 isim varyantı öğrendi.
+        <span class="mono">Incele</span> sayfasındaki bir satırı kalıcı çözmek için
+        <span class="mono">veri\aliases.csv</span> (çalışan) ya da
+        <span class="mono">veri\harici_kisiler.csv</span> (çalışan olmayan) dosyasına
+        bir satır eklenir. Streamlit arayüzünde aynı iş tıklayarak yapılır.</p>
       </div>
     </div>
   </section>

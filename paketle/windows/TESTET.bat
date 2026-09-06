@@ -26,6 +26,7 @@ echo --- 1. Klasor yapisi ---------------------------------------
 for %%D in (1_FATURALAR 2_EXCEL_CIKTI PERSONEL program veri) do (
     if exist "%%D\" (echo   VAR    %%D) else (echo   EKSIK  %%D)
 )
+if exist "3_ISLENENLER\" (echo   VAR    3_ISLENENLER) else (echo   YOK    3_ISLENENLER  ^(ilk basarili calistirmada olusur, normal^))
 for %%F in (program\python.exe program\python311.dll program\Lib\os.py program\kod\calistir.py) do (
     if exist "%%F" (echo   VAR    %%F) else (echo   EKSIK  %%F)
 )
@@ -86,7 +87,7 @@ echo.
 
 echo --- 9. Fatura dosyalari ------------------------------------
 set SAYI=0
-for %%F in (1_FATURALAR\*.msg 1_FATURALAR\*.xlsx 1_FATURALAR\*.xls) do set /a SAYI+=1
+for %%F in (1_FATURALAR\*.msg 1_FATURALAR\*.xlsx 1_FATURALAR\*.xls 1_FATURALAR\*.xlsm 1_FATURALAR\*.csv) do set /a SAYI+=1
 echo   1_FATURALAR icinde islenebilir dosya sayisi: %SAYI%
 
 :son

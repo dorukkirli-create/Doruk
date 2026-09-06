@@ -149,6 +149,28 @@ def _parola_korumali_mi(yol: Path) -> bool:
         return False
 
 
+try:  # xlsxwriter Workbook.close() IOError'i FileCreateError'a cevirir
+    from xlsxwriter.exceptions import FileCreateError as _FileCreateError
+except Exception:  # pragma: no cover - xlsxwriter yoksa
+    class _FileCreateError(Exception):
+        pass
+
+#: Excel dosyasi baska programda acikken alinan hatalar.
+_YAZMA_HATALARI = (PermissionError, _FileCreateError)
+
+
+def _hata_metni(hata: BaseException) -> str:
+    """Ham istisnayi kullanicinin anlayacagi cumleye cevirir."""
+    ad = hata.__class__.__name__
+    if ad in ("BadZipFile", "XLRDError", "EmptyDataError") or "File is not a zip" in str(hata) \
+            or "size is 0" in str(hata):
+        return ("dosya bos ya da bozuk; Excel de acamiyorsa biz de acamayiz "
+                f"({ad}: {hata})")
+    if ad in ("MesajAcilamadi", "MesajOkunamadi"):
+        return str(hata)
+    return f"okunamadi ({ad}: {hata})"
+
+
 def _mahsup_ozeti(mahsup) -> dict:
     """Mahsuplasma tablosunun ozet gostergeleri (arayuz ve rapor icin)."""
     return {
@@ -222,6 +244,12 @@ class Boru:
         self.yardimci: Any = None
         self.hatalar: list[str] = []
         self.uyarilar: list[str] = []
+        #: Calistirici (calistir.py) 'bu dosya daha once islendi' gibi
+        #: uyarilari buraya koyar; isle() bunlari uyarilara tasir.
+        self.on_uyarilar: list[str] = []
+        #: Mail eklerinden okunmadan gecilenler (PDF, docx...). Sessizce
+        #: atlanmaz; Kontrol sayfasinda ve kapakta listelenir.
+        self.atlanan_ekler: list[str] = []
         self._son_donem: date | None = None
         self._hazir = False
 
@@ -267,6 +295,8 @@ class Boru:
 
         harita_yolu = self.ayarlar.cozulmus_harita_yolu()
         self.harita = MasrafMerkeziHaritasi.yukle(harita_yolu)
+        if getattr(self.harita, "yukleme_uyarisi", None):
+            self.uyarilar.append(str(self.harita.yukleme_uyarisi))
         if not self.harita.kaynak_var:
             self.uyarilar.append(
                 f"Masraf merkezi haritasi bulunamadi ({harita_yolu}); gorev yerleri "
@@ -305,14 +335,33 @@ class Boru:
         from masraf.okuyucular.kesif import dosya_tipini_bul
         from masraf.okuyucular.kesif import oku as kesif_oku
 
+        from masraf.okuyucular.kesif import _dosya_ozeti
+
         satirlar: list[GiderSatiri] = []
         toplam = max(1, len(dosya_yollari))
-        # Bu calistirmada okunan eklerin icerik ozetleri. Ayni ek iki mailde
-        # gelirse ikincisi atlanir (bkz. kesif._msg_oku_icerik).
+        # Bu calistirmada okunan dosyalarin ve eklerin icerik ozetleri. Ayni
+        # icerik ikinci kez gelirse (ayni ek iki mailde, ya da mailin eki
+        # ayrica klasore atilmis) ikincisi atlanir; aksi halde para cift
+        # sayilir ve mutabakat yine 'kapali' gorunur (olculdu).
         gorulen_ozetler: set[str] = set()
+        # Ayni AD ile gelen ama icerigi farkli dosyalar (Excel'de yeniden
+        # kaydedilmis kopya gibi): ad -> (satir sayisi, toplam, yol).
+        gorulen_adlar: dict[str, tuple[int, float, str]] = {}
         for sira, yol in enumerate(dosya_yollari, start=1):
             hedef = Path(yol)
             _bildir(ilerleme, 5 + 25 * (sira - 1) / toplam, f"Okunuyor: {hedef.name}")
+            try:
+                ozet = _dosya_ozeti(hedef)
+            except OSError:
+                ozet = None
+            if ozet is not None:
+                if ozet in gorulen_ozetler:
+                    self.uyarilar.append(
+                        f"{hedef.name}: icerigi daha once okunan bir dosyayla/ekle "
+                        "birebir ayni; cift sayim olmasin diye atlandi."
+                    )
+                    continue
+                gorulen_ozetler.add(ozet)
             if _parola_korumali_mi(hedef):
                 # Ham istisna mesaji ('ImportError: msoffcrypto ...') kullaniciya
                 # hicbir sey anlatmaz. Ne oldugunu ve ne yapacagini soyleyelim.
@@ -326,16 +375,70 @@ class Boru:
                 tip = dosya_tipini_bul(hedef)
                 # kesif.oku Outlook mesajlarini, referans listelerini ve
                 # ozel parser bos donerse genel parser'a dusmeyi kendi ele alir.
-                dosya_satirlari = kesif_oku(hedef, gorulen_ozetler=gorulen_ozetler)
+                dosya_satirlari = kesif_oku(hedef, gorulen_ozetler=gorulen_ozetler,
+                                            atlanan_ekler=self.atlanan_ekler)
                 if not dosya_satirlari:
                     self.hatalar.append(
                         f"{hedef.name}: dosyadan hic gider satiri cikarilamadi "
                         f"(tespit edilen tip: {tip})."
                     )
+                dosya_satirlari = self._ayni_adli_dosyayi_ele(
+                    dosya_satirlari, gorulen_adlar)
                 satirlar.extend(dosya_satirlari)
             except Exception as hata:  # noqa: BLE001 - kullaniciya gosterilecek
-                self.hatalar.append(f"{hedef.name}: okunamadi ({hata.__class__.__name__}: {hata})")
+                self.hatalar.append(f"{hedef.name}: {_hata_metni(hata)}")
         return satirlar
+
+    def _ayni_adli_dosyayi_ele(
+        self, dosya_satirlari: list[GiderSatiri],
+        gorulen_adlar: dict[str, tuple[int, float, str]],
+    ) -> list[GiderSatiri]:
+        """Ayni adli ikinci dosyayi tanir: aynisiysa atar, farkliysa etiketler.
+
+        Kaynak adi mahsuplasmada 'fatura' anahtaridir ('mesaj.msg > EK.xls'
+        icin 'EK.xls'). Ayni ad ikinci kez gelirse iki dosya tek fatura
+        sanilir ve satirlar birlesir; mutabakat yine kapanir ama para iki kez
+        dagitilir. Iki durum ayrilir:
+
+        * satir sayisi ve toplam ayni -> ayni dosya (Excel'de yeniden
+          kaydedilmis kopya). Ikincisi atilir, uyari yazilir.
+        * farkli -> gercekten iki ayri dosya. Ikincisi 'ust > ad' etiketiyle
+          ayri fatura olarak izlenir, uyari yazilir; finans karar verir.
+        """
+        from collections import defaultdict
+
+        gruplar: dict[str, list[GiderSatiri]] = defaultdict(list)
+        for s in dosya_satirlari:
+            ham = str(s.kaynak_dosya or "")
+            gruplar[ham.split("> ")[-1].strip()].append(s)
+        tutulan: list[GiderSatiri] = []
+        for ad, grup in gruplar.items():
+            toplam = round(sum(float(s.tutar) for s in grup if s.tutar is not None), 2)
+            imza = (len(grup), toplam)
+            onceki = gorulen_adlar.get(ad)
+            tam_yol = str(grup[0].kaynak_dosya or "")
+            if onceki is None:
+                gorulen_adlar[ad] = (len(grup), toplam, tam_yol)
+                tutulan.extend(grup)
+                continue
+            if onceki[:2] == imza:
+                self.uyarilar.append(
+                    f"'{ad}' iki kez verildi ({onceki[2]} ve {tam_yol}); satir sayisi "
+                    f"ve toplam ayni. Ikincisi cift sayim olmasin diye atlandi."
+                )
+                continue
+            etiket = tam_yol if "> " in tam_yol else f"kopya-{sum(1 for k in gorulen_adlar if k == ad) + 1} > {ad}"
+            for s in grup:
+                if isinstance(s.ek, dict):
+                    s.ek["kaynak_etiketi"] = etiket
+            self.uyarilar.append(
+                f"'{ad}' adli iki FARKLI dosya geldi ({onceki[2]}: {onceki[0]} satir, "
+                f"{onceki[1]:,.2f}; {tam_yol}: {len(grup)} satir, {toplam:,.2f}). Ikisi de "
+                f"sayildi ve Kontrol sayfasinda ayri satir olarak gorunur; ayni fatura "
+                "ise birini kaldirip yeniden calistirin."
+            )
+            tutulan.extend(grup)
+        return tutulan
 
     # ------------------------------------------------------------------
     # Ana is akisi
@@ -345,8 +448,12 @@ class Boru:
              ilerleme: Ilerleme | None = None) -> list[Sonuc]:
         """Dosyalari uctan uca isler ve sonuc listesini dondurur."""
         self.hatalar = []
+        self.atlanan_ekler = []
         _bildir(ilerleme, 1, "Personel verisi yukleniyor")
         self.hazirla()
+        # Calistiricinin (ornegin 'bu dosya daha once islendi') onceden verdigi
+        # uyarilar hazirla() sonrasi da yasasin ve Excel kapagina cikabilsin.
+        self.uyarilar.extend(getattr(self, "on_uyarilar", []) or [])
 
         tum_satirlar = self.oku(dosya_yollari, ilerleme)
         if not tum_satirlar:
@@ -360,10 +467,17 @@ class Boru:
         referanslar = [s for s in tum_satirlar if s.kaynak_tip == "referans_liste"]
         if referanslar:
             # Bu bir hata degil, beklenen davranistir: kullaniciya 'hata' diye
-            # gostermek yanlis alarm uretir.
+            # gostermek yanlis alarm uretir. Ama HANGI dosyanin kutuk sayildigi
+            # yazilmali: tutar kolonu taninmayan bir fatura da buraya duser ve
+            # dagilimdan sessizce cikar (olculdu).
+            from collections import Counter
+            sayim = Counter(str(s.kaynak_dosya or "").split("> ")[-1] for s in referanslar)
             self.uyarilar.append(
                 f"{len(referanslar)} satir kisi kutugu olarak ayrildi ve gider "
-                "satiri sayilmadi; defter beslemesinde kullanildi."
+                "satiri sayilmadi; defter beslemesinde kullanildi. Dosyalar: "
+                + "; ".join(f"{ad} ({n} satir)" for ad, n in sayim.most_common())
+                + ". Bunlardan biri FATURAYSA tutar kolonu taninmamis demektir: "
+                "kolon adini veri/kolon_esanlamlilari.csv dosyasina ekleyin."
             )
         if not satirlar:
             _bildir(ilerleme, 100, "Islenecek gider satiri bulunamadi")
@@ -575,6 +689,9 @@ class Boru:
             "hatalar": list(self.hatalar),
             "guven_esigi": self.ayarlar.guven_esigi,
             "personel_dosyasi": str(self.ayarlar.personel_yolu),
+            "yardimci_dosyasi": str(self.ayarlar.yardimci_personel_yolu or ""),
+            "harita_dosyasi": str(getattr(self.harita, "kaynak", "") or ""),
+            "atlanan_ekler": list(getattr(self, "atlanan_ekler", []) or []),
             "son_donem": self._son_donem,
         }
 
@@ -658,8 +775,10 @@ class Boru:
         if sonuclar:
             try:
                 excel_yolu = excel_yaz(sonuclar, str(yol), ozet, mahsup, oneriler)
-            except PermissionError:
-                # Ayni adli dosya Excel'de acik. Cokmek yerine yanina yaz.
+            except _YAZMA_HATALARI:
+                # Ayni adli dosya Excel'de acik. xlsxwriter PermissionError'i
+                # kendi FileCreateError'ina sarar; ikisi de yakalanir (olculdu).
+                # Cokmek yerine yanina yaz.
                 yedek = yol.with_name(f"{yol.stem}_yeni{yol.suffix}")
                 excel_yolu = excel_yaz(sonuclar, str(yedek), ozet, mahsup, oneriler)
                 self.uyarilar.append(

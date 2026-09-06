@@ -285,9 +285,14 @@ class MasrafMerkeziHaritasi:
     """
 
     def __init__(self, kayitlar: Iterable[MasrafMerkezi] | None = None,
-                 kaynak: str | None = None, kaynak_var: bool = True) -> None:
+                 kaynak: str | None = None, kaynak_var: bool = True,
+                 yukleme_uyarisi: str | None = None) -> None:
         self.kaynak = kaynak
         self.kaynak_var = kaynak_var
+        #: Dosya var ama kolonlari eksik/bozuk ise burada aciklanir. Bos harita
+        #: 'gecerli' sayilirsa kullanici 'harita bozuk' yerine 'N gorev yeri
+        #: tanimsiz' uyarisi okur ve yanlis yere ugrasir (olculdu).
+        self.yukleme_uyarisi = yukleme_uyarisi
         self._kayitlar: list[MasrafMerkezi] = list(kayitlar or ())
         self._index: dict[str, MasrafMerkezi] = {}
         self._bilinmeyenler: set[str] = set()
@@ -348,6 +353,14 @@ class MasrafMerkeziHaritasi:
             gercek = alan_haritasi.get(ad)
             return _metin(satir.get(gercek)) if gercek else ""
 
+        eksik = [k for k in ("gorev_yeri", "masraf_merkezi_kodu") if k not in alan_haritasi]
+        if eksik:
+            return cls([], kaynak=str(hedef), kaynak_var=True, yukleme_uyarisi=(
+                f"Masraf merkezi haritasi ({hedef.name}) okunamadi: baslikta "
+                f"{', '.join(eksik)} kolonu yok (bulunan: "
+                f"{', '.join(okuyucu.fieldnames or []) or 'hic'}). Dosya bozuk ya da "
+                "yanlis kaydedilmis; hicbir gorev yeri cozulemeyecek."))
+
         kayitlar: list[MasrafMerkezi] = []
         for satir in okuyucu:
             gorev_yeri = al(satir, "gorev_yeri")
@@ -365,7 +378,11 @@ class MasrafMerkeziHaritasi:
                     aktif=_dogru_mu(al(satir, "aktif")),
                 )
             )
-        return cls(kayitlar, kaynak=str(hedef), kaynak_var=True)
+        uyari = None
+        if not kayitlar:
+            uyari = (f"Masraf merkezi haritasi ({hedef.name}) bos: basliklar dogru ama "
+                     "hicbir satir okunamadi.")
+        return cls(kayitlar, kaynak=str(hedef), kaynak_var=True, yukleme_uyarisi=uyari)
 
     # ------------------------------------------------------------------
     # Sorgular

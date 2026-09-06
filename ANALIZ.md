@@ -400,16 +400,20 @@ uydurma değil, çalıştırma çıktısıdır.
 ### Tek bir Outlook mesajından uçtan uca
 
 Mustafa Bey'in gönderdiği mesajın kendisi doğrudan uygulamaya verildi. Uygulama
-iç içe iki mail, altı zip arşivi ve içlerindeki Excel dosyalarını kendi açtı.
+iç içe iki mail, beş zip arşivi ve içlerindeki Excel dosyalarını kendi açtı.
 
 | Ölçüm | Değer |
 |---|---|
 | Mesajdan çıkarılan tablo dosyası | 12 |
 | Ayıklanan gider satırı | 405 |
 | Kişi kütüğü olarak ayrılan satır | 20.920 |
-| Otomatik eşleşen | 232, yüzde 57,3 |
-| İncelemeye düşen | 117, yüzde 28,9 |
-| Eşleşmeyen | 56, yüzde 13,8 |
+| Otomatik eşleşen | 225, yüzde 55,6 |
+| İncelemeye düşen | 166, yüzde 41,0 |
+| Eşleşmeyen | 14, yüzde 3,5 |
+
+*Ölçüm: 6 Eylül 2026 sürümü, 1C listesi ve öğrenen defterler açık. İncelemeye
+düşen sayının yüksek olması kasıtlıdır: 1C listesinden gelen 56 satır ve dönemi
+örtüşmeyen satırlar sonuç bulsa da insana bırakılır.*
 | Öğrenilen TC kimlik köprüsü | 27 |
 | Öğrenilen alias | 30 |
 
@@ -436,7 +440,10 @@ binlerce sahte satır üretirdi.
 | ULF-GPC-RHI | 30 |
 | AGPP | 26 |
 | RM-RHI | 20 |
-| ALNG2-GBS | 10 |
+| ALNG2-GBS | 12 |
+
+*(6 Eylül 2026 ölçümü: GPP 222, HQ-MOSCOW 48, AGPP 26, ULF-GPC-RHI 21, RM-RHI 20,
+ALNG2-GBS 12, RSD-UL-GPC 8.)*
 
 ### Çıktı
 
@@ -456,7 +463,7 @@ Ayrıntı için [bölüm 13](#13-nihai-çıktı-mahsuplaşma-tablosu).
 
 ### Testler
 
-23 test yazıldı ve hepsi geçiyor. Yedi tanesi altın örnek: dördü doğum tarihi
+250 test yazıldı ve hepsi geçiyor. Yedi tanesi altın örnek: dördü doğum tarihi
 kontrolü olmadan yanlış eşleşen vaka, üçü soyadı farklı yazıldığı için kaçırılan
 doğru vaka. Bu yedi vaka regresyona karşı sabitlendi.
 
@@ -590,25 +597,30 @@ Temmuz 2026, tek Outlook mesajı, 405 satır okundu:
 
 | Ölçüm | Değer |
 |---|---|
-| Okunan toplam | 106.297,78 USD |
+| Okunan toplam | 106.374,56 USD |
 | Yinelenen (düşülen) | 48.978,59 USD |
 | Net dağıtılacak | 57.319,19 USD |
-| Dağıtılan | 54.432,90 USD |
-| Dağıtılamayan | 2.886,29 USD |
-| Dağıtım oranı | %94,96 |
-| Mahsup satırı | 34 |
-| Kişi kütüğü (dağılıma girmeyen) | 100 satır |
-| Tutarı okunamayan | 7 satır |
+| Dağıtılan | 53.981,84 USD |
+| Dağıtılamayan | 3.414,13 USD |
+| Dağıtım oranı | %94,05 |
+| Mahsup satırı | 33 |
+| Kişi kütüğü (dağılıma girmeyen) | 106 satır (50 katılımcı + 50 sağlık + 6 fatura detay listesi) |
+| Tutarı okunamayan | 0 satır |
 | İşaret çelişkisi | 1 |
+| Okunmayan ek (PDF vb.) | 17 (12 farklı PDF; listesi Kontrol sayfasında) |
 
-Bütün faturalar kapanıyor. 34 mahsup satırı, 405 satırlık ham dökümün yerine
-geçiyor; finans ekibinin muhasebeye vereceği tablo bu.
+Bütün faturalar kapanıyor. 33 mahsup satırı, 405 satırlık ham dökümün yerine
+geçiyor; finans ekibinin muhasebeye vereceği tablo bu. Kapak, inceleme
+bekleyen satır varken "TASLAK" der; "gönderilebilir" yalnızca mutabakat kapalı
+ve inceleme kuyruğu boşken yazılır.
 
 ### Haritada olmayan masraf merkezleri işaretleniyor
 
 1C personel listesinden gelen kişilerin görev yeri değerleri
 (`Renservis - Lytkarino - Renservis`, `One Tower`, `Bsk Management Group`)
-masraf merkezi haritasında tanımlı değil. Kod bunları olduğu gibi taşıyor ama
-`HARITADA TANIMLI DEGIL` diye işaretliyor. Finans kodlarına çevrilene kadar o
-satırlar muhasebeye ham metinle gitmemeli. Temmuz 2026'da 7 masraf merkezi bu
-durumda, toplam 4.619,16 USD (dağıtılamayan tutar bunun dışında).
+masraf merkezi haritasında tanımlı değildi. Kod bunları olduğu gibi taşır ve
+`HARITADA TANIMLI DEGIL` diye işaretler; finans koduna çevrilene kadar o
+satırlar muhasebeye ham metinle gitmemeli. Temmuz 2026'da bu durumda 9 görev
+yeri vardı; hepsinin tüzel kişisi 1C listesindeki `Firm 2` kolonundan bulunup
+haritaya eklendi, artık tanımsız görev yeri kalmadı. Yeni bir proje açıldığında
+`Harita Onerileri` sayfası yapıştırmaya hazır satırla dolar.

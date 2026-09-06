@@ -100,6 +100,37 @@ def _hucre_alici(satir: list[Any]):
 _FATURA_NO_DESENI = re.compile(r"\b([A-Z]{2,4}\d{8,})\b")
 
 
+def _assessment_fatura_ozeti(calisma: Any) -> dict[str, float]:
+    """'Fatura Detay' sayfasindan fatura numarasi bazinda Energo Payi toplamini cikarir.
+
+    Satirlar: belge tarihi | yerel tutar | para birimi | USD | 'USD' | Energo Payi | Metin.
+    Fatura numarasi 'Metin' kolonundadir ('ASS2026000002187 - AS ...'); toplam
+    satirinda metin bos oldugu icin dogal olarak atlanir.
+    """
+    ad = sayfa_sec(calisma.sayfa_adlari, "Fatura Detay", "Fatura Detayi")
+    if ad is None:
+        return {}
+    satirlar = calisma.satirlar(ad)
+    baslik_i = baslik_satiri_bul(satirlar, aranan=("Energo Payi", "Energo Payı", "Metin"))
+    if baslik_i < 0:
+        return {}
+    harita = kolon_haritasi(satirlar[baslik_i])
+    i_pay = kolon_ara(harita, "energo payi", "pay")
+    i_metin = kolon_ara(harita, "metin", "aciklama", "fatura")
+    if i_pay is None or i_metin is None:
+        return {}
+    ozet: dict[str, float] = {}
+    for r in range(baslik_i + 1, len(satirlar)):
+        al = _hucre_alici(satirlar[r])
+        metin = hucre_metni(al(i_metin))
+        tutar = hucre_sayisi(al(i_pay))
+        if not metin or tutar is None:
+            continue
+        no = _dosya_adindan_fatura_no(metin) or metin.strip()
+        ozet[no] = ozet.get(no, 0.0) + tutar
+    return ozet
+
+
 def _dosya_adindan_fatura_no(dosya_adi: str) -> str | None:
     """'ASS2026000002867 300620261013 ENERGO Fatura Detayi.xlsx' -> 'ASS2026000002867'."""
     m = _FATURA_NO_DESENI.search(dosya_adi or "")
@@ -150,6 +181,9 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
     detay_listesi = i_pay is None and i_usd is None and i_toplam is None
     kaynak_tip = "energo_assessment_detay" if detay_listesi else "energo_assessment"
     dosya_fatura_no = _dosya_adindan_fatura_no(p.name)
+    # Yansitma dosyasinin 'Fatura Detay' sayfasi fatura basina Energo Payi'ni
+    # beyan eder; kisi satirlarinin toplamiyla kurusuna kadar karsilastirilir.
+    fatura_ozeti = _assessment_fatura_ozeti(calisma) if not detay_listesi else {}
 
     sonuclar: list[GiderSatiri] = []
     for r in range(baslik_i + 1, len(satirlar)):
@@ -205,6 +239,9 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
                         "fatura detay listesi; tutar yansitma dosyasinda"
                         if detay_listesi else "kisi satirindaki Energo Payi"
                     ),
+                    **({"fatura_ozeti": dict(fatura_ozeti),
+                        "beyan_yontemi": "'Fatura Detay' sayfasindaki fatura bazli Energo Payi"}
+                       if fatura_ozeti else {}),
                 },
             )
         )

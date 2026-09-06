@@ -212,6 +212,16 @@ class KontrolSatiri:
         return round(self.beyan_toplam - self.gelen, 2)
 
     @property
+    def beyan_toleransi(self) -> float:
+        """Tedarikci yuvarlamasindan gelebilecek en buyuk fark: satir basina 1 kurus, en cok 50."""
+        return min(_AZAMI_YUVARLAMA, 0.01 * max(1, self.satir_sayisi))
+
+    @property
+    def beyan_uyusuyor(self) -> bool:
+        bf = self.beyan_farki
+        return bf is None or abs(bf) <= self.beyan_toleransi + 1e-9
+
+    @property
     def fark(self) -> float:
         """Sifir olmalidir. Degilse dagitimda kayip var demektir."""
         return round(
@@ -225,10 +235,7 @@ class KontrolSatiri:
             return False
         if self.tutarsiz_satir:
             return False
-        bf = self.beyan_farki
-        if bf is not None and abs(bf) >= 0.01:
-            return False
-        return True
+        return self.beyan_uyusuyor
 
     @property
     def acik_sebebi(self) -> str:
@@ -239,7 +246,7 @@ class KontrolSatiri:
         if self.tutarsiz_satir:
             sebepler.append(f"{self.tutarsiz_satir} satirda tutar okunamadi")
         bf = self.beyan_farki
-        if bf is not None and abs(bf) >= 0.01:
+        if not self.beyan_uyusuyor:
             sebepler.append(f"faturanin beyan ettigi toplamdan {bf:+.2f} farkli")
         return "; ".join(sebepler)
 
@@ -460,6 +467,12 @@ def _kaynak_adi(sonuc: Any) -> str:
     Outlook mesajindan gelen satirlarda kaynak 'mesaj.msg > ek.xlsx' bicimindedir;
     fatura o ekin kendisidir.
     """
+    ek = sonuc.satir.ek if isinstance(getattr(sonuc.satir, "ek", None), dict) else {}
+    etiket = ek.get("kaynak_etiketi")
+    if etiket:
+        # Ayni adli ama farkli icerikli iki dosya geldiginde boru bu etiketi
+        # koyar; iki dosya kontrol tablosunda ayri satir olur, birlesmez.
+        return str(etiket)
     ham = str(getattr(sonuc.satir, "kaynak_dosya", "") or "")
     return ham.split("> ")[-1].strip() or "(bilinmeyen)"
 
@@ -554,14 +567,17 @@ def _kovayi_esle(tutulanlar: list[Any], digerleri: list[Any]) -> list[tuple[Any,
                 bos_tutulan.remove(en_iyi)
                 ciftler.append((en_iyi, d))
         bekleyen = kalan_bekleyen
-    # Kalanlar: isim eslesmedi ama kova (tarih, tutar, doviz) ayni. Iki
-    # durumda bagla: (a) ikisi de isimsiz kurumsal kalem, (b) kalan sayilar
-    # esit, yani ayni parti (6 kisilik grup ucusu iki dosyada 6'sar). Sayilar
-    # farkliysa fazlalik gercekten yeni islem olabilir; baglamak para yutar.
+    # Kalanlar: isim eslesmedi ama kova (tarih, tutar, doviz) ayni. Yalnizca
+    # iki taraf da isimsiz kurumsal kalemse (cenaze celengi, organizasyon)
+    # sirayla baglanir. Isimli kayitlar isim benzerligi olmadan BAGLANMAZ:
+    # iki faturada ayni gun ayni sabit ucretle (vize, saglik, bagaj) gecen
+    # bambaska kisiler 'yinelenen' diye elenirse para dagilimdan duser ve
+    # mutabakat yine kapali gorunur (olculdu). Sayilarin esit olmasi kanit
+    # degildir; bu kayitlar korunur ve 'yineleme suphesi' olarak raporlanir.
     if bekleyen and bos_tutulan:
         isimsiz = all(not _isim_imzasi(d.satir.kisi_ham) for d in bekleyen) and \
                   all(not _isim_imzasi(t.satir.kisi_ham) for t in bos_tutulan)
-        if isimsiz or len(bekleyen) == len(bos_tutulan):
+        if isimsiz:
             for d in bekleyen:
                 if not bos_tutulan:
                     break
@@ -618,8 +634,14 @@ def _paylar(sonuc: Any, harita: Any = None) -> list[tuple]:
         merkez = DAGITILAMAYAN
     else:
         merkez = sonuc.masraf_merkezi or DAGITILAMAYAN
-    ad = ek.get("masraf_merkezi_adi") or None
-    sirket = sonuc.sirket or sonuc.sirket2
+    if merkez == DAGITILAMAYAN:
+        # Reddedilen zayif adayin sirketi/projesi tasinmaz; aksi halde
+        # 'kisi bulunamadi' denen tutar Sirket Kirilimi'nde o adayin tuzel
+        # kisisine yazilir (olculdu: 527,83 USD UST LUGA/RHI altina gitmisti).
+        ad, sirket = None, None
+    else:
+        ad = ek.get("masraf_merkezi_adi") or None
+        sirket = sonuc.sirket or sonuc.sirket2
     haritada = bool(ek.get("masraf_merkezi_haritada", True)) and merkez != DAGITILAMAYAN
 
     paylasim = ek.get("paylasim") or []

@@ -344,6 +344,8 @@ def harita_yaz(df: pd.DataFrame, kok: Path | None = None) -> Path:
             temiz[kolon] = ""
     temiz = temiz[list(HARITA_KOLONLARI)]
     temiz = temiz[temiz["gorev_yeri"].str.strip() != ""]
+    from masraf.defter import yedekle
+    yedekle(yol)   # onceki surum veri/gecmis/ altinda kalir
     gecici = yol.with_suffix(".csv.tmp")
     temiz.to_csv(gecici, sep=ayirici, index=False, encoding=kodlama,
                  quoting=csv.QUOTE_MINIMAL, lineterminator="\n")

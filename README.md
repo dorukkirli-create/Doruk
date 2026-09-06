@@ -16,10 +16,13 @@ doğrudan dağıtır, emin olmadıklarını gerekçesiyle birlikte inceleme kuyr
 koyar. Amaç elle çalışmayı sıfırlamak değil, **elle bakılacak satır sayısını
 azaltmak** ve her kararın nedenini görünür kılmak.
 
-Ölçülen durum (Temmuz 2026 seyahat faturası, 134 satır): 82 satır otomatik
-dağıtılıyor, 52 satır insana kalıyor. Bu 52'nin 20'si zaten grup şirketi
-personelidir ve **hiçbir zaman** otomatik dağıtılamaz — onlar için doğru
-davranış "eşleşmedi" demektir. Sayılar ve nasıl üretildikleri aşağıda
+Ölçülen durum (Temmuz 2026, iki Outlook maili, 405 satır; 1C listesi ve
+öğrenen defterler açık): 225 satır otomatik dağıtılıyor (%55,6), 166 satır
+gerekçesiyle incelemeye düşüyor (%41,0), 14 satırda kişi bulunamıyor (%3,5) ve
+tutarı görünür biçimde `(DAGITILAMAYAN)` satırında kalıyor. Yalnız seyahat
+dosyası ve 1C listesi olmadan ölçüldüğünde 134 satırın 82'si otomatik, 52'si
+insana kalır; o 52'nin 20'si grup şirketi personelidir ve 1C listesi olmadan
+**hiçbir zaman** otomatik dağıtılamaz. Sayılar ve nasıl üretildikleri aşağıda
 [Ölçülen performans](#ölçülen-performans) bölümündedir.
 
 ## Nasıl çalışır
@@ -54,6 +57,7 @@ Akış:
             +--> sicil no verilmiş mi?            --> EŞLEŞTİ  (1,00)
             +--> TC kimlik köprüsü tutuyor mu?    --> EŞLEŞTİ  (0,99)
             +--> aliases.csv'de var mı?           --> EŞLEŞTİ  (0,98)
+            +--> harici_kisiler.csv'de var mı?    --> İNCELE   (0,95) "çalışan değil"
             +--> tam isim tek kişide mi?          --> EŞLEŞTİ  (0,95)
             +--> isim alt kümesi tek kişide mi?   --> EŞLEŞTİ  (0,90)
             +--> bitişik ad açılıyor mu?          --> EŞLEŞTİ  (0,92)
@@ -61,6 +65,8 @@ Akış:
             +--> transliterasyon varyantı tutuyor mu? --> İNCELE  (0,88)
             |        (IYLMAZ GEKHAN -> YILMAZ GOKHAN)
             +--> kesik isim öneki tutuyor mu?     --> İNCELE   (0,85)
+            +--> 1C personel listesinde mi?       --> İNCELE   (0,90 tek / 0,55 çok aday)
+            |        (grup şirketi personeli; dönem doğrulanamaz)
             +--> ek kişi defterinde mi?           --> İNCELE   (0,70)
             +--> bulanık benzerlik yeterli mi?    --> İNCELE   (0,79-0,90)
             +--> soyadı bir çalışanla aynı mı?    --> İNCELE   (0,60) "aile bireyi"
@@ -73,7 +79,11 @@ Akış:
   [5] Görev yeri -> masraf merkezi kodu (masraf_merkezi_haritasi.csv)
             |
             v
-  [6] Excel çıktısı: Sonuç | İncele | Eşleşmedi | Özet
+  [6] Mahsuplaşma: yineleme eleme, paylaşım, kuruşuna kadar mutabakat
+            |
+            v
+  [7] Excel çıktısı (8 sayfa): Ozet | Mahsuplasma | Kontrol | Sirket Kirilimi
+                               | Harita Onerileri | Sonuc | Incele | Eslesmedi
 ```
 
 Yukarıdaki "EŞLEŞTİ" yalnızca **0,90 ve üstü** kademeler için otomatik kabul
@@ -89,6 +99,19 @@ Python'dur; aynı girdi her zaman aynı çıktıyı verir ve sonuç ofis dışı
 çevrimdışı bir dizüstünde de aynıdır.
 
 ## Kurulum
+
+İki kullanım yolu vardır; ikisi aynı çekirdek kodu (`masraf/`) kullanır.
+
+**1) Finans ekibi için masaüstü paketi (internet ve Python kurulumu gerekmez).**
+`paketle/` altındaki tarif ile üretilen `Otomasyon\` klasörü: faturalar
+`1_FATURALAR`'a atılır, `CALISTIR.bat` çift tıklanır, Excel `2_EXCEL_CIKTI`'ya
+çıkar, işlenen faturalar `3_ISLENENLER`'e taşınır. Kurulum ve kullanım
+`paketle/windows/OKU_BENI.txt`, paketleme tarifi `paketle/BENIOKU.md`. Bu yolda
+arayüz yoktur; öğrenme otomatik defter beslemesiyle ve `veri/*.csv`
+dosyalarının elle düzenlenmesiyle olur.
+
+**2) Geliştirici / analist için Streamlit arayüzü (ilk kurulumda internet
+gerekir).** Aşağıdaki adımlar bu yol içindir.
 
 **Windows:** `baslat.bat` dosyasına çift tıklayın. İlk çalıştırmada sanal ortam
 kurulur ve paketler indirilir (birkaç dakika), sonraki açılışlar hızlıdır.
@@ -223,6 +246,7 @@ ettiği toplama kuruşuna kadar eşittir (Temmuz 2026: 1.943,74 USD, fark 0,00).
 | Sağlık kontrol listesi (`.xlsx`) | `BORDROLU LİSTE` sayfası, `TCKN` + `ŞANTİYE` | **TC kimlik no** + doğum tarihi | Var (`ŞANTİYE`) |
 | Koç Üniversitesi katılımcı listesi (`.xlsx`) | `ID`, `Ad Soyad`, `Katılım Tarihi` | **Sicil numarası** (`ID` kolonu) | Yok |
 | Outlook e-postası (`.msg`) | Dosya uzantısı | Ekteki dosyaya göre | Ekteki dosyaya göre |
+| Kişi kütüğü (`referans_liste`) | 200+ satır ve hiçbir satırda tutar yok (sigorta listesi gibi) | Defter beslemesinde kullanılır | Dağılıma girmez; hangi dosyanın kütük sayıldığı uyarıda yazar |
 | Tanınmayan tablo (`.xlsx`, `.csv`) | Genel okuyucu, kolon adlarından çıkarım | Bulunabilene göre | Varsa okunur |
 
 En kolay eşleşen kaynaklar sicil veya TC kimlik taşıyanlardır. Seyahat
@@ -234,6 +258,8 @@ faturaları en zorudur: kimlik alanı yoktur, sadece serbest metinde isim vardı
 |---|---|---|
 | `sicil` | 1,00 | Kaynak dosyada sicil numarası var (Koç katılımcı listesi gibi) |
 | `tckn` | 0,99 | TC kimlik `veri/tckn_sicil.csv` köprüsünde tek bir sicile bağlanıyor |
+| `harici` | 0,95 | Kişi `veri/harici_kisiler.csv` dış kişi defterinde (danışman, konuşmacı). Çalışan olmadığı için her zaman uyarılı, İNCELE'ye düşer; masraf merkezi defterden gelir |
+| `yardimci_defter` | 0,90 / 0,55 | Kişi 1C personel listesinde (grup şirketi). Tek aday 0,90, çok aday 0,55; liste tek tarihli olduğu için dönem doğrulanamaz, İNCELE |
 | `alias` | 0,98 | Bu ismi daha önce siz elle onaylamışsınız (`veri/aliases.csv`) |
 | `tam_isim` | 0,95 | Normalize isim personel verisinde **tek** kişiye denk geliyor |
 | `tam_isim` (bitişik ad) | 0,92 | `AHMETCAN` sözlükle `MUSTAFA KEMAL` olarak açıldı, sonuç tek kişi |
@@ -595,7 +621,7 @@ isterseniz şirket içi bir paylaşıma kopyalayın, genel bir depoya koymayın.
 python3 -m unittest discover -s testler -v
 ```
 
-Son durum: **155 test, hepsi geçiyor** (yaklaşık 33 saniye). Testler standart
+Son durum: **250 test, hepsi geçiyor** (yaklaşık 50 saniye). Testler standart
 kütüphaneyle yazılmıştır, ek bir test paketi gerekmez.
 `ornek_veri/` dizini repoda olmadığı için veri gerektiren testler o dizin
 yoksa atlanır (`skipped`); metin normalizasyon testleri her ortamda çalışır.

@@ -399,6 +399,11 @@ def antik_cari_oku(yol: str | Path) -> list[GiderSatiri]:
         return []
 
     sonuclar: list[GiderSatiri] = []
+    # Dokumun kendi TOPLAM satiri (borc kolonu toplami). Okuyucunun bir borc
+    # satirini kacirip kacirmadigini mutabakatta 'Faturada Yazan Toplam'
+    # olarak ele verir. Alacak (iade) toplami dokumde beyan edilmez.
+    beyan_borc: float | None = None
+    alacak_toplami = 0.0
     for r in range(baslik_i + 1, len(satirlar)):
         satir = satirlar[r]
         if dolu_hucre_sayisi(satir) == 0:
@@ -410,10 +415,13 @@ def antik_cari_oku(yol: str | Path) -> list[GiderSatiri]:
             return satir[i]
 
         aciklama = hucre_metni(al(i_aciklama))
+        toplam_satiri = any(_RE_TOPLAM.search(_fold(h)) for h in satir)
+        if toplam_satiri and beyan_borc is None:
+            beyan_borc = hucre_sayisi(al(i_borc))
         if aciklama is None:
             # Hesap adi satiri ('ENERGO-USD-ENERGO-USD') ve TOPLAM satiri
             continue
-        if any(_RE_TOPLAM.search(_fold(h)) for h in satir):
+        if toplam_satiri:
             continue
 
         islem = hucre_metni(al(i_islem))
@@ -422,6 +430,7 @@ def antik_cari_oku(yol: str | Path) -> list[GiderSatiri]:
 
         borc = hucre_sayisi(al(i_borc))
         alacak = hucre_sayisi(al(i_alacak))
+        alacak_toplami += alacak or 0.0
         tutar: float | None
         if borc is None and alacak is None:
             tutar = None
@@ -458,6 +467,15 @@ def antik_cari_oku(yol: str | Path) -> list[GiderSatiri]:
                 ek=ek,
             )
         )
+    if beyan_borc is not None and sonuclar:
+        # Beyan = dokumun TOPLAM'i (borc) - okunan alacak. Okunan net ile farki,
+        # tam olarak 'kacirilan borc satiri' demektir; alacak tarafi dokumde
+        # beyan edilmedigi icin dogrulanamaz, bu bilerek boyle.
+        ozet = {"TOPLAM (borc)": round(beyan_borc, 2),
+                "okunan alacak": -round(alacak_toplami, 2)}
+        for s in sonuclar:
+            s.ek["fatura_ozeti"] = dict(ozet)
+            s.ek["beyan_yontemi"] = "dokumun TOPLAM satiri (borc) - okunan alacak"
     return sonuclar
 
 

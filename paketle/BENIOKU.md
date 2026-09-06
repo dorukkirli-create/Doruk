@@ -51,7 +51,7 @@ Paketi 30 MB altina indirmek icin su parcalar cikarilir. Her biri once
 
 Kirpmadan sonra dogrulama, bu modulleri `sys.meta_path` ile engelleyip
 boru hattini gercek ornek mesajla ucdan uca calistirarak yapilir. Beklenen
-sonuc: 405 satir okunur, 35 mahsup satiri uretilir, mutabakat kapanir.
+sonuc: 405 satir okunur, 33 mahsup satiri uretilir, mutabakat kapanir.
 
 ## Boyut
 

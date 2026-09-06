@@ -9,10 +9,14 @@ IS AKISI SIRASINDADIR: once muhasebeye gidecek olan, sonra kaniti.
                   yazilacagi. Muhasebeye giden tablo budur.
     Kontrol     - Mutabakat. Her fatura icin okunan / yinelenen / dagitilan /
                   dagitilamayan tutar. 'Fark' sutunu sifir olmak zorundadir.
+                  Altinda: fatura detay listeleri capraz kontrolu, okunmayan
+                  ekler, isaret celiskileri, dagilima girmeyen satirlar.
+    Sirket Kirilimi - tuzel kisi ustte, projeleri altinda (1C 'Firm 2').
+    Harita Onerileri - haritada tanimsiz gorev yerleri, hazir CSV satiri
+                  (yalnizca oneri varsa yazilir).
     Sonuc       - tum satirlar, tum kolonlar (mahsuplasmanin dayanagi)
     Incele      - durum = INCELE (guven dusuk veya uyari var)
     Eslesmedi   - durum = ESLESMEDI (kisi bulunamadi)
-    Ozet        - durum/yontem dagilimi, masraf merkezi bazinda tutar toplami
 
 Tasarim ilkesi: kullanici HER satirda neden o sonuca varildigini gorebilmeli.
 Bu yuzden 'Eslestirme Yontemi', 'Guven', 'Eslestirme Aciklamasi' ve 'Uyarilar'
@@ -300,6 +304,7 @@ class _Bicimler:
                            valign="vcenter")
         self.durum_kotu = f(bold=True, font_color=BEYAZ, bg_color="#C62828", align="center",
                             valign="vcenter")
+        self.durum_uyari = f(bold=True, font_size=10, font_color=KOYU_GRI, bg_color="#FFF2CC", border=1, border_color="#BF9000", valign="vcenter", text_wrap=True)
         self.vurgu = f(bold=True, font_color=BEYAZ, bg_color=CANLI_MAVI, valign="vcenter",
                        text_wrap=True)
         self.kapak_bant = calisma.add_format({"bg_color": LACIVERT})
@@ -462,11 +467,25 @@ def _ozet_yaz(
     # --- Mutabakat durumu ------------------------------------------------
     if mahsup is not None:
         sayfa.set_row(satir, 26)
-        if mahsup.kapali_mi:
+        incele_sayisi = sum(1 for s in sonuclar if s.durum == DURUM_INCELE)
+        eslesmedi_sayisi = sum(1 for s in sonuclar if s.durum == DURUM_ESLESMEDI)
+        if mahsup.kapali_mi and not incele_sayisi and not eslesmedi_sayisi:
             sayfa.merge_range(satir, 1, satir, 7,
                               "MUTABAKAT KAPALI   |   Okunan = Yinelenen + Dağıtılan + Dağıtılamayan. "
-                              "Para kaybolmadı; tablo muhasebeye gönderilebilir.",
+                              "Para kaybolmadı; inceleme bekleyen satır yok, tablo muhasebeye gönderilebilir.",
                               bicimler.durum_iyi)
+        elif mahsup.kapali_mi:
+            # Para kaybolmadi ama kimlik/merkez karari bekleyen satirlar var:
+            # bu bir TASLAKTIR. 'Gonderilebilir' demek onay akisini atlatir.
+            bekleyen = " + ".join(
+                p for p in (
+                    f"{incele_sayisi} satır inceleme" if incele_sayisi else "",
+                    f"{eslesmedi_sayisi} satır kişi bulunamadı ((DAGITILAMAYAN))" if eslesmedi_sayisi else "",
+                ) if p)
+            sayfa.merge_range(satir, 1, satir, 7,
+                              f"MUTABAKAT KAPALI, TASLAK   |   Para kaybolmadı; {bekleyen} "
+                              "bekliyor. 'Incele' ve 'Eslesmedi' sayfaları görülmeden muhasebeye gönderilmemeli.",
+                              bicimler.durum_uyari)
         else:
             acik = ", ".join(f"{k.kaynak} ({k.fark:+.2f})" for k in mahsup.acik_kontroller)
             sayfa.merge_range(satir, 1, satir, 7,
@@ -558,6 +577,14 @@ def _ozet_yaz(
     if oneriler:
         dikkat.append(f"{len(oneriler)} görev yeri masraf merkezi haritasında tanımlı değil. "
                       "'Harita Onerileri' sayfasında hazır satırlar var.")
+    atlanan_ekler = list(ozet.get("atlanan_ekler") or [])
+    if atlanan_ekler:
+        # PDF faturalar ve diger tablo olmayan ekler okunmaz; sessiz atlanmaz.
+        pdf_sayisi = sum(1 for a in atlanan_ekler if str(a).lower().split("  [")[0].endswith(".pdf"))
+        dikkat.append(
+            f"{len(atlanan_ekler)} ek okunmadı ({pdf_sayisi} PDF). PDF'ler tutarı kişi kırılımı olmadan "
+            "taşır; tutar yalnızca PDF'te olan bir fatura varsa bu tabloda YOKTUR. Liste 'Kontrol' sayfasında."
+        )
     for u in (ozet.get("uyarilar") or []):
         metin = str(u)
         if "Ogrenildi" in metin or "kisi kutugu" in metin:
@@ -588,6 +615,8 @@ def _ozet_yaz(
     bolum("Kaynak veri")
     for ad, deger in (
         ("Personel ana verisi", Path(str(ozet.get("personel_dosyasi") or "")).name or "-"),
+        ("1C personel listesi", Path(str(ozet.get("yardimci_dosyasi") or "")).name or "- (kullanılmadı)"),
+        ("Masraf merkezi haritası", Path(str(ozet.get("harita_dosyasi") or "")).name or "-"),
         ("Personel son dönemi", ozet["son_donem"].strftime("%d.%m.%Y") if isinstance(ozet.get("son_donem"), date) else "-"),
         ("Otomatik kabul eşiği", f"güven ≥ {ozet.get('guven_esigi', '')} ve uyarı yok"),
     ):
@@ -606,6 +635,9 @@ def _ozet_yaz(
         ("Incele", "Elle bakılacak satırlar."),
         ("Eslesmedi", "Kişi bulunamayan satırlar."),
     )
+    if oneriler is None:
+        # Sayfa yazilmadiysa rehberde kirik baglanti olmasin.
+        rehber = tuple(r for r in rehber if r[0] != "Harita Onerileri")
     for i, (ad, aciklama) in enumerate(rehber):
         zebra = i % 2 == 1
         sayfa.write_url(satir, 1, f"internal:'{ad}'!A1", bicimler.mahsup("metin", "", zebra), ad)
@@ -919,6 +951,21 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
             sayfa.write_string(satir, 0, celiski.aciklama(), bicimler.ozet_metin)
             satir += 1
 
+    atlanan_ekler = list(getattr(tablo, "atlanan_ekler", None) or [])
+    if atlanan_ekler:
+        satir += 1
+        sayfa.write_string(satir, 0, "Okunmayan ekler (PDF ve tablo olmayan dosyalar)", bicimler.bolum)
+        satir += 1
+        sayfa.write_string(
+            satir, 0,
+            "Bu ekler acilmadi; PDF faturalar kisi kirilimi tasimaz, tutar yanlarindaki Excel'den "
+            "okunur. Tutari YALNIZCA PDF'te olan bir fatura varsa bu tabloda yoktur; elle eklenmeli.",
+            bicimler.ozet_metin)
+        satir += 1
+        for ad in atlanan_ekler:
+            sayfa.write_string(satir, 0, str(ad), bicimler.ozet_metin)
+            satir += 1
+
     if tablo.kutuk_satir_sayisi or tablo.tutarsiz_satir_sayisi:
         satir += 1
         sayfa.write_string(satir, 0, "Dagilima girmeyen satirlar", bicimler.bolum)
@@ -975,6 +1022,10 @@ def excel_yaz(
         # giden tablo, sonra kaniti.
         _ozet_yaz(calisma, ozet or {}, list(sonuclar), bicimler, mahsup, harita_onerileri)
         if mahsup is not None:
+            try:
+                mahsup.atlanan_ekler = list((ozet or {}).get("atlanan_ekler") or [])
+            except Exception:  # noqa: BLE001 - salt okunur nesne olabilir
+                pass
             _mahsuplasma_yaz(calisma, mahsup, bicimler)
             _sirket_ozeti_yaz(calisma, mahsup, bicimler)
         if harita_onerileri is not None:

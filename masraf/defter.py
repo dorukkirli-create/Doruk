@@ -72,6 +72,35 @@ BESLEYEN_KAYNAKLAR: frozenset[str] = frozenset({
 })
 
 
+def yedekle(hedef: Path, azami: int = 30) -> Path | None:
+    """Ustune yazmadan once mevcut dosyayi veri/gecmis/ altina kopyalar.
+
+    Harita ve ogrenen defterler surumsuz ustune yaziliyordu; hangi harita
+    surumuyle hangi Excel'in uretildigi izlenemiyordu. Her yazimdan once
+    '<ad>_<YYYYAAGG_SSDDss>.csv' kopyasi alinir; en eski kopyalar silinir.
+    """
+    import datetime as _dt
+    import shutil
+
+    try:
+        if not hedef.is_file() or hedef.stat().st_size == 0:
+            return None
+        gecmis = hedef.parent / "gecmis"
+        gecmis.mkdir(parents=True, exist_ok=True)
+        damga = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        kopya = gecmis / f"{hedef.stem}_{damga}{hedef.suffix}"
+        shutil.copy2(hedef, kopya)
+        eskiler = sorted(gecmis.glob(f"{hedef.stem}_*{hedef.suffix}"))
+        for e in eskiler[:-azami]:
+            try:
+                e.unlink()
+            except OSError:
+                pass
+        return kopya
+    except OSError:
+        return None
+
+
 def tckn_normalize(deger: Any) -> str:
     """TCKN / kimlik numarasini kanonik bicime cevirir.
 
@@ -206,6 +235,7 @@ class Defterler:
         hedef = self.yol(dosya)
         try:
             hedef.parent.mkdir(parents=True, exist_ok=True)
+            yedekle(hedef)
             gecici = hedef.with_suffix(".csv.tmp")
             with gecici.open("w", encoding=KODLAMA, newline="") as akis:
                 yazici = csv.DictWriter(

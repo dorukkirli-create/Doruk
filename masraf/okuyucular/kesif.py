@@ -53,7 +53,8 @@ PARSERLAR: dict[str, Callable[[str | Path], list[GiderSatiri]]] = {
 _KUTUK_SATIR_ESIGI = 200
 
 # Kesif icin okunacak satir sayisi (dosyanin tamami okunmaz, hizli kalir).
-_KESIF_SATIR_SINIRI = 15
+# genel_oku'nun baslik arama siniriyla AYNI olmali.
+from masraf.okuyucular.genel import BASLIK_ARAMA_SINIRI as _KESIF_SATIR_SINIRI  # noqa: E402
 
 
 def _ipuclarini_topla(yol: Path) -> tuple[set[str], str]:
@@ -161,6 +162,7 @@ def _msg_oku(
     yol: Path,
     cikarma_dizini: str | Path | None = None,
     gorulen_ozetler: set | None = None,
+    atlanan_ekler: list[str] | None = None,
 ) -> list[GiderSatiri]:
     """Outlook mesajindaki tum tablo eklerini cikarir ve tek tek okur.
 
@@ -182,7 +184,7 @@ def _msg_oku(
     bizim_dizin = cikarma_dizini is None
     hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="mm_"))
     try:
-        return _msg_oku_icerik(yol, hedef, gorulen_ozetler)
+        return _msg_oku_icerik(yol, hedef, gorulen_ozetler, atlanan_ekler)
     finally:
         if bizim_dizin:
             shutil.rmtree(hedef, ignore_errors=True)
@@ -198,12 +200,13 @@ def _dosya_ozeti(yol: Path) -> str:
     return h.hexdigest()
 
 
-def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None) -> list[GiderSatiri]:
+def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
+                    atlanan_ekler: list[str] | None = None) -> list[GiderSatiri]:
     """``_msg_oku``'nun govdesi; gecici dizin yonetimi disarida tutulur."""
     from masraf.okuyucular.posta import msg_aciklarini_cikar
 
     satirlar: list[GiderSatiri] = []
-    ekler = msg_aciklarini_cikar(yol, hedef)
+    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlanan_ekler)
 
     # Ayni ek iki farkli mailde (iletilmis, tekrar gonderilmis) gelirse
     # icerigi birebir aynidir. Ikisini de okumak parayi cift sayar; yineleme
@@ -280,6 +283,7 @@ def oku(
     yol: str | Path,
     cikarma_dizini: str | Path | None = None,
     gorulen_ozetler: set | None = None,
+    atlanan_ekler: list[str] | None = None,
 ) -> list[GiderSatiri]:
     """Dosya tipini bulur ve dogru parser'i calistirir.
 
@@ -292,7 +296,7 @@ def oku(
     p = Path(yol)
     tip = dosya_tipini_bul(p)
     if tip == "outlook_msg":
-        return _msg_oku(p, cikarma_dizini, gorulen_ozetler)
+        return _msg_oku(p, cikarma_dizini, gorulen_ozetler, atlanan_ekler)
     satirlar = oku_tip(p, tip)
     if not satirlar and tip != "genel":
         satirlar = genel_oku(p)

@@ -105,9 +105,24 @@ def personel_dosyalarini_bul(kok: Path) -> tuple[Path | None, Path | None, list[
     return ana, yardimci, notlar
 
 
-def fatura_dosyalarini_topla(kok: Path, argumanlar: list[str]) -> list[Path]:
-    """Surukle-birak ile gelenler + 1_FATURALAR klasorundekiler."""
+#: Personel ana verisi yanlislikla 1_FATURALAR'a atilirsa 150 bin satir okunup
+#: 'kutuk' sayilir ve arsive tasinir; kullanici dosyasini kaybolmus gorur.
+_PERSONEL_IPUCLARI = ("giris_cikis", "giris cikis", "personnel", "personel", "1c_")
+
+
+def _personel_dosyasi_gibi(yol: Path) -> bool:
+    ad = yol.name.lower()
+    return any(ip in ad for ip in _PERSONEL_IPUCLARI)
+
+
+def fatura_dosyalarini_topla(kok: Path, argumanlar: list[str]) -> tuple[list[Path], list[str]]:
+    """Surukle-birak ile gelenler + 1_FATURALAR klasorundekiler.
+
+    Returns:
+        (dosyalar, notlar). Notlar: atlanan dosyalar ve sebebi.
+    """
     bulunan: list[Path] = []
+    notlar: list[str] = []
     gorulen: set[str] = set()
 
     def ekle(yol: Path) -> None:
@@ -115,9 +130,16 @@ def fatura_dosyalarini_topla(kok: Path, argumanlar: list[str]) -> list[Path]:
             anahtar = str(yol.resolve()).lower()
         except OSError:
             anahtar = str(yol).lower()
-        if anahtar not in gorulen and _tablo_dosyasi_mi(yol):
-            gorulen.add(anahtar)
-            bulunan.append(yol)
+        if anahtar in gorulen or not _tablo_dosyasi_mi(yol):
+            return
+        gorulen.add(anahtar)
+        if _personel_dosyasi_gibi(yol):
+            notlar.append(
+                f"{yol.name}: adi personel verisine benziyor, fatura olarak islenmedi "
+                f"ve yerinden oynatilmadi. Personel dosyalari {PERSONEL_DIZINI} klasorune konur."
+            )
+            return
+        bulunan.append(yol)
 
     for ham in argumanlar:
         yol = Path(ham)
@@ -131,7 +153,78 @@ def fatura_dosyalarini_topla(kok: Path, argumanlar: list[str]) -> list[Path]:
     for alt in sorted((kok / FATURA_DIZINI).rglob("*")):
         if alt.is_file():
             ekle(alt)
-    return bulunan
+    return bulunan, notlar
+
+
+# --------------------------------------------------------------------------
+# Calistirmalar arasi tekrar korumasi
+# --------------------------------------------------------------------------
+
+ISLENEN_OZETLER_DOSYASI = "ISLENEN_DOSYALAR.txt"
+
+
+def dosya_ozeti(yol: Path) -> str | None:
+    """Dosya iceriginin SHA-256'si (ad degisse de ayni kalir)."""
+    import hashlib
+
+    try:
+        h = hashlib.sha256()
+        with open(yol, "rb") as f:
+            for parca in iter(lambda: f.read(1 << 20), b""):
+                h.update(parca)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def islenen_ozetleri_oku(kok: Path) -> dict[str, tuple[str, str]]:
+    """3_ISLENENLER/ISLENEN_DOSYALAR.txt -> {ozet: (damga, dosya adi)}."""
+    yol = kok / ARSIV_DIZINI / ISLENEN_OZETLER_DOSYASI
+    kayit: dict[str, tuple[str, str]] = {}
+    try:
+        for satir in yol.read_text(encoding="utf-8").splitlines():
+            parcalar = satir.split("\t")
+            if len(parcalar) >= 3 and len(parcalar[0]) == 64:
+                kayit.setdefault(parcalar[0], (parcalar[1], parcalar[2]))
+    except OSError:
+        pass
+    return kayit
+
+
+def islenen_ozetleri_yaz(kok: Path, damga: str, dosyalar: list[Path],
+                         ozetler: dict[str, str | None] | None = None) -> None:
+    """Bu calistirmada islenen dosyalarin ozetlerini kalici listeye ekler."""
+    yol = kok / ARSIV_DIZINI / ISLENEN_OZETLER_DOSYASI
+    try:
+        yol.parent.mkdir(parents=True, exist_ok=True)
+        yeni = not yol.exists()
+        with open(yol, "a", encoding="utf-8") as f:
+            if yeni:
+                f.write("# sha256\tcalistirma\tdosya   (ayni icerik tekrar gelirse uyarilir)\n")
+            for d in dosyalar:
+                oz = (ozetler or {}).get(d.name) or dosya_ozeti(d)
+                if oz:
+                    f.write(f"{oz}\t{damga}\t{d.name}\n")
+    except OSError:
+        pass
+
+
+def daha_once_islenenler(kok: Path, faturalar: list[Path]) -> list[str]:
+    """Icerigi daha onceki bir calistirmada islenmis dosyalari uyari metni olarak doner."""
+    kayit = islenen_ozetleri_oku(kok)
+    if not kayit:
+        return []
+    uyarilar: list[str] = []
+    for f in faturalar:
+        oz = dosya_ozeti(f)
+        if oz and oz in kayit:
+            damga, eski_ad = kayit[oz]
+            uyarilar.append(
+                f"DAHA ONCE ISLENDI: {f.name} icerigi {damga} calistirmasinda "
+                f"('{eski_ad}') zaten islenmisti. Ayni ay iki kez muhasebeye gitmesin; "
+                f"bu Excel'i kullanmadan once {ARSIV_DIZINI}/{damga} ile karsilastirin."
+            )
+    return uyarilar
 
 
 def _sayi(deger: float) -> str:
@@ -179,7 +272,10 @@ def ozet_bas(sonuclar, mahsup, uyarilar: list[str]) -> None:
             yaz()
             yaz("  PROJE BAZINDA DAGILIM")
             for m in merkezler[:12]:
-                isaret = "" if m["haritada_var"] else "  <- haritada tanimli degil"
+                if str(m["masraf_merkezi"]) == "(DAGITILAMAYAN)":
+                    isaret = "  <- kisi / merkez bulunamadi"
+                else:
+                    isaret = "" if m["haritada_var"] else "  <- haritada tanimli degil"
                 yaz(f"    {m['masraf_merkezi'][:32]:32s} "
                     f"{_sayi(m['tutar']):>13s} {m['para_birimi']}"
                     f"  %{m['pay_yuzde']:.1f}{isaret}")
@@ -247,7 +343,9 @@ def islenenleri_arsivle(kok: Path, faturalar: list[Path], damga: str) -> tuple[l
 
 def calistirma_kaydi_yaz(kok: Path, damga: str, faturalar: list[Path], ana: Path | None,
                          yardimci: Path | None, sonuclar, mahsup, excel_yolu: str,
-                         tasinan: list[Path]) -> Path | None:
+                         tasinan: list[Path], okunamayanlar: list[str] | None = None,
+                         uyarilar: list[str] | None = None,
+                         ozetler: dict[str, str | None] | None = None) -> Path | None:
     """Her calistirma icin kisa bir denetim kaydi birakir.
 
     Finans 'bu Excel hangi dosyalardan, hangi personel verisiyle uretildi'
@@ -268,10 +366,27 @@ def calistirma_kaydi_yaz(kok: Path, damga: str, faturalar: list[Path], ana: Path
         f"Excel          : {excel_yolu or '(uretilemedi)'}",
         f"Ana personel   : {ana.name if ana else '-'}  ({_boyut(ana)})",
         f"1C listesi     : {yardimci.name if yardimci else '-'}  ({_boyut(yardimci)})",
-        f"Islenen dosya  : {len(faturalar)}",
+        f"Islenen dosya  : {len(faturalar) - len(okunamayanlar or [])}",
     ]
     for f in faturalar:
-        satirlar.append(f"    - {f.name}")
+        if f.name in (okunamayanlar or []):
+            continue
+        oz = (ozetler or {}).get(f.name) or dosya_ozeti(f)
+        satirlar.append(f"    - {f.name}  sha256={oz or '?'}")
+    for ad in (okunamayanlar or []):
+        satirlar.append(f"    - {ad}  OKUNAMADI (1_FATURALAR'da birakildi)")
+    # Hangi harita ve defter surumuyle uretildi? Ay sonra 'neden boyle
+    # dagitilmis' sorusu bunlarla cevaplanir.
+    veri = kok / AYAR_DIZINI
+    for ad in ("masraf_merkezi_haritasi.csv", "aliases.csv", "harici_kisiler.csv",
+               "ek_kisiler.csv", "tckn_sicil.csv", "kolon_esanlamlilari.csv"):
+        y = veri / ad
+        if y.is_file():
+            satirlar.append(f"Veri dosyasi   : {ad}  ({_boyut(y)}, sha256={dosya_ozeti(y) or '?'})")
+    tarihler = [s.satir.belge_tarihi for s in sonuclar
+                if getattr(getattr(s, "satir", None), "belge_tarihi", None)]
+    if tarihler:
+        satirlar.append(f"Gider donemi   : {min(tarihler):%d.%m.%Y} - {max(tarihler):%d.%m.%Y}")
     satirlar.append(f"Okunan satir   : {len(sonuclar)}")
     satirlar.append(f"  otomatik     : {sum(1 for s in sonuclar if s.durum == DURUM_OTOMATIK)}")
     satirlar.append(f"  incele       : {sum(1 for s in sonuclar if s.durum == DURUM_INCELE)}")
@@ -285,6 +400,8 @@ def calistirma_kaydi_yaz(kok: Path, damga: str, faturalar: list[Path], ana: Path
             )
     if tasinan:
         satirlar.append(f"Arsive tasinan : {len(tasinan)} dosya -> {ARSIV_DIZINI}/{damga}/")
+    for u in (uyarilar or []):
+        satirlar.append(f"Uyari          : {u}")
     metin = "\n".join(satirlar) + "\n"
     try:
         arsiv = kok / ARSIV_DIZINI / damga
@@ -344,7 +461,9 @@ def calistir() -> int:
         yaz(f"  NOT: {n}")
 
     # --- Fatura dosyalari ---
-    faturalar = fatura_dosyalarini_topla(kok, sys.argv[1:])
+    faturalar, topla_notlari = fatura_dosyalarini_topla(kok, sys.argv[1:])
+    for n in topla_notlari:
+        yaz(f"  NOT: {n}")
     if not faturalar:
         yaz()
         yaz("HATA: Islenecek fatura bulunamadi.")
@@ -393,7 +512,13 @@ def calistir() -> int:
         son_yuzde[0] = yuzde
         yaz(f"    [%{yuzde:3.0f}] {mesaj}")
 
-    damga = datetime.now().strftime("%Y%m%d_%H%M")
+    damga = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Ayni dosya (icerik olarak) daha once islendiyse soyle: konsola, Excel
+    # kapagina ve calistirma kaydina. Islemeyi durdurmaz; karar finansindir.
+    tekrar_uyarilari = daha_once_islenenler(kok, faturalar)
+    for u in tekrar_uyarilari:
+        yaz(f"  UYARI: {u}")
+    boru.on_uyarilar = list(tekrar_uyarilari)
     sonuc = boru.calistir(faturalar, cikti_adi=f"Masraf_Dagitimi_{damga}.xlsx",
                           ilerleme=ilerleme)
 
@@ -430,18 +555,40 @@ def calistir() -> int:
         yaz("  gidecek tablo odur. 'Kontrol' sayfasi paranin kaybolmadigini gosterir.")
 
         # Basarili calistirmadan sonra islenen faturalari arsive tasi. Gelecek ay
-        # ayni dosyalarin tekrar islenip cift sayilmasini onler.
-        tasinan, tasima_hatalari = islenenleri_arsivle(kok, faturalar, damga)
-        if tasinan:
+        # ayni dosyalarin tekrar islenip cift sayilmasini onler. Iki istisna:
+        #  - okunamayan dosyalar yerinde kalir (duzeltilip tekrar denenecek),
+        #  - mutabakat ACIKSA hicbiri tasinmaz; Excel 'gonderilmemeli' diyor,
+        #    kullanici duzeltip tekrar calistiracak, dosyalari aramasin.
+        mahsup = sonuc.get("mahsup")
+        okunamayanlar = {h.split(":", 1)[0].strip() for h in boru.hatalar}
+        arsivlenecek = [f for f in faturalar if f.name not in okunamayanlar]
+        # Ozetler tasimadan ONCE alinir; tasinan dosyanin eski yolu kalmaz.
+        ozetler = {f.name: dosya_ozeti(f) for f in faturalar}
+        tasinan, tasima_hatalari = [], []
+        if mahsup is not None and not mahsup.kapali_mi:
             yaz()
-            yaz(f"  Islenen {len(tasinan)} dosya arsive tasindi:")
-            yaz(f"    {kok / ARSIV_DIZINI / damga}")
-            yaz("  1_FATURALAR klasoru gelecek ay icin bos. Dosyalar silinmedi,")
-            yaz("  gerekirse arsivden geri alabilirsiniz.")
+            yaz("  MUTABAKAT ACIK: faturalar 1_FATURALAR klasorunde BIRAKILDI.")
+            yaz("  Excel'deki 'Kontrol' sayfasina bakip sorunu giderin ve tekrar")
+            yaz("  calistirin; dosyalar yerinde oldugu icin geri almaniz gerekmez.")
+        else:
+            tasinan, tasima_hatalari = islenenleri_arsivle(kok, arsivlenecek, damga)
+            if tasinan:
+                yaz()
+                yaz(f"  Islenen {len(tasinan)} dosya arsive tasindi:")
+                yaz(f"    {kok / ARSIV_DIZINI / damga}")
+                yaz("  1_FATURALAR klasoru gelecek ay icin bos. Dosyalar silinmedi,")
+                yaz("  gerekirse arsivden geri alabilirsiniz.")
+            islenen_ozetleri_yaz(kok, damga, arsivlenecek, ozetler)
+        if okunamayanlar:
+            yaz(f"  Okunamayan {len(okunamayanlar)} dosya 1_FATURALAR'da birakildi:")
+            for ad in sorted(okunamayanlar):
+                yaz(f"    - {ad}")
         for h in tasima_hatalari:
             yaz(f"  UYARI: {h}")
         kayit = calistirma_kaydi_yaz(kok, damga, faturalar, ana, yardimci,
-                                     sonuclar, sonuc.get("mahsup"), excel_yolu, tasinan)
+                                     sonuclar, mahsup, excel_yolu, tasinan,
+                                     okunamayanlar=sorted(okunamayanlar),
+                                     uyarilar=list(boru.uyarilar), ozetler=ozetler)
         if kayit:
             yaz(f"  Calistirma kaydi: {kayit.name}")
         excel_ac(Path(excel_yolu))
