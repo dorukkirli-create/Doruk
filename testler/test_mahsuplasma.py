@@ -381,7 +381,7 @@ class GercekMesajTest(unittest.TestCase):
             except ImportError:
                 return
             calisma = openpyxl.load_workbook(yol)
-            self.assertEqual(calisma.sheetnames[:2], ["Mahsuplasma", "Kontrol"])
+            self.assertEqual(calisma.sheetnames[:3], ["Ozet", "Mahsuplasma", "Kontrol"])
             self.assertEqual(calisma["Mahsuplasma"].max_row,
                              len(self.tablo.satirlar) + 2)  # baslik + toplam
 

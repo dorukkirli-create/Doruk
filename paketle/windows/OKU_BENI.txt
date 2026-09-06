@@ -13,12 +13,14 @@ ILK KURULUM (bir kez, 2 dakika)
        C:\Users\dokirli\Desktop\Otomasyon\
 
    Icinde su klasorler gorunmeli:
-       1_FATURALAR
-       2_EXCEL_CIKTI
-       PERSONEL
-       program
-       veri
+       1_FATURALAR        <- faturalari buraya atin
+       2_EXCEL_CIKTI      <- Excel buraya cikar
+       3_ISLENENLER       <- islenen faturalar buraya tasinir (otomatik)
+       PERSONEL           <- personel dosyalari
+       program            <- dokunmayin
+       veri               <- harita ve ogrenilen defterler
        CALISTIR.bat
+       TESTET.bat
        OKU_BENI.txt
 
 2. Personel dosyalarini PERSONEL klasorune kopyalayin:
@@ -47,6 +49,13 @@ HER AY NE YAPACAKSINIZ
 3. Siyah pencerede ilerlemeyi izleyin. Bittiginde Excel kendiliginden acilir.
    Ayni dosya 2_EXCEL_CIKTI klasorune de yazilir, tarih saat damgasiyla.
 
+4. Islem bitince faturalar 1_FATURALAR'dan 3_ISLENENLER\<tarih_saat>\ altina
+   KENDILIGINDEN tasinir. Boylece gelecek ay ayni dosyalar tekrar islenmez ve
+   tutarlar iki kez sayilmaz. Dosyalar silinmez; gerekirse geri alabilirsiniz.
+   Her calistirma icin bir OZET.txt de o klasore yazilir; ayrica kok dizindeki
+   CALISTIRMA_GECMISI.txt dosyasina eklenir (hangi tarihte, hangi dosyalar,
+   hangi personel verisiyle, kac satir, mutabakat kapandi mi).
+
 Alternatif: dosyalari dogrudan CALISTIR.bat uzerine surukleyip birakin.
 O zaman 1_FATURALAR klasorune koymaniza gerek kalmaz.
 
@@ -54,19 +63,31 @@ O zaman 1_FATURALAR klasorune koymaniza gerek kalmaz.
 EXCEL'I NASIL OKUYACAKSINIZ
 ============================
 
-Alti sayfa var. Sirasi is akisi sirasidir.
+Sekiz sayfa var. Sirasi okuma sirasidir.
+
+  Ozet          KAPAK. Tutarlar, mutabakat durumu (yesil = para kaybolmadi),
+                sirket kirilimi, dikkat notlari ve sayfa rehberi. Dosya
+                acilinca ilk bu gelir; 30 saniyede butun calismayi anlatir.
 
   Mahsuplasma   MUHASEBEYE GIDECEK TABLO BUDUR. Her fatura icin hangi
-                projeye ne kadar yazilacagi. Once buna bakin.
+                sirkete ve projeye ne kadar yazilacagi.
+
+  Sirket Kirilimi  Tuzel kisi (RHI, UST LUGA, RSS, RC, BSK) ustte, projeleri
+                altinda. Muhasebenin okuma sirasi.
+
+  Harita Onerileri  Haritada tanimli olmayan gorev yerleri; sirketi 1C'den
+                bulunmus, kod onerilmis, yapistirmaya hazir satir. Bossa
+                yapilacak bir sey yok.
 
   Kontrol       Mutabakat. Her fatura icin okunan / yinelenen /
                 dagitilan / dagitilamayan tutar.
                 >>> "Fark" sutunu SIFIR olmak zorunda. <<<
                 Sifir degilse tablo muhasebeye gonderilmemeli.
 
-  Sonuc         Butun satirlar, 26 kolon. Her satirda kisinin nasil
-                bulundugu, guven skoru ve Turkce gerekce yazar.
-                "Bu satir neden bu projeye yazildi" sorusunun cevabi burada.
+  Sonuc         Butun satirlar, 28 kolon. Her satirda kisinin nasil
+                bulundugu, guven skoru, Turkce gerekce, EVRAK / FATURA NO ve
+                mail konusu yazar. "Bu satir neden bu projeye yazildi" ve
+                "hangi faturaya ait" sorularinin cevabi burada.
 
   Incele        Sistemin emin olamadigi satirlar. Elle bakilmasi gerekenler.
 
@@ -140,9 +161,10 @@ Masraf merkezi haritasi
     Klasorde .venv ya da baslat.bat varsa onlar eski kurulumdan kalmadir,
     silin. Bu paketin ikisine de ihtiyaci yok.
 
-Her ay 1_FATURALAR klasorunu bosaltin
-    Eski faturalar orada kalirsa gelecek ay TEKRAR islenir ve tutarlar iki
-    kez sayilir. Islem bittikten sonra dosyalari baska bir klasore tasiyin.
+1_FATURALAR bosaltilmali mi
+    Hayir, program kendisi yapiyor: basarili her calistirmadan sonra islenen
+    dosyalar 3_ISLENENLER altina tasinir. Surukle-birak ile disaridan
+    verdiginiz dosyalara dokunulmaz; onlar kendi klasorunuzde kalir.
 
 Program ogreniyor mu
     Evet. veri klasorundeki CSV dosyalarinda bulunan eslesmeler, TC kimlik
@@ -170,7 +192,11 @@ GIZLILIK
 Program internete hic cikmaz, yapay zeka kullanmaz. Personel dosyalari ve
 faturalar bilgisayarinizdan disari gitmez.
 
-veri klasorundeki CSV dosyalari ogrenilen eslesmeleri tutar ve KISISEL VERI
-icerir (ad soyad, sicil, TC kimlik). Bu klasoru kimseyle paylasmayin.
-
-2_EXCEL_CIKTI klasorundeki dosyalar da kisisel veri icerir.
+Kisisel veri iceren yerler (ad soyad, sicil, TC kimlik, tutar):
+  - veri\            ogrenilen eslesme defterleri
+  - 2_EXCEL_CIKTI\   uretilen Excel'ler
+  - 3_ISLENENLER\    islenmis faturalar ve calistirma ozetleri
+  - PERSONEL\        personel dosyalari ve yanlarindaki .pkl onbellekler
+  - CALISTIRMA_GECMISI.txt
+Bu klasorleri paylasmayin. Outlook eklerinin acildigi gecici dizin islem
+bitince otomatik silinir; bilgisayarda kalinti birakmaz.

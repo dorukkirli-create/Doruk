@@ -1570,7 +1570,11 @@ def _mahsup_dataframe(mahsup: Any) -> "pd.DataFrame":
         CIKTI_MODULU.mahsup_satir_degerleri(m, fatura_toplami[(m.kaynak, m.para_birimi)])
         for m in mahsup.satirlar
     ]
-    return pd.DataFrame(satirlar, columns=basliklar)
+    df = pd.DataFrame(satirlar, columns=basliklar)
+    # Excel bu kolonu 0.0% bicimiyle gosterir; ekranda da yuzde olarak okunsun.
+    if "Fatura Payi" in df.columns:
+        df["Fatura Payi"] = (df["Fatura Payi"] * 100).round(1).astype(str) + " %"
+    return df
 
 
 def _kontrol_dataframe(mahsup: Any) -> "pd.DataFrame":

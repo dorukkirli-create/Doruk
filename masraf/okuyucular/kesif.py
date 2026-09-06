@@ -163,11 +163,27 @@ def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderS
     Raises:
         MesajOkunamadi: Hicbir ekten satir cikmadiysa, sebebiyle birlikte.
     """
+    import shutil
     from tempfile import mkdtemp
 
     from masraf.okuyucular.posta import msg_aciklarini_cikar
 
+    # Cikarilan ekler KISISEL VERI tasir (ad soyad, TC, tutar). Gecici dizini
+    # biz actiysak is bitince SILMEK zorundayiz; aksi halde her calistirmada
+    # faturalar Windows'ta %TEMP% altinda birikir ve kimse fark etmez.
+    bizim_dizin = cikarma_dizini is None
     hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="masraf_msg_"))
+    try:
+        return _msg_oku_icerik(yol, hedef)
+    finally:
+        if bizim_dizin:
+            shutil.rmtree(hedef, ignore_errors=True)
+
+
+def _msg_oku_icerik(yol: Path, hedef: Path) -> list[GiderSatiri]:
+    """``_msg_oku``'nun govdesi; gecici dizin yonetimi disarida tutulur."""
+    from masraf.okuyucular.posta import msg_aciklarini_cikar
+
     satirlar: list[GiderSatiri] = []
     ekler = msg_aciklarini_cikar(yol, hedef)
 
