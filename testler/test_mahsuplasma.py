@@ -226,9 +226,10 @@ class PaylasimTest(unittest.TestCase):
         t = mahsuplasma_uret([sonuc(gider(tutar=201.42, ek={"paylasim": paylasim}))])
         self.assertEqual(len(t.satirlar), 2)
         self.assertEqual({m.masraf_merkezi for m in t.satirlar}, {"GPP"})
-        self.assertEqual({m.sirket for m in t.satirlar}, {"RHI", "RENSTROYDETAL"})
+        # Tuzel kisi etiketi haritanin sirket koduna cevrilir: RENSTROYDETAL -> RSS.
+        self.assertEqual({m.sirket for m in t.satirlar}, {"RHI", "RSS"})
         buyuk = max(t.satirlar, key=lambda m: m.tutar)
-        self.assertEqual(buyuk.sirket, "RENSTROYDETAL")
+        self.assertEqual(buyuk.sirket, "RSS")
         self.assertAlmostEqual(buyuk.tutar, 134.28, places=2)
 
     def test_proje_paylasimi_haritayla_bolunur(self):

@@ -59,16 +59,17 @@ Akış:
             +--> aliases.csv'de var mı?           --> EŞLEŞTİ  (0,98)
             +--> harici_kisiler.csv'de var mı?    --> İNCELE   (0,95) "çalışan değil"
             +--> tam isim tek kişide mi?          --> EŞLEŞTİ  (0,95)
-            +--> isim alt kümesi tek kişide mi?   --> EŞLEŞTİ  (0,90)
+            +--> 1C personel listesinde birebir mi? --> İNCELE  (0,90 tek / 0,55 çok aday)
+            |        (bilinen kimlik tahminden önce; grup şirketi personeli,
+            |         dönem doğrulanamaz; sicil ana veride de varsa 0,92 tam isim)
+            +--> isim alt kümesi tek kişide mi?   --> EŞLEŞTİ  (0,90; soyad tutmuyorsa 0,72 İNCELE)
             +--> bitişik ad açılıyor mu?          --> EŞLEŞTİ  (0,92)
             |        (AHMETCAN -> MUSTAFA KEMAL)
             +--> transliterasyon varyantı tutuyor mu? --> İNCELE  (0,88)
             |        (IYLMAZ GEKHAN -> YILMAZ GOKHAN)
             +--> kesik isim öneki tutuyor mu?     --> İNCELE   (0,85)
-            +--> 1C personel listesinde mi?       --> İNCELE   (0,90 tek / 0,55 çok aday)
-            |        (grup şirketi personeli; dönem doğrulanamaz)
             +--> ek kişi defterinde mi?           --> İNCELE   (0,70)
-            +--> bulanık benzerlik yeterli mi?    --> İNCELE   (0,79-0,90)
+            +--> bulanık benzerlik yeterli mi?    --> İNCELE   (en çok 0,89; asla otomatik değil)
             +--> soyadı bir çalışanla aynı mı?    --> İNCELE   (0,60) "aile bireyi"
             +--> hiçbiri                          --> EŞLEŞMEDİ (0,00)
             |
@@ -257,20 +258,20 @@ faturaları en zorudur: kimlik alanı yoktur, sadece serbest metinde isim vardı
 
 | Yöntem | Güven | Ne zaman oluşur |
 |---|---|---|
-| `sicil` | 1,00 | Kaynak dosyada sicil numarası var (Koç katılımcı listesi gibi) |
-| `tckn` | 0,99 | TC kimlik `veri/tckn_sicil.csv` köprüsünde tek bir sicile bağlanıyor |
+| `sicil` | 1,00 / 0,75 | Kaynak dosyada sicil numarası var (Koç katılımcı listesi gibi). Satırdaki ad ile personel adının hiçbir kelimesi tutmuyorsa 0,75 (yanlış satıra yazılmış sicil), İNCELE |
+| `tckn` | 0,99 / 0,75 | TC kimlik `veri/tckn_sicil.csv` köprüsünde tek bir sicile bağlanıyor; ad hiç tutmuyorsa 0,75, İNCELE |
 | `harici` | 0,95 | Kişi `veri/harici_kisiler.csv` dış kişi defterinde (danışman, konuşmacı). Çalışan olmadığı için her zaman uyarılı, İNCELE'ye düşer; masraf merkezi defterden gelir |
-| `yardimci_defter` | 0,90 / 0,55 | Kişi 1C personel listesinde (grup şirketi). Tek aday 0,90, çok aday 0,55; liste tek tarihli olduğu için dönem doğrulanamaz, İNCELE |
-| `alias` | 0,98 | Bu ismi daha önce siz elle onaylamışsınız (`veri/aliases.csv`) |
+| `yardimci_defter` | 0,90 / 0,55 | Kişi 1C personel listesinde birebir (grup şirketi). Tam isimden hemen sonra, tahmin kademelerinden ÖNCE denenir. Tek aday 0,90, çok aday 0,55; liste tek tarihli olduğu için dönem doğrulanamaz, İNCELE. Sicil ana veride de varsa 0,92 `tam_isim` olur |
+| `alias` | 0,98 / 0,75 | Bu ismi daha önce siz elle onaylamışsınız (`veri/aliases.csv`). Ana veride aynı isimli başka çalışan da varsa 0,75 ve adaylar listelenir, İNCELE |
 | `tam_isim` | 0,95 | Normalize isim personel verisinde **tek** kişiye denk geliyor |
 | `tam_isim` (bitişik ad) | 0,92 | `AHMETCAN` sözlükle `MUSTAFA KEMAL` olarak açıldı, sonuç tek kişi |
-| `alt_kume` | 0,90 | Fatura ismi personel isminin alt kümesi, tek aday (ikinci ad eksik) |
+| `alt_kume` | 0,90 / 0,72 | Fatura ismi personel isminin alt kümesi, tek aday (ikinci ad/patronimik eksik). Fatura kelimelerinden biri personelin SOYADI değilse 0,72, İNCELE |
 | `transliterasyon` | 0,88 | Rusça transliterasyon geri çevrildi (`GEKHAN` -> `GOKHAN`), tek aday |
 | `prefix` | 0,85 | İsim bilet sisteminde kesilmiş, önek tek kişiye uyuyor |
-| `alt_kume` (zayıf) | 0,72 | Alt küme eşleşmesi ama isim çok yaygın |
+| `alt_kume` (ters) | 0,72 / 0,50 | Personel adının tamamı fatura metninin içinde (ayıklama artığı). Fazladan kalan kelime bir AD ise (üçüncü adı olan başka kişi olabilir) sicil doldurulmaz, 0,50 |
 | `ek_defter` | 0,70 | Kişi ana veride yok, yardımcı listelerden (sağlık listesi vb.) bulundu |
-| `bulanik` | 0,79-0,90 | Yazım hatası toleranslı benzerlik (rapidfuzz ≥ 88 puan) ve ikinci adayla arada en az 6 puan fark var |
-| `aile` | 0,30-0,60 | Soyadı aynı dosyada kesin eşleşen bir çalışanla aynı; eş/çocuk olabilir. Kanıtın gücüne göre dört kademe (aynı dosyada soyadaş + tek görev yeri en güçlüsü) |
+| `bulanik` | 0,79-0,89 | Yazım hatası toleranslı benzerlik (rapidfuzz ≥ 88 puan), ikinci adayla arada en az 6 puan fark. Tavan 0,89: asla otomatik kabul edilmez. Tek kelimelik/placeholder personel adları ve alt küme durumları havuza girmez; iki kelimeli adlarda farklı kalan kelime çifti yakın değilse (ALI/ANIL) sicil doldurulmaz |
+| `aile` | 0,30-0,60 | Soyadı aynı çalıştırmadaki bir FATURADA kesin eşleşen bir çalışanla aynı; eş/çocuk olabilir. Kanıt yalnızca kesin yöntemlerden (sicil, TC kimlik, alias, tek kişilik tam isim) ve fatura tipi kaynaklardan gelir; sağlık/katılımcı listeleri kanıt üretmez. Kanıtın gücüne göre dört kademe |
 | çoklu aday | ≤ 0,58 | Aynı isimde birden fazla çalışan var; sicil **doldurulmaz** |
 | `yok` | 0,00 | Hiçbir kademe tutmadı |
 
@@ -281,8 +282,10 @@ Karar eşikleri (`masraf/masraf_merkezi.py`): **0,90 ve üstü** güvene sahip
 sayfasına düşer. Eşikler *Ayarlar* sekmesinden değiştirilebilir.
 
 Buradan çıkan sonuç önemlidir: `transliterasyon` (0,88), `prefix` (0,85),
-`bulanik` (0,79-0,90), `ek_defter` (0,70) ve `aile` (0,60) kademelerinin
-**hiçbiri kendi başına otomatik kabul edilmez** — hepsi insan onayına gider.
+`bulanik` (en çok 0,89), `ek_defter` (0,70) ve `aile` (0,60) kademelerinin
+**hiçbiri kendi başına otomatik kabul edilmez**; hepsi insan onayına gider.
+Satırda TC kimlik varken tahmin kademesi Türkiye vatandaşı olmayan birine
+giderse güven 0,75'e çekilir ve uyarı yazılır.
 Otomatik kabul yalnızca sicil, TC kimlik, onaylanmış alias, tek kişiye denk
 gelen tam isim ve bitişik ad açılımı kademelerinden gelir.
 

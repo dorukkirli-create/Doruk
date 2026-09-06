@@ -36,6 +36,7 @@ GIDER_TIPLERI: frozenset[str] = frozenset({
 # Eslestirme yontemleri, guvenilirlik sirasina yakin bicimde.
 YONTEMLER: frozenset[str] = frozenset({
     "sicil",
+    "yardimci_defter",
     "tckn",
     "tam_isim",
     "alias",

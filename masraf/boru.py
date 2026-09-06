@@ -511,7 +511,7 @@ class Boru:
         if self.ayarlar.defterleri_besle:
             _bildir(ilerleme, 30, "Yardimci listelerden kisi defteri besleniyor")
             try:
-                besleme = self.defterler.yardimci_kaynaktan_besle(list(tum_satirlar))
+                besleme = self.defterler.yardimci_kaynaktan_besle(list(tum_satirlar), defter=self.defter)
                 if self.ayarlar.ogrenmeyi_kaydet and (
                     besleme.get("ek_kisi") or besleme.get("tckn_kopru")
                 ):

@@ -236,8 +236,10 @@ DURUM_RENKLERI: dict[str, str] = {
 #: Gider ayi ile personel donemi iliskisinin okunakli karsiliklari.
 DONEM_ESLESME_ETIKETLERI: dict[str, str] = {
     "tam": "Ayni ay",
-    "onceki_donem": "Onceki donem (ayrilmis)",
-    "ilk_donem_oncesi": "Ise girmeden once",
+    "onceki_donem": "Onceki donem (kayit yok)",
+    "personel_dosyasi_eski": "Personel dosyasi eski",
+    "ilk_donem_oncesi": "Ilk donemden once",
+    "yardimci_defter": "1C listesi (donem yok)",
     "tarihsiz": "Tarih yok",
     "yok": "",
 }

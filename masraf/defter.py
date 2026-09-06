@@ -469,7 +469,7 @@ class Defterler:
     # Yardimci kaynaklardan besleme
     # ------------------------------------------------------------------
 
-    def yardimci_kaynaktan_besle(self, satirlar: list[GiderSatiri]) -> dict[str, int]:
+    def yardimci_kaynaktan_besle(self, satirlar: list[GiderSatiri], defter: Any = None) -> dict[str, int]:
         """Yardimci kaynak satirlarindan ek kisi defterini ve TCKN koprusunu doldurur.
 
         Saglik kontrol listesi, arabuluculuk listesi ve egitim katilimci
@@ -496,7 +496,20 @@ class Defterler:
                 ozet["atlanan"] += 1
                 continue
             santiye = _metin(satir.masraf_merkezi_kaynak)
-            if self.ek_kisi_ekle(ad, tckn=tckn, santiye=santiye, kaynak=satir.kaynak_tip):
+            # Ana veride zaten olan calisan ek kisi defterine yazilmaz; defter
+            # sicili olmayanlar icindir (olculdu: 106 satirin 81'i calisandi).
+            calisan_mi = False
+            if defter is not None and ad:
+                try:
+                    from masraf.metin import isim_normalize
+                    norm = isim_normalize(ad)
+                    calisan_mi = bool(norm) and bool(
+                        defter.isimle_adaylar(norm)
+                        or defter.token_ile_adaylar(frozenset(norm.split(" ")))
+                    )
+                except Exception:  # noqa: BLE001
+                    calisan_mi = False
+            if not calisan_mi and self.ek_kisi_ekle(ad, tckn=tckn, santiye=santiye, kaynak=satir.kaynak_tip):
                 ozet["ek_kisi"] += 1
             if tckn and sicil:
                 if self.tckn_kopru_ekle(tckn, sicil, ad_soyad=ad, kaynak=satir.kaynak_tip):

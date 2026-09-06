@@ -107,18 +107,24 @@ def sicil_normalize(deger: Any) -> str:
 
 
 def _tarihe_cevir(deger: Any) -> date | None:
-    """Cesitli tarih temsillerini date'e cevirir; cozulemezse None."""
+    """Cesitli tarih temsillerini date'e cevirir; cozulemezse None.
+
+    pandas NaT ``datetime`` alt sinifidir; isinstance kontrolu ONCE yapilirsa
+    NaT.date() NaT olarak geri doner, bos 'Donem' hucresi None yerine NaT
+    olur ve donem siralamasi TypeError ile coker (olculdu). Bu yuzden bosluk
+    kontrolu isinstance'tan once gelir.
+    """
     if deger is None:
         return None
-    if isinstance(deger, datetime):
-        return deger.date()
-    if isinstance(deger, date):
-        return deger
     try:
         if pd.isna(deger):
             return None
     except (TypeError, ValueError):
         pass
+    if isinstance(deger, datetime):
+        return deger.date()
+    if isinstance(deger, date):
+        return deger
     try:
         zaman = pd.Timestamp(deger)
     except (TypeError, ValueError):

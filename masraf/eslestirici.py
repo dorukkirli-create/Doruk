@@ -14,15 +14,19 @@ Adim  Yontem                                                        Guven
 3     ``alias``           kullanicinin daha once ogrettigi eslesme    0.98
 4     ``harici``          calisan degil, bilinen dis kisi             0.95
 5     ``tam_isim``        normalize isim / token kumesi birebir       0.95
-6     ``alt_kume``        fatura tokenlari personel tokenlarinin      0.90
-                          alt kumesi (Rus patronimikleri)
-7     ``tam_isim``        bitisik ad acilarak birebir                 0.92
-8     ``transliterasyon`` Rusca yazim varyanti ile birebir            0.88
-9     ``prefix``          kesilmis (truncate) PNR ismi                0.85
-10    ``ek_defter``       yardimci kaynaklardaki ek kisi defteri      0.70
-11    ``bulanik``         rapidfuzz token_set_ratio >= 88             ~0.80
-12    ``aile``            soyadi eslesen calisanin aile bireyi        0.50
-13    ``yok``             hicbiri                                     0.00
+6     ``yardimci_defter`` 1C personel listesinde birebir (bilinen     0.90
+                          kimlik, tahminden once; coklu aday 0.55)
+7     ``alt_kume``        fatura tokenlari personel tokenlarinin      0.90
+                          alt kumesi (Rus patronimikleri); soyad
+                          tutmuyorsa 0.72
+8     ``tam_isim``        bitisik ad acilarak birebir                 0.92
+9     ``transliterasyon`` Rusca yazim varyanti ile birebir            0.88
+10    ``prefix``          kesilmis (truncate) PNR ismi                0.85
+11    ``ek_defter``       yardimci kaynaklardaki ek kisi defteri      0.70
+12    ``bulanik``         rapidfuzz token_set_ratio >= 88; en cok    <=0.89
+                          0,89: hicbir zaman otomatik kabul edilmez
+13    ``aile``            soyadi eslesen calisanin aile bireyi        0.50
+14    ``yok``             hicbiri                                     0.00
 ===== ============================================================= ======
 
 SOZLESMEDEN BILINCLI SAPMALAR (hepsi dogruluk lehinedir):
@@ -76,7 +80,26 @@ from masraf.modeller import (
 # --------------------------------------------------------------------------
 
 #: Bu guvenin altindaki eslesmeler kullanici incelemesine gonderilir.
-INCELE_ESIGI = 0.80
+#: masraf_merkezi.GUVEN_ESIGI ile AYNI olmali; iki yol farkli karar vermesin.
+INCELE_ESIGI = 0.90
+
+#: Bulanik eslesmenin ulasabilecegi en yuksek guven. GUVEN_ESIGI'nin altinda
+#: tutulur: bir yazim benzerligi tek basina otomatik kabul gerekcesi olamaz
+#: (olculdu: tek tokenli/placeholder adlar %100 puanla 'miknatis' oluyordu).
+BULANIK_TAVAN = 0.89
+
+#: Kesin sayilip aile kanitina eklenebilecek yontemler. Tahmin kademeleri
+#: (alt_kume, transliterasyon, prefix, bulanik) kanit uretmez; yanlis bir
+#: tahmin ayni soyadli baska satirlari da pesinden surukler.
+KESIN_YONTEMLER: frozenset[str] = frozenset({"sicil", "tckn", "alias", "tam_isim"})
+
+#: Aile kanitina katkida bulunmayan kaynak tipleri (kisi kutukleri).
+KANIT_DISI_KAYNAKLAR: frozenset[str] = frozenset({
+    "energo_saglik", "koc_katilimci", "referans_liste", "energo_assessment_detay",
+})
+
+#: Turkiye vatandasligi yazimlari (personel verisindeki 'vatandaslik' alani).
+_TURK_VATANDASLIK: frozenset[str] = frozenset({"TURKIYE", "TURKEY", "TR", "TC", "TURK", "TURKISH"})
 
 #: Birden fazla aday bulundugunda guven bu degerin ustune CIKAMAZ.
 COKLU_ADAY_TAVANI = 0.58
@@ -375,6 +398,10 @@ class Eslestirici:
             if len(personel_tokenlar) < len(tokenlar):
                 continue
             kalan = set(personel_tokenlar)
+            # Bitisik yazilmis ve kesilmis cift ad: 'MUSTAFAKEMA' personel
+            # adinin ad kismi birlestirilince ('MUSTAFAKEMAL') onun onekidir.
+            ad_parcalari = isim.split(" ")[1:]
+            bitisik_ad = "".join(ad_parcalari)
             onek_kullanildi = False
             uygun = True
             for token in sirali_tokenlar:
@@ -389,6 +416,13 @@ class Eslestirici:
                     key=len,
                 )
                 if not adaylar:
+                    if (len(ad_parcalari) >= 2 and len(bitisik_ad) > len(token)
+                            and bitisik_ad.startswith(token)
+                            and all(p in kalan for p in ad_parcalari)):
+                        for p in ad_parcalari:
+                            kalan.discard(p)
+                        onek_kullanildi = True
+                        continue
                     uygun = False
                     break
                 kalan.discard(adaylar[0])
@@ -498,15 +532,37 @@ class Eslestirici:
                 f"Kaynak dosyadaki {ham} sicili personel ana verisinde bulunamadi"
             )
             return None
+        guven = 1.00 if self._ad_uyusuyor(satir, ham, notlar) else 0.75
         return Eslesme(
             sicil=ham,
             ad_soyad=kayit.get("ad_soyad"),
             yontem="sicil",
-            guven=1.00,
+            guven=guven,
             aday_sayisi=1,
             aciklama=f"Kaynak dosyada sicil dogrudan verilmis: {self._etiket(ham)}",
             aday_siciller=[ham],
         )
+
+    def _ad_uyusuyor(self, satir: GiderSatiri, sicil: str, notlar: list[str]) -> bool:
+        """Kaynak dosyadaki ad ile personel adinin en az bir ortak kelimesi var mi?
+
+        Sicil ya da TCKN ile gelen satirlarda kimlik kesindir; ama listeye
+        yanlis satira yazilmis bir sicil/TCKN sessizce baska kisiye gider.
+        Ortak kelime yoksa not dusulur ve guven incelemeye dusecek kadar
+        indirilir. Soyadi degisen kisi (ad ortak) etkilenmez.
+        """
+        norm = isim_normalize(satir.kisi_ham or "")
+        if not norm:
+            return True
+        tokenlar = frozenset(norm.split(" ")) - {""}
+        kayit_tok = self._kayit_tokenlari(sicil)
+        if not tokenlar or not kayit_tok or tokenlar & kayit_tok:
+            return True
+        notlar.append(
+            f"Kaynak dosyadaki ad '{norm}' ile personel adi '{self._ad(sicil)}' hicbir "
+            "kelimede uyusmuyor; sicil/TCKN yanlis satira yazilmis olabilir, dogrulayin"
+        )
+        return False
 
     def _adim_tckn(self, satir: GiderSatiri, notlar: list[str]) -> Eslesme | None:
         tckn = tckn_normalize(satir.tckn_ham)
@@ -519,11 +575,12 @@ class Eslestirici:
         if self._defter.sicil_ile(sicil) is None:
             notlar.append(f"TCKN koprusundeki {sicil} sicili personel verisinde yok")
             return None
+        guven = 0.99 if self._ad_uyusuyor(satir, sicil, notlar) else 0.75
         return Eslesme(
             sicil=sicil,
             ad_soyad=self._ad(sicil),
             yontem="tckn",
-            guven=0.99,
+            guven=guven,
             aday_sayisi=1,
             aciklama=f"TCKN -> sicil koprusu ile eslesti: {self._etiket(sicil)}",
             aday_siciller=[sicil],
@@ -550,6 +607,28 @@ class Eslestirici:
                 ),
                 aday_siciller=[sicil],
             )
+        # Es isimli koruma: alias tek bir sicile baglar ama ana veride ayni
+        # isimli BASKA calisan varsa tam_isim kademesinin 'coklu aday' korumasi
+        # devre disi kalirdi (olculdu). Baska calisan varsa incelemeye dus.
+        digerleri = [
+            s for s in _tekil(list(self._defter.isimle_adaylar(norm))
+                              + list(self._defter.token_ile_adaylar(tokenlar)))
+            if s != sicil
+        ]
+        if digerleri:
+            return Eslesme(
+                sicil=sicil,
+                ad_soyad=self._ad(sicil),
+                yontem="alias",
+                guven=0.75,
+                aday_sayisi=1 + len(digerleri),
+                aciklama=(
+                    f"{gerekce}: {self._etiket(sicil)}. DIKKAT: ayni isimli baska calisan "
+                    f"da var ({', '.join(self._etiket(s) for s in digerleri[:3])}); "
+                    "alias dogru kisiyi gosteriyor mu, dogrulayin."
+                ),
+                aday_siciller=[sicil] + digerleri[:AZAMI_ADAY],
+            )
         return Eslesme(
             sicil=sicil,
             ad_soyad=self._ad(sicil),
@@ -567,21 +646,48 @@ class Eslestirici:
     def _adim_alt_kume(self, tokenlar: frozenset[str]) -> Eslesme | None:
         isimler = self._alt_kume_isimleri(tokenlar)
         if isimler:
-            eslesme = self._tekil_eslesme(
-                self._isimlerden_siciller(isimler),
-                "alt_kume",
-                0.90,
-                "Fatura ismi personel isminin icinde geciyor (ornegin baba adi/patronimik eksik)",
-            )
+            # Personel adi 'SOYAD AD ...' siralidir. Fatura kelimelerinden biri
+            # SOYAD ise alt kume guvenilirdir (patronimik eksik). Soyad hic
+            # tutmuyorsa ('KUMAR ARBIND' -> 'Sahu Arbind Kumar') bambaska bir
+            # kisi olabilir: incelemeye dus (olculdu: %2,5 yanlis pozitif).
+            soyadli = [i for i in isimler if i.split(" ", 1)[0] in tokenlar]
+            if soyadli:
+                eslesme = self._tekil_eslesme(
+                    self._isimlerden_siciller(soyadli), "alt_kume", 0.90,
+                    "Fatura ismi personel isminin icinde geciyor (ornegin baba adi/patronimik eksik)",
+                )
+            else:
+                eslesme = self._tekil_eslesme(
+                    self._isimlerden_siciller(isimler), "alt_kume", 0.72,
+                    "Fatura kelimeleri personel isminin icinde geciyor ama soyad tutmuyor; "
+                    "baska kisi olabilir, dogrulanmali",
+                )
             if eslesme is not None:
                 return eslesme
         # Ters yon: personel ismi, ayiklama artigi kalmis fatura metninin icinde.
         ters = self._ters_alt_kume_isimleri(tokenlar)
         if ters:
+            # Fazladan kalan kelime bir AD ise ('MEHMET TIMUR GUL' -> 'Gul Mehmet',
+            # kalan 'TIMUR') bu artik degil ucuncu addir; muhtemelen baska kisi.
+            # Sicil doldurulmaz, adaylar listelenir.
+            adli_kalan = [
+                i for i in ters
+                if any(self._siklik(t) > 0 for t in (tokenlar - self._isim_tokenlar[i]))
+            ]
+            siciller = self._isimlerden_siciller(ters)
+            if adli_kalan and len(adli_kalan) == len(ters):
+                return Eslesme(
+                    sicil=None, ad_soyad=None, yontem="alt_kume", guven=0.50,
+                    aday_sayisi=len(siciller),
+                    aciklama=(
+                        "Personel adi fatura metninin icinde geciyor ama fazladan kalan kelime "
+                        "de bir ad; ucuncu adi olan baska bir kisi olabilir. Adaylar: "
+                        + ", ".join(self._etiket(s) for s in siciller[:4])
+                    ),
+                    aday_siciller=siciller[:AZAMI_ADAY],
+                )
             return self._tekil_eslesme(
-                self._isimlerden_siciller(ters),
-                "alt_kume",
-                0.72,
+                siciller, "alt_kume", 0.72,
                 "Personel adinin tamami fatura metninde geciyor (metinde fazladan kelimeler var)",
             )
         return None
@@ -686,6 +792,12 @@ class Eslestirici:
         sicil_puan: dict[str, float] = {}
         sicil_isim: dict[str, str] = {}
         for isim, puan, _ in sonuclar:
+            isim_tok = self._isim_tokenlar.get(isim, frozenset())
+            # token_set_ratio alt kume iliskisinde 100 verir: tek tokenli ya da
+            # placeholder personel adlari ('. Yunus') her seyle eslesir. Alt
+            # kume durumu ters-alt-kume kuralinin isidir, bulanigin degil.
+            if len(isim_tok) < 2 or isim_tok < tokenlar:
+                continue
             for sicil in self._isim_siciller.get(isim, ()):
                 if puan > sicil_puan.get(sicil, -1.0):
                     sicil_puan[sicil] = puan
@@ -728,11 +840,28 @@ class Eslestirici:
                 ),
                 aday_siciller=kisa_liste,
             )
+        # Iki tokenli adlarda soyad ayni, ad bambaska olabilir ('ALI' / 'ANIL'
+        # token_set_ratio 90 alir). Farkli kalan tek kelime cifti yakin
+        # degilse sicil doldurulmaz; aday listelenir.
+        aday_tok = self._isim_tokenlar.get(sicil_isim[en_iyi_sicil], frozenset())
+        fark_fatura = tokenlar - aday_tok
+        fark_aday = aday_tok - tokenlar
+        if len(fark_fatura) == 1 and len(fark_aday) == 1:
+            a, b = next(iter(fark_fatura)), next(iter(fark_aday))
+            if fuzz.ratio(a, b) < 80:
+                return Eslesme(
+                    sicil=None, ad_soyad=None, yontem="bulanik", guven=0.50, aday_sayisi=1,
+                    aciklama=(
+                        f"Bulanik benzerlik %{en_iyi_puan:.0f} ama '{a}' ile '{b}' farkli adlar; "
+                        f"baska kisi olabilir. Aday: {self._etiket(en_iyi_sicil)}"
+                    ),
+                    aday_siciller=[en_iyi_sicil],
+                )
         return Eslesme(
             sicil=en_iyi_sicil,
             ad_soyad=self._ad(en_iyi_sicil),
             yontem="bulanik",
-            guven=round(en_iyi_puan / 100.0 * 0.9, 4),
+            guven=min(BULANIK_TAVAN, round(en_iyi_puan / 100.0 * 0.9, 4)),
             aday_sayisi=1,
             aciklama=(
                 f"Bulanik benzerlik %{en_iyi_puan:.0f} ('{norm}' ~ "
@@ -803,6 +932,23 @@ class Eslestirici:
             )
         sicil = adaylar[0]
         kayit = self._yardimci.sicil_ile(sicil) or {}
+        ana_kayit = self._defter.sicil_ile(sicil)
+        if ana_kayit is not None:
+            # Kisi ana veride de var ama yazimi farkli; 1C listesi kopru oldu.
+            # Donem mantigi ana veri uzerinden normal isler.
+            return Eslesme(
+                sicil=sicil,
+                ad_soyad=ana_kayit.get("ad_soyad"),
+                yontem="tam_isim",
+                guven=0.92,
+                aday_sayisi=1,
+                aciklama=(
+                    f"1C listesindeki yazimla birebir eslesti ({kayit.get('ad_soyad')}); "
+                    f"ana veride ayni sicil '{ana_kayit.get('ad_soyad')}' yazimiyla kayitli: "
+                    f"{self._etiket(sicil)}"
+                ),
+                aday_siciller=[sicil],
+            )
         return Eslesme(
             sicil=sicil,
             ad_soyad=kayit.get("ad_soyad"),
@@ -924,8 +1070,8 @@ class Eslestirici:
                 guven=0.60,
                 aday_sayisi=len(adaylar),
                 aciklama=(
-                    f"'{kullanilan}' soyadli calisan {self._etiket(sicil)} ayni dosyada "
-                    f"kesin eslesti; bu satir onun aile bireyi olabilir{ek_not}. Masraf "
+                    f"'{kullanilan}' soyadli calisan {self._etiket(sicil)} ayni calistirmadaki "
+                    f"bir faturada kesin eslesti; bu satir onun aile bireyi olabilir{ek_not}. Masraf "
                     "merkezi o calisandan devralindi, dogrulanmali."
                 ),
                 aday_siciller=adaylar[:AZAMI_ADAY],
@@ -1068,7 +1214,7 @@ class Eslestirici:
         if eslesme is None:
             eslesme = self._adim_tckn(satir, notlar)
         if eslesme is not None:
-            return self._bitir(eslesme, notlar)
+            return self._bitir(eslesme, notlar, satir)
 
         ham = satir.kisi_ham or ""
         norm = isim_normalize(ham)
@@ -1081,27 +1227,41 @@ class Eslestirici:
                     "Satirda kisi adi bulunamadi; masraf bir kisiye bagli degil "
                     "(organizasyon, celenk, genel hizmet vb)."
                 ),
-                notlar,
+                notlar, satir,
             )
 
         tokenlar = frozenset(norm.split(" "))
 
+        # 1C birebir eslesmesi BILINEN kimliktir; alt_kume/transliterasyon/prefix
+        # TAHMINDIR. Bilinen kimlik tahminden once denenir (olculdu: gercek
+        # veride bir Turk vatandasi transliterasyonla Ozbek calisana gidiyordu).
+        # 1C coklu aday verirse hemen donulmez; diger kademeler denenir, hicbiri
+        # tutmazsa 1C aday listesi kullanilir.
+        bekleyen: Eslesme | None = None
         for uretici in (
             lambda: self._adim_alias(norm, tokenlar),
             lambda: self._adim_harici(norm, tokenlar),
             lambda: self._adim_tam_isim(norm, tokenlar),
+            lambda: self._adim_yardimci_defter(norm, tokenlar),
             lambda: self._adim_alt_kume(tokenlar),
             lambda: self._adim_bitisik_ad(tokenlar),
             lambda: self._adim_transliterasyon(norm, tokenlar),
             lambda: self._adim_onek(tokenlar),
-            lambda: self._adim_yardimci_defter(norm, tokenlar),
             lambda: self._adim_ek_defter(satir, norm, tokenlar),
             lambda: self._adim_bulanik(norm, tokenlar),
             lambda: self._adim_aile(satir, norm, tokenlar),
         ):
             eslesme = uretici()
-            if eslesme is not None:
-                return self._bitir(eslesme, notlar)
+            if eslesme is None:
+                continue
+            if eslesme.yontem == "yardimci_defter" and eslesme.sicil is None:
+                if bekleyen is None:
+                    bekleyen = eslesme
+                continue
+            self._vatandaslik_notu(satir, eslesme, notlar)
+            return self._bitir(eslesme, notlar, satir)
+        if bekleyen is not None:
+            return self._bitir(bekleyen, notlar, satir)
 
         return self._bitir(
             bos_eslesme(
@@ -1109,8 +1269,32 @@ class Eslestirici:
                 "karsilik bulunamadi. Kisi grup sirketi calisani, taseron, dis danisman "
                 "veya yeni giren olabilir; inceleyip deftere ekleyin."
             ),
-            notlar,
+            notlar, satir,
         )
+
+    def _vatandaslik_notu(self, satir: GiderSatiri, eslesme: Eslesme, notlar: list[str]) -> None:
+        """Satirda TC kimlik varken tahmin kademesi yabanci uyruklu birine gittiyse uyar.
+
+        TCKN tasiyan satirdaki kisi Turk vatandasidir. alt_kume / transliterasyon
+        / prefix / bulanik tahmini vatandasligi Turkiye olmayan bir calisana
+        gidiyorsa eslesme buyuk olasilikla yanlistir; guven incelemeye indirilir.
+        """
+        if not tckn_normalize(satir.tckn_ham) or not eslesme.sicil:
+            return
+        if eslesme.yontem not in ("alt_kume", "transliterasyon", "prefix", "bulanik"):
+            return
+        kayit = self._defter.sicil_ile(eslesme.sicil) or {}
+        vatandaslik = str(kayit.get("vatandaslik") or "").strip()
+        if not vatandaslik:
+            return
+        from masraf.metin import ascii_katla
+        if ascii_katla(vatandaslik).upper() in _TURK_VATANDASLIK:
+            return
+        notlar.append(
+            f"Satirda TC kimlik var ama tahminle bulunan kisi {vatandaslik} vatandasi; "
+            "eslesme suphelidir, dogrulayin"
+        )
+        eslesme.guven = min(eslesme.guven, 0.75)
 
     def esle_toplu(self, satirlar: Sequence[GiderSatiri]) -> list[Eslesme]:
         """Bir dosyanin tamamini iki gecisli olarak eslestirir (SIRA BAGIMSIZ).
@@ -1143,18 +1327,27 @@ class Eslestirici:
     # Ic yardimcilar
     # ------------------------------------------------------------------
 
-    def _bitir(self, eslesme: Eslesme, notlar: list[str]) -> Eslesme:
+    def _bitir(self, eslesme: Eslesme, notlar: list[str],
+               satir: GiderSatiri | None = None) -> Eslesme:
         """Uyari notlarini aciklamaya ekler ve aile kanitini gunceller."""
         if notlar:
             eslesme.aciklama = f"{eslesme.aciklama} | Uyari: {'; '.join(notlar)}"
-        self._ogren(eslesme)
+        self._ogren(eslesme, satir)
         return eslesme
 
-    def _ogren(self, eslesme: Eslesme) -> None:
-        """Kesin eslesmeleri dosya ici aile kaniti olarak kaydeder."""
+    def _ogren(self, eslesme: Eslesme, satir: GiderSatiri | None = None) -> None:
+        """Kesin eslesmeleri calistirma ici aile kaniti olarak kaydeder.
+
+        Yalnizca KESIN yontemler (sicil, tckn, alias, tam_isim) ve yalnizca
+        fatura tipi kaynaklar kanit uretir. Saglik/katilimci listesine girmis
+        olmak, ayni soyadli birinin bileti icin 'birlikte seyahat etti' kaniti
+        degildir (olculdu: 6 satirin sonucu buna bagliydi).
+        """
         if not eslesme.sicil or eslesme.guven < OGRENME_ESIGI:
             return
-        if eslesme.yontem == "aile":
+        if eslesme.yontem not in KESIN_YONTEMLER or eslesme.aday_sayisi != 1:
+            return
+        if satir is not None and getattr(satir, "kaynak_tip", "") in KANIT_DISI_KAYNAKLAR:
             return
         kayit = self._defter.sicil_ile(eslesme.sicil)
         if not kayit:

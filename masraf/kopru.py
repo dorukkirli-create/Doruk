@@ -308,8 +308,9 @@ def alias_turet(satirlar: Iterable, defter, esik: int = _BENZERLIK_ESIGI) -> lis
         norm = isim_normalize(ad)
         if not norm or norm in sonuc:
             continue
-        # zaten kesin eslesenler icin alias uretmeye gerek yok
-        if defter.isimle_adaylar(norm):
+        # zaten kesin eslesenler icin alias uretmeye gerek yok (kelime sirasi
+        # farkli yazimlar da tam_isim kademesinde birebir eslesir)
+        if defter.isimle_adaylar(norm) or defter.token_ile_adaylar(frozenset(norm.split(" "))):
             continue
 
         uyan = _dogum_indeksi(defter).get(dogum) or []

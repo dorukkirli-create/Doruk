@@ -662,8 +662,12 @@ def _paylar(sonuc: Any, harita: Any = None) -> list[tuple]:
                 cozum["sirket"] or sirket, True, not_metni, oran,
             ))
         else:
-            # Etiket tuzel kisi adi: proje ayni, sirket degisiyor.
-            paylar.append((merkez, ad, etiket or sirket, haritada, not_metni, oran))
+            # Etiket tuzel kisi adi: proje ayni, sirket degisiyor. Etiket
+            # haritanin sirket koduna cevrilir (RENSTROYDETAL -> RSS); aksi
+            # halde Sirket Kirilimi'nde ayni tuzel kisi iki satir olur.
+            from masraf.masraf_merkezi import sirket_kanonik
+            kanonik = sirket_kanonik(etiket) if etiket else None
+            paylar.append((merkez, ad, kanonik or etiket or sirket, haritada, not_metni, oran))
     return paylar
 
 

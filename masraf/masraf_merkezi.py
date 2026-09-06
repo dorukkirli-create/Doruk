@@ -114,7 +114,34 @@ TUZEL_KISI_ETIKETLERI: frozenset[str] = frozenset({
     "KRONDEX",
     "YAKA LLC",
     "YAKA",
+    # Haritanin kendi sirket kodlari da tuzel kisidir.
+    "RSS",
+    "BSK",
+    "BSA",
+    "ULTK",
+    "RC",
 })
+
+#: Tuzel kisi etiketlerini haritanin sirket koduna ceviren sozluk. Kaynak
+#: dosyada 'RENSTROYDETAL 2/3' yazan pay, Sirket Kirilimi'nde 'RSS' altinda
+#: toplanmali; aksi halde ayni tuzel kisi iki satir olur (olculdu: 134,28 USD).
+SIRKET_KANONIK: dict[str, str] = {
+    "RENSTROYDETAL": "RSS", "RENSERVIS": "RSS", "RSD": "RSS", "RS": "RSS", "RSS": "RSS",
+    "RC PETER": "RC", "RC PETERSBURG": "RC", "RC MOSKOVA": "RC", "RC MOSCOW": "RC",
+    "ONE TOWER": "RC", "TOP TOWER": "RC", "RC": "RC",
+    "UST LUGA": "UST LUGA", "USTLUGA": "UST LUGA", "ULTK": "UST LUGA",
+    "RHI": "RHI", "RHI RUSSIA": "RHI",
+    "BSK": "BSK", "BSK MANAGEMENT": "BSK", "BSK MANAGEMENT GROUP": "BSK",
+    "BSA": "BSA", "SAREN": "SAREN", "KRONDEX": "KRONDEX", "YAKA LLC": "YAKA LLC", "YAKA": "YAKA LLC",
+}
+
+
+def sirket_kanonik(etiket: Any) -> str | None:
+    """Bir tuzel kisi etiketini haritanin sirket koduna cevirir; bilinmiyorsa None."""
+    anahtar = _anahtar(etiket)
+    if not anahtar:
+        return None
+    return SIRKET_KANONIK.get(anahtar)
 
 #: Kaynak dosyalarda gecen proje yazimlarinin personel verisindeki 'Gorev Yeri'
 #: karsiliklari. Kullanici CSV'sini kirletmemek icin kod tarafinda tutulur;
@@ -173,9 +200,12 @@ def _anahtar(deger: Any) -> str:
     """
     if deger is None:
         return ""
-    metin = ascii_katla(str(deger)).upper()
+    metin = str(deger)
+    # Tireler ascii_katla'dan ONCE bosluga cevrilir: en/em-dash ASCII'de
+    # yoktur ve katlama onlari siler ('A–B' -> 'AB' olur, olculdu).
     for karakter in _TIRE_KARAKTERLERI:
         metin = metin.replace(karakter, " ")
+    metin = ascii_katla(metin).upper()
     metin = metin.replace("(", " ").replace(")", " ")
     metin = metin.replace(".", " ").replace(",", " ").replace("&", " ")
     return " ".join(metin.split())
@@ -303,10 +333,18 @@ class MasrafMerkeziHaritasi:
     # ------------------------------------------------------------------
 
     def _indeksle(self) -> None:
-        """Arama indeksini kurar. Once yazilan kayit onceliklidir."""
+        """Arama indeksini kurar. Once gorev yerleri, sonra kod ve adlar.
+
+        Gorev yeri anahtari her zaman kazanir: bir satirin kodu baska satirin
+        gorev yeriyle cakisirsa gorev yeri sahibi bulunmali (golgeleme yok).
+        """
         self._index.clear()
         for kayit in self._kayitlar:
-            for aday in (kayit.gorev_yeri, kayit.kod, kayit.ad):
+            anahtar = _anahtar(kayit.gorev_yeri)
+            if anahtar:
+                self._index.setdefault(anahtar, kayit)
+        for kayit in self._kayitlar:
+            for aday in (kayit.kod, kayit.ad):
                 anahtar = _anahtar(aday)
                 if anahtar:
                     self._index.setdefault(anahtar, kayit)
@@ -315,6 +353,17 @@ class MasrafMerkeziHaritasi:
             kayit = self._index.get(_anahtar(hedef))
             if kayit is not None:
                 self._index.setdefault(_anahtar(yazim), kayit)
+
+    def _golgelenenler(self) -> list[str]:
+        """Kodu/adi baska satirin gorev yeriyle cakisan kayitlari listeler."""
+        gy = {_anahtar(k.gorev_yeri): k for k in self._kayitlar if _anahtar(k.gorev_yeri)}
+        cikti: list[str] = []
+        for k in self._kayitlar:
+            for aday in (k.kod, k.ad):
+                a = _anahtar(aday)
+                if a and a in gy and gy[a] is not k:
+                    cikti.append(f"'{aday}' ({k.gorev_yeri}) ~ gorev yeri '{gy[a].gorev_yeri}'")
+        return cikti
 
     @classmethod
     def yukle(cls, yol: str | Path) -> "MasrafMerkeziHaritasi":
@@ -327,13 +376,28 @@ class MasrafMerkeziHaritasi:
         if not hedef.exists():
             return cls([], kaynak=str(hedef), kaynak_var=False)
 
+        kodlama_uyarisi: str | None = None
         try:
             ham = hedef.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
+        except UnicodeDecodeError:
+            # Turkce Windows Excel'in 'CSV (virgulle ayrilmis)' kaydi cp1254'tur.
             try:
-                ham = hedef.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                return cls([], kaynak=str(hedef), kaynak_var=False)
+                ham = hedef.read_text(encoding="cp1254")
+                kodlama_uyarisi = (
+                    f"Masraf merkezi haritasi ({hedef.name}) UTF-8 degil, Windows-1254 "
+                    "olarak okundu. Excel'de 'CSV UTF-8' olarak kaydetmeniz onerilir."
+                )
+            except (OSError, UnicodeDecodeError):
+                try:
+                    ham = hedef.read_text(encoding="utf-8", errors="replace")
+                    kodlama_uyarisi = (
+                        f"Masraf merkezi haritasi ({hedef.name}) okunurken bozuk karakterler "
+                        "bulundu; Turkce harfli gorev yerleri cozulemeyebilir. Dosyayi UTF-8 kaydedin."
+                    )
+                except OSError:
+                    return cls([], kaynak=str(hedef), kaynak_var=False)
+        except OSError:
+            return cls([], kaynak=str(hedef), kaynak_var=False)
 
         satirlar = [s for s in ham.splitlines() if s.strip()]
         if not satirlar:
@@ -362,13 +426,21 @@ class MasrafMerkeziHaritasi:
                 "yanlis kaydedilmis; hicbir gorev yeri cozulemeyecek."))
 
         kayitlar: list[MasrafMerkezi] = []
+        gorulen_gy: dict[str, str] = {}
+        tekrarlar: list[str] = []
         for satir in okuyucu:
             gorev_yeri = al(satir, "gorev_yeri")
             if not gorev_yeri:
                 continue
             kod = al(satir, "masraf_merkezi_kodu") or gorev_yeri
             ad = al(satir, "masraf_merkezi_adi") or gorev_yeri
-            sirket = al(satir, "sirket") or None
+            # Sirket kodu normalize: 'ust luga' ile 'UST LUGA' ayni sirkettir.
+            sirket = (al(satir, "sirket") or "").strip().upper() or None
+            gy_anahtar = _anahtar(gorev_yeri)
+            if gy_anahtar in gorulen_gy:
+                tekrarlar.append(f"'{gorev_yeri}' (ilk satir: '{gorulen_gy[gy_anahtar]}')")
+            else:
+                gorulen_gy[gy_anahtar] = gorev_yeri
             kayitlar.append(
                 MasrafMerkezi(
                     gorev_yeri=gorev_yeri,
@@ -378,11 +450,27 @@ class MasrafMerkeziHaritasi:
                     aktif=_dogru_mu(al(satir, "aktif")),
                 )
             )
-        uyari = None
+        uyarilar: list[str] = []
+        if kodlama_uyarisi:
+            uyarilar.append(kodlama_uyarisi)
         if not kayitlar:
-            uyari = (f"Masraf merkezi haritasi ({hedef.name}) bos: basliklar dogru ama "
-                     "hicbir satir okunamadi.")
-        return cls(kayitlar, kaynak=str(hedef), kaynak_var=True, yukleme_uyarisi=uyari)
+            uyarilar.append(f"Masraf merkezi haritasi ({hedef.name}) bos: basliklar dogru ama "
+                            "hicbir satir okunamadi.")
+        if tekrarlar:
+            # Ayni gorev yeri iki kez yazildiysa ILK satir kazanir; kullanici
+            # duzeltmeyi sona eklerse etkisiz kalir. Bunu soylemek gerekir.
+            uyarilar.append(
+                f"Masraf merkezi haritasinda ayni gorev yeri birden fazla satirda: "
+                + "; ".join(tekrarlar[:5]) + ". Ilk satir gecerli sayildi; digerini silin."
+            )
+        harita = cls(kayitlar, kaynak=str(hedef), kaynak_var=True,
+                     yukleme_uyarisi=(" | ".join(uyarilar) if uyarilar else None))
+        golgeler = harita._golgelenenler()
+        if golgeler:
+            harita.yukleme_uyarisi = ((harita.yukleme_uyarisi + " | ") if harita.yukleme_uyarisi else "") + (
+                "Masraf merkezi haritasinda bir satirin kodu/adi baska bir satirin gorev yeriyle "
+                "cakisiyor, ikinci satir kendi gorev yeriyle bulunamaz: " + "; ".join(golgeler[:5]))
+        return harita
 
     # ------------------------------------------------------------------
     # Sorgular
@@ -414,12 +502,23 @@ class MasrafMerkeziHaritasi:
             return False
         if anahtar in TUZEL_KISI_ETIKETLERI:
             return True
-        # 'RHI 1/3 - RENSTROYDETAL 2/3' gibi paylasimli etiketler.
+        # 'RHI 1/3 - RENSTROYDETAL 2/3' gibi paylasimli etiketler: kelimeler
+        # bastan sona TAM tuzel kisi etiketleriyle (1-3 kelimelik) ortulmeli.
+        # Onek eslemesi ('R', 'U', 'SA') tuzel sayilirdi; kaldirildi.
         parcalar = [p for p in anahtar.replace("+", " ").split() if p.isalpha()]
-        return bool(parcalar) and all(
-            any(t.startswith(p) or p in t.split() for t in TUZEL_KISI_ETIKETLERI)
-            for p in parcalar
-        )
+        if not parcalar:
+            return False
+        i = 0
+        while i < len(parcalar):
+            uzunluk = 0
+            for n in (3, 2, 1):
+                if " ".join(parcalar[i:i + n]) in TUZEL_KISI_ETIKETLERI:
+                    uzunluk = n
+                    break
+            if not uzunluk:
+                return False
+            i += uzunluk
+        return True
 
     def eksikleri_bildir(self, gorev_yerleri: set) -> list[str]:
         """Haritada karsiligi olmayan gorev yerlerini sirali dondurur."""
@@ -481,7 +580,24 @@ def _yardimci_kaydi(yardimci: Any, sicil: str | None) -> dict | None:
         return None
 
 
-def _yardimci_es_isimliler(yardimci: Any, eslesme: Any, gorev_yeri: str | None) -> list[tuple[str, str]]:
+def _ayni_proje(harita: Any, a: Any, b: Any) -> bool:
+    """Iki gorev yeri metni ayni masraf merkezine mi cozuluyor?
+
+    Once harita kodu, harita cozemezse ham anahtar karsilastirilir.
+    """
+    if harita is not None:
+        try:
+            ca = harita.coz(a) if a else None
+            cb = harita.coz(b) if b else None
+        except Exception:  # noqa: BLE001
+            ca = cb = None
+        if ca and cb:
+            return ca["masraf_merkezi_kodu"] == cb["masraf_merkezi_kodu"]
+    return _anahtar(a or "") == _anahtar(b or "")
+
+
+def _yardimci_es_isimliler(yardimci: Any, eslesme: Any, gorev_yeri: str | None,
+                           harita: Any = None) -> list[tuple[str, str]]:
     """1C listesinde ayni isimli, FARKLI sicilli ve FARKLI projedeki kisiler.
 
     Returns:
@@ -502,7 +618,7 @@ def _yardimci_es_isimliler(yardimci: Any, eslesme: Any, gorev_yeri: str | None) 
         kayit = _yardimci_kaydi(yardimci, sicil)
         if not kayit or not kayit.get("gorev_yeri"):
             continue
-        if _anahtar(kayit["gorev_yeri"]) == _anahtar(gorev_yeri or ""):
+        if _ayni_proje(harita, kayit["gorev_yeri"], gorev_yeri):
             continue
         sonuc.append((str(kayit["gorev_yeri"]), str(kayit.get("sirket2") or kayit.get("sirket") or "?")))
     return sonuc
@@ -660,12 +776,6 @@ def masraf_merkezi_coz(
         # (Renservis, Renstroydetal, RC, One Tower, Top Tower) ancak orada.
         kayit = yardimci.donem_kaydi(eslesme.sicil, belge_tarihi)
     if kayit is None:
-        kayit = defter.sicil_ile(eslesme.sicil)
-        if kayit is not None:
-            uyarilar.append(
-                f"Sicil {eslesme.sicil} icin donem kaydi bulunamadi; en guncel kayit kullanildi."
-            )
-    if kayit is None:
         uyarilar.append(
             f"Sicil {eslesme.sicil} personel ana verisinde bulunamadi. "
             "Alias defterindeki sicil eski veya hatali olabilir."
@@ -700,9 +810,13 @@ def masraf_merkezi_coz(
     #    Kisinin projesi ve masraf merkezi aydan aya degisebilir.
     donem_eslesme = kayit.get("_donem_eslesme")
     if donem_eslesme == "yardimci_defter":
+        firma = kayit.get("sirket")
+        grup = kayit.get("sirket2")
+        sirket_metni = (f"sirket {grup}" + (f", 1C firmasi {firma}" if firma and firma != grup else "")
+                        if grup else f"sirket {firma}")
         uyarilar.append(
             f"Kisi ana personel verisinde yok, 1C personel listesinden alindi "
-            f"(sirket {kayit.get('sirket')}, proje {kayit.get('gorev_yeri')}). "
+            f"({sirket_metni}, proje {kayit.get('gorev_yeri')}). "
             "1C listesi tek tarihli oldugu icin gider ayindaki durum dogrulanamadi."
         )
     elif donem_eslesme == "tarihsiz":
@@ -711,37 +825,60 @@ def masraf_merkezi_coz(
             "Gider ayi dogrulanamadi."
         )
     elif donem_eslesme == "ilk_donem_oncesi":
-        uyarilar.append(
-            f"Gider tarihi ({_tarih_metni(belge_tarihi)}) kisinin ilk personel "
-            f"kaydindan ({_tarih_metni(donem)}) ONCE. Kisi o tarihte henuz ise "
-            "baslamamis; mobilizasyon veya aday seyahati olabilir. Ilk donemin "
-            "masraf merkezi kullanildi."
-        )
+        ise_giris = _gecerli_tarih(kayit.get("ise_giris_tarihi"))
+        if ise_giris is not None and belge_tarihi is not None and ise_giris <= belge_tarihi:
+            # Kisi zaten calisiyordu; personel dosyasi o ayi kapsamiyor.
+            uyarilar.append(
+                f"Gider tarihi ({_tarih_metni(belge_tarihi)}) personel dosyasinin bu kisi icin "
+                f"kapsadigi ilk donemden ({_tarih_metni(donem)}) once; kisi {_tarih_metni(ise_giris)} "
+                "tarihinden beri calisiyor, dosya o ayi icermiyor. Ilk donemin masraf merkezi "
+                "kullanildi; o aydaki projesi farkli olabilir."
+            )
+        else:
+            uyarilar.append(
+                f"Gider tarihi ({_tarih_metni(belge_tarihi)}) kisinin ilk personel "
+                f"kaydindan ({_tarih_metni(donem)}) ONCE. Kisi o tarihte henuz ise "
+                "baslamamis; mobilizasyon veya aday seyahati olabilir. Ilk donemin "
+                "masraf merkezi kullanildi."
+            )
     elif donem_eslesme == "onceki_donem":
-        mesaj = (
-            f"Kisinin gider ayinda ({_ay_metni(belge_tarihi)}) personel kaydi yok. "
-            f"Kayitli son donemi {_ay_metni(donem)}; o donemin masraf merkezi "
-            "kullanildi. Cikis masrafi ise dogru santiyedir, kontrol edin."
+        dosya_eski = (
+            son_donem is not None and belge_tarihi is not None
+            and _ay_basi_sonrasi(belge_tarihi, son_donem)
         )
+        if dosya_eski:
+            # Gider ayi personel dosyasinin son doneminden SONRA: kimsenin o
+            # ayda kaydi olamaz. Sorun kisi degil, dosyanin guncel olmamasi.
+            donem_eslesme = "personel_dosyasi_eski"
+            mesaj = (
+                f"Personel dosyasi {_ay_metni(son_donem)} ile bitiyor; gider ayinin "
+                f"({_ay_metni(belge_tarihi)}) kaydi henuz yok. Kisinin son donemi "
+                f"({_ay_metni(donem)}) kullanildi. Personel dosyasini guncelleyip tekrar calistirin."
+            )
+        elif kategori == "Cikis":
+            mesaj = (
+                f"Kisinin gider ayinda ({_ay_metni(belge_tarihi)}) personel kaydi yok; "
+                f"isten ayrilmis. Kayitli son donemi {_ay_metni(donem)}; o donemin masraf "
+                "merkezi kullanildi. Cikis masrafi ise dogru santiyedir, kontrol edin."
+            )
+        else:
+            mesaj = (
+                f"Kisinin gider ayinda ({_ay_metni(belge_tarihi)}) personel kaydi yok ve "
+                f"cikis kaydi da yok; kayit {_ay_metni(donem)} donemiyle kesilmis. O donemin "
+                "masraf merkezi kullanildi; kisi baska sirkete/projeye gecmis olabilir, kontrol edin."
+            )
         # Ana veriden cikmis ama 1C listesinde BASKA bir projede aktifse,
         # muhtemelen grup sirketine gecmistir; masraf oraya ait olabilir.
+        # Karsilastirma harita KODU uzerinden yapilir: 'Reshetnikova Office'
+        # ile 'St. Petersburg Office' ayni projedir (olculdu: 2 yanlis alarm).
         baska = _yardimci_kaydi(yardimci, eslesme.sicil)
-        if baska and baska.get("gorev_yeri") and _anahtar(baska["gorev_yeri"]) != _anahtar(gorev_yeri or ""):
+        if baska and baska.get("gorev_yeri") and not _ayni_proje(harita, baska["gorev_yeri"], gorev_yeri):
             mesaj += (
                 f" DIKKAT: 1C listesinde kisi '{baska['gorev_yeri']}' "
                 f"({baska.get('sirket2') or baska.get('sirket') or '?'}) projesinde gorunuyor; "
                 "grup sirketine gecmis olabilir, masraf oraya ait olabilir."
             )
         uyarilar.append(mesaj)
-    elif (
-        son_donem is not None
-        and belge_tarihi is not None
-        and _ay_basi_sonrasi(belge_tarihi, son_donem)
-    ):
-        uyarilar.append(
-            f"Belge tarihi ({_tarih_metni(belge_tarihi)}) personel dosyasindaki "
-            f"son donemden ({_tarih_metni(son_donem)}) sonra; personel dosyasini guncelleyin."
-        )
 
     # 2) Kisi belge tarihinden once isten ayrilmis mi?
     if (
@@ -825,7 +962,7 @@ def masraf_merkezi_coz(
     #    baska bir kaydi varsa otomatik kabul edilmez. Olculdu: Temmuz 2026'da
     #    iki satir boyle; ikisi de ULF-GPC-RHI yerine RSS Lytkarino olabilir.
     if eslesme.yontem in _ISIM_TABANLI_YONTEMLER and eslesme.sicil:
-        esler = _yardimci_es_isimliler(yardimci, eslesme, gorev_yeri)
+        esler = _yardimci_es_isimliler(yardimci, eslesme, gorev_yeri, harita)
         if esler:
             uyarilar.append(
                 "1C listesinde ayni isimli baska kisi var: "
