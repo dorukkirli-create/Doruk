@@ -9,7 +9,7 @@ sayfasina, kapaga ve calistirma kaydina (OZET.txt) yazilir.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 #: Durum etiketleri. ASCII tutulur; Excel ve konsolda oldugu gibi gorunur.
@@ -21,12 +21,17 @@ AYNI_ICERIK = "AYNI ICERIK"    # daha once okunan dosyayla birebir ayni; cift sa
 OKUNAMADI = "OKUNAMADI"        # acilamadi / hata / parola
 SATIR_YOK = "SATIR YOK"        # acildi ama hicbir gider satiri cikmadi
 MAIL = "MAIL"                  # Outlook mesaji (kapsayici); ekleri ayri kayitlardir
+ARSIV = "ARSIV"                # zip arsivi (kapsayici); icindekiler ayri kayitlardir
 PERSONEL = "PERSONEL"          # personel verisine benziyor, fatura olarak islenmedi
 
 #: Dagilima giren durumlar. Digerleri tutar tasimaz ya da tasisa da sayilmaz.
 DAGILIMA_GIREN = frozenset({OKUNDU})
 
 _KUTUK_TIPLERI = frozenset({"referans_liste", "energo_saglik", "koc_katilimci"})
+#: Disaridan kullanilan adlar. Mahsuplasma detay listelerini de kutuk sayar
+#: (tutar tasimazlar); envanter onlari ayri durumla (DETAY LISTESI) gosterir.
+KUTUK_TIPLERI = _KUTUK_TIPLERI
+DETAY_TIPLERI = frozenset({"energo_assessment_detay"})
 
 
 @dataclass
@@ -68,7 +73,7 @@ def satirlardan_kayit(ad: str, kaynak: str, tur: str, satirlar: Iterable[Any],
     elif tipler and set(tipler) <= {"energo_assessment_detay"}:
         durum, sebep = DETAY_LISTESI, "tutar kolonu yok; kisiler yansitma dosyasiyla capraz kontrol edildi"
     elif tipler and set(tipler) <= _KUTUK_TIPLERI:
-        durum, sebep = KUTUK, "kisi listesi; defter beslemesinde kullanildi, dagilima girmedi"
+        durum, sebep = KUTUK, "kisi listesi; dagilima girmedi (defter beslemesi sonucu uyarilarda)"
     else:
         durum = OKUNDU
         sebep = "" if len(tutarli) == len(satirlar) else f"{len(satirlar) - len(tutarli)} satirda tutar okunamadi"
@@ -77,7 +82,9 @@ def satirlardan_kayit(ad: str, kaynak: str, tur: str, satirlar: Iterable[Any],
         durum=durum, sebep=sebep, satir=len(satirlar), tutarli_satir=len(tutarli),
         tutar=round(sum(tutarli), 2) if tutarli else None,
         para_birimi=(paralar.most_common(1)[0][0] if paralar else None),
-        boyut=boyut, ozet=(ozet[:12] if ozet else None),
+        # Tam sha256 saklanir: calistirici bunu ISLENEN_DOSYALAR.txt'ye yazar ki
+        # ayni ek sonradan tek basina gelirse 'daha once islendi' denebilsin.
+        boyut=boyut, ozet=(ozet or None),
     )
 
 

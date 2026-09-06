@@ -274,10 +274,32 @@ class UctanUcaTest(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_kullanici_defterlerine_yazilmadi(self):
-        # ogrenmeyi_kaydet=False iken repo icindeki veri/ dizini degismemeli.
+        """ogrenmeyi_kaydet=False iken hicbir defter diske yazilmaz.
+
+        Calistirma gecici veri dizinine isaret eder; orada calistirmadan
+        sonra yalnizca kopyalanan masraf merkezi haritasi bulunmali. Ek
+        kisi, TC koprusu, alias ve harici defterleri (TC kimlik tasirlar)
+        ve gecmis/ yedek dizini OLUSMAMALI. Eski surumde bu test yalnizca
+        dizinin var oldugunu olcuyordu; kopru.py bayragi yok sayip yaziyordu.
+        """
         gecici = Path(self.gecici_veri)
         self.assertTrue(gecici.exists())
         self.assertNotEqual(gecici.resolve(), (KOK / "veri").resolve())
+        # Defterler kurulurken bos (yalnizca baslik satirli) CSV'ler olusur;
+        # bu kisisel veri degildir. Kayit iceren dosya ve gecmis/ yedegi olmamali.
+        dolu = []
+        for p in gecici.rglob("*"):
+            if not p.is_file() or p.name == "masraf_merkezi_haritasi.csv":
+                continue
+            satirlar = [s for s in p.read_text(encoding="utf-8-sig", errors="ignore").splitlines() if s.strip()]
+            if len(satirlar) > 1:
+                dolu.append(f"{p.relative_to(gecici).as_posix()} ({len(satirlar) - 1} kayit)")
+        self.assertEqual(dolu, [], dolu)
+        self.assertFalse((gecici / "gecmis").exists())
+        # Bellekte beslenen defterler kaydedilmemis olarak isaretli kalir.
+        ist = self.boru.defterler.istatistik() if hasattr(self.boru, "defterler") else {}
+        if isinstance(ist, dict) and "kaydedilmemis" in ist:
+            self.assertIsInstance(ist["kaydedilmemis"], list)
 
 
 if __name__ == "__main__":

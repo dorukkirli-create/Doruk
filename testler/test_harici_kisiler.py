@@ -34,8 +34,8 @@ class IsimImzasiTest(unittest.TestCase):
 
     def test_soyad_one_alinmis_hali(self):
         self.assertEqual(
-            isim_imzasi("DEMIRALP AHMETCAN"),
-            isim_imzasi("AHMET CAN DEMIRALP"),
+            isim_imzasi("ORNEKSOY AHMETCAN"),
+            isim_imzasi("AHMET CAN ORNEKSOY"),
         )
 
     def test_farkli_kisiler_farkli_imza(self):

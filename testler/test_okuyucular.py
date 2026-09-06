@@ -31,7 +31,7 @@ try:
 except ImportError:
     MODUL_VAR = False
 
-from testler.altin import altin, altin_veya_none
+from testler.altin import altin
 
 ORNEK = KOK / "ornek_veri"
 ANTIK = ORNEK / "antik_travel" / "ANTIK_CARI_TEMMUZ_2026.xls"

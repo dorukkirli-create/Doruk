@@ -13,16 +13,13 @@ import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from testler.altin import altin, altin_veya_none
+from testler.altin import altin
 
 try:
     from masraf.kopru import (
-        KopruAdayi,
         alias_turet,
-        aliaslari_deftere_yaz,
         kopru_ozeti,
         kopru_turet,
-        kopruyu_deftere_yaz,
     )
 
     MODUL_VAR = True

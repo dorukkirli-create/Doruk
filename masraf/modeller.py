@@ -19,6 +19,10 @@ KAYNAK_TIPLERI: frozenset[str] = frozenset({
     "energo_saglik",
     "koc_katilimci",
     "genel",
+    # Kesif katmaninin urettigi kapsayici/kutuk tipleri: satir uretmezler
+    # ama envanter ve dosya tipi kararlarinda gecerler.
+    "referans_liste",
+    "outlook_msg",
 })
 
 # Gider tipleri.
@@ -46,6 +50,9 @@ YONTEMLER: frozenset[str] = frozenset({
     "bulanik",
     "aile",
     "ek_defter",
+    # Harici kisiler defteri (danisman, misafir): sicil yok, masraf merkezi
+    # defterden gelir.
+    "harici",
     "yok",
 })
 

@@ -12,9 +12,15 @@ Dort ayri sablon, dort ayri fonksiyon:
     koc_katilimci_oku()   Koc Universitesi katilimci listesi. ID kolonu
                           dogrudan SICIL NUMARASIDIR (en guvenilir eslesme).
 
-Ortak kurallar: sayfa ve kolon adlari ASCII katlanmis karsilastirma ile
-esnek cozulur, kisi adi bos olan ozet/toplam satirlari atlanir, TCKN 11
-haneli rakam olarak dogrulanir, sicil metne cevrilip '.0' eki atilir.
+Ortak kurallar: sayfa ADIYLA degil ICERIGIYLE bulunur (baslik satirinda
+kisi kolonu + sablona ozgu kolonlar olan sayfa); kolon adlari ASCII katlanmis
+'iceren' karsilastirma ile esnek cozulur ('Katilimci Adi' de 'Katilimci'
+sayilir), kisi adi bos olan ozet/toplam satirlari atlanir, TCKN 11 haneli
+rakam olarak dogrulanir, sicil metne cevrilip '.0' eki atilir.
+
+Olculdu: 'Kisi Listesi' sayfasi 'Liste' olarak yeniden adlandirilinca ya da
+'Paket' basligi 'Program' olunca dosya sessizce genel okuyucuya dusuyor, TL
+'Toplam' kolonu USD gibi dagitiliyordu (250.260 yerine 6.505,64 USD).
 """
 
 from __future__ import annotations
@@ -22,11 +28,12 @@ from __future__ import annotations
 import re
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Sequence
 
 from masraf.kayit import sicil_normalize
 from masraf.modeller import GiderSatiri
 from masraf.okuyucular.genel import (
+    BASLIK_ARAMA_SINIRI,
     baslik_satiri_bul,
     calisma_oku,
     dolu_hucre_sayisi,
@@ -82,6 +89,52 @@ def _sayfa_satirlari(
     return ad, (calisma.satirlar(ad) if ad else [])
 
 
+def _baslik_ara(
+    calisma: Any,
+    gerekli: Sequence[Sequence[str]],
+    secmeli: Sequence[Sequence[str]] = (),
+    secmeli_en_az: int = 0,
+    haric_sayfalar: Iterable[str] = (),
+) -> tuple[str | None, int, dict[str, int]]:
+    """Sayfayi ve baslik satirini ADIYLA degil ICERIGIYLE bulur.
+
+    Her sayfanin ilk BASLIK_ARAMA_SINIRI satiri denenir: 'gerekli' gruplarinin
+    HER BIRINDEN en az bir kolon adi (normalize edilmis, iceren eslesme) ve
+    'secmeli' gruplarindan en az 'secmeli_en_az' tanesi ayni satirda
+    bulunuyorsa o satir basliktir. Sayfalar calisma kitabi sirasiyla denenir,
+    ilk eslesen kazanir.
+
+    Boylece tedarikci sayfayi 'Kisi Listesi' yerine 'Liste' diye adlandirsa,
+    'Katilimci' basligini 'Katilimci Adi' yapsa da sablon taninir; ama kisi
+    kolonu olmayan 'Fatura Detay' gibi ozet sayfalari secilmez.
+
+    Returns:
+        (sayfa adi, baslik satiri indeksi, kolon haritasi); bulunamazsa
+        (None, -1, {}).
+    """
+    haric = set(haric_sayfalar)
+    for sayfa_adi in calisma.sayfa_adlari:
+        if sayfa_adi in haric:
+            continue
+        satirlar = calisma.satirlar(sayfa_adi)
+        for i in range(min(len(satirlar), BASLIK_ARAMA_SINIRI)):
+            harita = kolon_haritasi(satirlar[i])
+            if len(harita) < 2:
+                continue
+            if not all(kolon_ara(harita, *grup) is not None for grup in gerekli):
+                continue
+            bulunan = sum(1 for grup in secmeli if kolon_ara(harita, *grup) is not None)
+            if bulunan < secmeli_en_az:
+                continue
+            return sayfa_adi, i, harita
+    return None, -1, {}
+
+
+def _kolon_etiketleri(*gruplar: Sequence[str]) -> str:
+    """Kullaniciya gosterilecek 'beklenen kolonlar' metni."""
+    return " ve ".join("'" + "' / '".join(g) + "'" for g in gruplar)
+
+
 def _hucre_alici(satir: list[Any]):
     """Satir icin guvenli indeksli hucre okuyucu uretir."""
 
@@ -100,23 +153,31 @@ def _hucre_alici(satir: list[Any]):
 _FATURA_NO_DESENI = re.compile(r"\b([A-Z]{2,4}\d{8,})\b")
 
 
-def _assessment_fatura_ozeti(calisma: Any) -> dict[str, float]:
-    """'Fatura Detay' sayfasindan fatura numarasi bazinda Energo Payi toplamini cikarir.
+#: Assessment fatura detay sayfasinin ayirt edici kolonlari.
+_ASS_DETAY_PAY = ("energo payi", "pay")
+_ASS_DETAY_METIN = ("metin", "aciklama", "fatura")
+
+
+def _assessment_fatura_ozeti(calisma: Any, kisi_sayfasi: str | None = None) -> dict[str, float]:
+    """Fatura detay sayfasindan fatura numarasi bazinda Energo Payi toplamini cikarir.
+
+    Sayfa adiyla degil icerigiyle bulunur: 'Energo Payi' (ya da 'Pay') ve
+    'Metin' kolonlarini birlikte tasiyan ilk sayfa. Kisi listesi sayfasi
+    disarida tutulur ('Fatura Numarasi' kolonu 'fatura' adayina uyar).
 
     Satirlar: belge tarihi | yerel tutar | para birimi | USD | 'USD' | Energo Payi | Metin.
     Fatura numarasi 'Metin' kolonundadir ('ASS2026000002187 - AS ...'); toplam
     satirinda metin bos oldugu icin dogal olarak atlanir.
     """
-    ad = sayfa_sec(calisma.sayfa_adlari, "Fatura Detay", "Fatura Detayi")
+    ad, baslik_i, harita = _baslik_ara(
+        calisma, (_ASS_DETAY_PAY, _ASS_DETAY_METIN),
+        haric_sayfalar=[kisi_sayfasi] if kisi_sayfasi else (),
+    )
     if ad is None:
         return {}
     satirlar = calisma.satirlar(ad)
-    baslik_i = baslik_satiri_bul(satirlar, aranan=("Energo Payi", "Energo Payı", "Metin"))
-    if baslik_i < 0:
-        return {}
-    harita = kolon_haritasi(satirlar[baslik_i])
-    i_pay = kolon_ara(harita, "energo payi", "pay")
-    i_metin = kolon_ara(harita, "metin", "aciklama", "fatura")
+    i_pay = kolon_ara(harita, *_ASS_DETAY_PAY)
+    i_metin = kolon_ara(harita, *_ASS_DETAY_METIN)
     if i_pay is None or i_metin is None:
         return {}
     ozet: dict[str, float] = {}
@@ -137,8 +198,22 @@ def _dosya_adindan_fatura_no(dosya_adi: str) -> str | None:
     return m.group(1) if m else None
 
 
+#: Assessment kisi listesi: kisi kolonu ZORUNLU, sablona ozgu kolonlardan en
+#: az ikisi bulunmali. Tek bir ayirt edici kolon (orn. arabuluculuk
+#: listesindeki 'Fatura No') bu sablona benzetmeye yetmez.
+_ASS_KISI = ("katilimci", "personel", "ad soyad", "adi soyadi", "isim")
+_ASS_AYIRT_EDICI: tuple[tuple[str, ...], ...] = (
+    ("paket",), ("energo payi", "pay"), ("uygulama turu",), ("uygulama yeri",),
+    ("yansitma",), ("firma yetkilisi",), ("fatura numarasi", "fatura no"),
+)
+
+
 def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
-    """Assessment yansitma dosyasinin 'Kisi Listesi' sayfasini okur.
+    """Assessment yansitma dosyasinin kisi listesi sayfasini okur.
+
+    Sayfa adiyla degil icerigiyle bulunur: baslik satirinda 'Katilimci'
+    (ya da 'Personel' / 'Ad Soyad') ve 'Paket' / 'Energo Payi' / 'Uygulama
+    Turu' gibi sablona ozgu kolonlardan en az ikisi olan ilk sayfa.
 
     Kisi adi 'Katilimci' kolonunda AD SOYAD sirasiyla bulunur. Tutar olarak
     kisi satirindaki 'Energo Payi' (USD) alinir; fatura toplami ve USD
@@ -147,16 +222,13 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
     """
     p = Path(yol)
     calisma = calisma_oku(p)
-    sayfa_adi, satirlar = _sayfa_satirlari(calisma, "Kisi Listesi", "Katilimci Listesi")
-    if not satirlar:
+    sayfa_adi, baslik_i, harita = _baslik_ara(
+        calisma, (_ASS_KISI,), _ASS_AYIRT_EDICI, secmeli_en_az=2)
+    if sayfa_adi is None or baslik_i < 0:
         return []
+    satirlar = calisma.satirlar(sayfa_adi)
 
-    baslik_i = baslik_satiri_bul(satirlar, aranan=("Katilimci", "Katılımcı"))
-    if baslik_i < 0:
-        return []
-    harita = kolon_haritasi(satirlar[baslik_i])
-
-    i_katilimci = kolon_ara(harita, "katilimci", "personel", "ad soyad")
+    i_katilimci = kolon_ara(harita, *_ASS_KISI)
     if i_katilimci is None:
         return []
     i_tarih = kolon_ara(harita, "tarih", icerir=False)
@@ -183,7 +255,7 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
     dosya_fatura_no = _dosya_adindan_fatura_no(p.name)
     # Yansitma dosyasinin 'Fatura Detay' sayfasi fatura basina Energo Payi'ni
     # beyan eder; kisi satirlarinin toplamiyla kurusuna kadar karsilastirilir.
-    fatura_ozeti = _assessment_fatura_ozeti(calisma) if not detay_listesi else {}
+    fatura_ozeti = _assessment_fatura_ozeti(calisma, sayfa_adi) if not detay_listesi else {}
 
     sonuclar: list[GiderSatiri] = []
     for r in range(baslik_i + 1, len(satirlar)):
@@ -252,23 +324,52 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
 # 2) Arabuluculuk yansitma
 # --------------------------------------------------------------------------
 
-def _arabulucu_fatura_ozeti(calisma: Any) -> dict[str, float]:
-    """'Fatura Detay' sayfasindan sirket bazinda Energo Payi toplamini cikarir.
+#: Arabuluculuk fatura detay sayfasinin ayirt edici kolonlari. Pay kolonu iki
+#: kademede aranir: once 'Energo Payi' / 'Pay (USD)', o yoksa 'Fatura Tutari
+#: (USD)'. Tek listede aranamaz: kolon_ara once BUTUN adaylarin tam
+#: eslesmesine bakar, 'Fatura Tutari ( USD )' tam eslesip 'Pay (USD)'nin
+#: onune gecer ve fatura tutari pay diye dagitilir (olculdu: 15 yerine 5,25).
+_ARA_DETAY_YER = ("masraf yeri", "masraf merkezi", "sirket")
+_ARA_DETAY_PAY = ("energo payi", "pay")
+_ARA_DETAY_PAY_YEDEK = ("fatura tutari usd",)
 
-    Ozet/pivot satirlari 'Masraf yeri' bos oldugu icin dogal olarak atlanir.
+
+def _arabulucu_fatura_ozeti(
+    calisma: Any, kisi_sayfasi: str | None = None
+) -> tuple[dict[str, float], str | None]:
+    """Fatura detay sayfasindan sirket bazinda Energo Payi toplamini cikarir.
+
+    Sayfa adiyla degil icerigiyle bulunur: 'Masraf yeri' (ya da 'Sirket')
+    ve 'Energo Payi' (ya da 'Pay') kolonlarini birlikte tasiyan ilk sayfa;
+    kisi listesi sayfasi disarida tutulur. Ozet/pivot satirlari 'Masraf
+    yeri' bos oldugu icin dogal olarak atlanir.
+
+    Returns:
+        (sirket -> toplam, sebep). Sayfa bulunamadiysa ya da hicbir satirda
+        tutar okunamadiysa sebep, finansciya ne aranip ne bulunamadigini
+        soyler; satir aciklamasina bu metin yazilir. Olculdu: 'Fatura Detay'
+        sayfasi 'Ozet' olunca 25 kisinin tutari None kaliyor ve aciklama
+        yaniltici bicimde 'eslesen masraf yeri yok' diyordu.
     """
-    ad = sayfa_sec(calisma.sayfa_adlari, "Fatura Detay", "Fatura Detayi")
+    ad, baslik_i, harita = _baslik_ara(
+        calisma, (_ARA_DETAY_YER, _ARA_DETAY_PAY + _ARA_DETAY_PAY_YEDEK),
+        haric_sayfalar=[kisi_sayfasi] if kisi_sayfasi else (),
+    )
     if ad is None:
-        return {}
+        digerleri = [a for a in calisma.sayfa_adlari if a != kisi_sayfasi]
+        return {}, (
+            "fatura detay sayfasi bulunamadi: beklenen kolonlar "
+            + _kolon_etiketleri(("Masraf yeri", "Sirket"), ("Energo Payi", "Pay"))
+            + " birlikte hicbir sayfada yok"
+            + (f" (bakilan sayfalar: {', '.join(digerleri)})" if digerleri else "")
+        )
     satirlar = calisma.satirlar(ad)
-    baslik_i = baslik_satiri_bul(satirlar, aranan=("Masraf yeri", "Energo Payi"))
-    if baslik_i < 0:
-        return {}
-    harita = kolon_haritasi(satirlar[baslik_i])
-    i_yer = kolon_ara(harita, "masraf yeri", "masraf merkezi", "sirket")
-    i_pay = kolon_ara(harita, "energo payi", "fatura tutari usd", "pay")
-    if i_yer is None or i_pay is None:
-        return {}
+    i_yer = kolon_ara(harita, *_ARA_DETAY_YER)
+    i_pay = kolon_ara(harita, *_ARA_DETAY_PAY)
+    if i_pay is None:
+        i_pay = kolon_ara(harita, *_ARA_DETAY_PAY_YEDEK)
+    if i_yer is None or i_pay is None:  # _baslik_ara garanti eder; savunma
+        return {}, f"fatura detay sayfasi ('{ad}') bulundu ama kolonlari cozulemedi"
 
     ozet: dict[str, float] = {}
     for r in range(baslik_i + 1, len(satirlar)):
@@ -279,7 +380,13 @@ def _arabulucu_fatura_ozeti(calisma: Any) -> dict[str, float]:
         if anahtar is None or tutar is None:
             continue
         ozet[anahtar] = ozet.get(anahtar, 0.0) + tutar
-    return ozet
+    if not ozet:
+        return {}, (
+            f"fatura detay sayfasi ('{ad}') bulundu ama hicbir satirda masraf yeri "
+            "ve tutar birlikte okunamadi (hucreler bos ya da formul sonucu "
+            "kaydedilmemis olabilir)"
+        )
+    return ozet, None
 
 
 def _kurusa_bol(toplam: float, adet: int) -> list[float]:
@@ -294,31 +401,46 @@ def _kurusa_bol(toplam: float, adet: int) -> list[float]:
     return [(taban + (1 if i < artik else 0)) / 100 for i in range(adet)]
 
 
+#: Arabuluculuk kisi listesi: kisi kolonu ve (arabulucu | TCKN | proje)
+#: zorunlu; sablona ozgu kolonlardan en az ikisi bulunmali. 'Ad Soyad' +
+#: 'Arabulucu Ucreti' basligi tasiyan sade bir gider dosyasi bu sablona
+#: benzetilmez (tek ayirt edici kolon), genel okuyucuya birakilir.
+_ARA_KISI = ("personel", "ad soyad", "adi soyadi", "katilimci", "isim")
+_ARA_ZORUNLU_BIRI = ("arabulucu", "personel t c", "tckn", "tc kimlik no", "proje")
+_ARA_AYIRT_EDICI: tuple[tuple[str, ...], ...] = (
+    ("arabulucu",), ("personel t c", "tckn", "tc kimlik no"),
+    ("proje", "santiye", "masraf yeri"), ("ilgili sirket", "sirket"),
+    ("yetkili",), ("fatura no", "fatura numarasi"),
+)
+
+
 def arabulucu_oku(yol: str | Path) -> list[GiderSatiri]:
-    """Arabuluculuk yansitma dosyasinin 'Kisi Listesi' sayfasini okur.
+    """Arabuluculuk yansitma dosyasinin kisi listesi sayfasini okur.
 
     Bu sablonda PERSONEL T.C. (TCKN) ve PROJE kolonlari vardir; PROJE
     degerleri personel ana verisindeki 'Gorev Yeri' degerleriyle birebir
     ayni DEGILDIR, esleme tablosu gerektirir (veri/masraf_merkezi_haritasi.csv).
 
-    Kisi Listesi sayfasinda tutar kolonu bulunmadigi icin tutar, 'Fatura
-    Detay' sayfasindaki sirket bazli Energo Payi toplaminin o sirkete ait
+    Kisi listesi sayfasi adiyla degil icerigiyle bulunur: baslik satirinda
+    kisi kolonu ('Personel' / 'Ad Soyad'), 'Arabulucu' / 'Personel T.C.' /
+    'Proje' kolonlarindan biri ve sablona ozgu kolonlardan en az ikisi.
+
+    Kisi listesi sayfasinda tutar kolonu bulunmadigi icin tutar, fatura
+    detay sayfasindaki sirket bazli Energo Payi toplaminin o sirkete ait
     kisi sayisina esit bolunmesiyle hesaplanir; yontem ek['tutar_yontemi']
-    icinde acikca belirtilir. Eslesen masraf yeri yoksa tutar None kalir.
+    icinde acikca belirtilir. Fatura detay sayfasi bulunamazsa ya da
+    eslesen masraf yeri yoksa tutar None kalir ve sebep ayni alana yazilir.
     """
     p = Path(yol)
     calisma = calisma_oku(p)
-    sayfa_adi, satirlar = _sayfa_satirlari(calisma, "Kisi Listesi", "Personel Listesi")
-    if not satirlar:
+    sayfa_adi, baslik_i, harita = _baslik_ara(
+        calisma, (_ARA_KISI, _ARA_ZORUNLU_BIRI), _ARA_AYIRT_EDICI, secmeli_en_az=2)
+    if sayfa_adi is None or baslik_i < 0:
         return []
-
-    baslik_i = baslik_satiri_bul(satirlar, aranan=("PERSONEL", "ARABULUCU"))
-    if baslik_i < 0:
-        return []
-    harita = kolon_haritasi(satirlar[baslik_i])
+    satirlar = calisma.satirlar(sayfa_adi)
 
     i_tckn = kolon_ara(harita, "personel t c", "tckn", "tc kimlik no", "kimlik no")
-    i_personel = kolon_ara(harita, "personel", "ad soyad", "adi soyadi")
+    i_personel = kolon_ara(harita, *_ARA_KISI)
     if i_personel is not None and i_personel == i_tckn:
         # 'personel' anahtari 'personel t c' kolonuna dusmus olabilir
         i_personel = harita.get("personel")
@@ -343,7 +465,7 @@ def arabulucu_oku(yol: str | Path) -> list[GiderSatiri]:
             continue
         ham_satirlar.append((r, satir))
 
-    fatura_ozeti = _arabulucu_fatura_ozeti(calisma)
+    fatura_ozeti, detay_sebebi = _arabulucu_fatura_ozeti(calisma, sayfa_adi)
     sayimlar: dict[str, int] = {}
     for _, satir in ham_satirlar:
         anahtar = _sirket_anahtari(_hucre_alici(satir)(i_sirket))
@@ -383,7 +505,14 @@ def arabulucu_oku(yol: str | Path) -> list[GiderSatiri]:
         sirket = kopru.get(sirket_ham, sirket_ham)
 
         tutar: float | None = None
-        yontem = "fatura detayinda eslesen masraf yeri yok"
+        if detay_sebebi:
+            yontem = detay_sebebi
+        else:
+            yontem = (
+                f"fatura detayinda eslesen masraf yeri yok: kisi listesinde "
+                f"'{sirket_ham or '-'}' yaziyor, detaydaki masraf yerleri: "
+                + ", ".join(sorted(fatura_ozeti))
+            )
         if sirket in paylar:
             tutar = paylar[sirket][pay_sirasi[sirket]]
             pay_sirasi[sirket] += 1

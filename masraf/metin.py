@@ -115,8 +115,8 @@ def isim_normalize(s: str) -> str:
 
     Buyuk harf + ASCII katlama + sadece harf ve bosluk + tek bosluk.
 
-    >>> isim_normalize("Demiralp, Ahmet Can")
-    'DEMIRALP AHMET CAN'
+    >>> isim_normalize("Orneksoy, Ahmet Can")
+    'ORNEKSOY AHMET CAN'
     """
     if not s:
         return ""
@@ -153,7 +153,7 @@ def isim_tokenlari(s: str) -> frozenset[str]:
     Sirasiz olmasi 'SOYAD AD' ile 'AD SOYAD' yazimlarinin ayni kumeye
     dusmesini saglar.
 
-    >>> isim_tokenlari("Demiralp Ahmet Can") == frozenset({"DEMIRALP", "AHMET", "CAN"})
+    >>> isim_tokenlari("Orneksoy Ahmet Can") == frozenset({"ORNEKSOY", "AHMET", "CAN"})
     True
     """
     norm = isim_normalize(s)
@@ -268,7 +268,7 @@ def translit_varyantlari(s: str) -> set[str]:
     carpimini alir. Kombinatoryal patlamayi onlemek icin en fazla 64 varyant
     dondurur; normalize edilmis orijinal her zaman kumededir.
 
-    >>> "YILMAZ GOKHAN" in translit_varyantlari("IYLMAZ GEKHAN")
+    >>> "ORNEKTAS GOKHAN" in translit_varyantlari("IYLMAZ GEKHAN")
     True
     """
     norm = isim_normalize(s)
@@ -409,8 +409,8 @@ def kisi_metnini_temizle(s: str) -> str:
     anahtar kelimesinden itibaren kesilir), guzergah kodlari ve kalan rakamlar
     atilir; sonuc buyuk harf + ASCII olarak dondurulur.
 
-    >>> kisi_metnini_temizle("TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI")
-    'DEMIRALP AHMETCAN'
+    >>> kisi_metnini_temizle("TK1234567890 ORNEKSOY/AHMETCAN MR  IST-CDG BILET BEDELI")
+    'ORNEKSOY AHMETCAN'
     """
     if not s:
         return ""

@@ -193,6 +193,7 @@ def tanilama(yol: str | Path, veri_dizini: str | Path = "veri") -> dict:
         calisma_oku,
         hucre_metni,
         kolon_ara,
+        kolon_haritasi,
     )
 
     hedef = Path(yol)
@@ -236,11 +237,22 @@ def tanilama(yol: str | Path, veri_dizini: str | Path = "veri") -> dict:
         "tarih": getattr(_genel, "_TARIH_ADAYLARI", ()),
         "santiye": getattr(_genel, "_MERKEZ_ADAYLARI", ()),
     }
+    # genel_oku ile ayni negatif listeler: 'Proje Kodu' sicil, 'Dogum Tarihi'
+    # belge tarihi, 'Company Name' kisi sayilmasin.
+    haric_tablolari = {
+        "kisi": getattr(_genel, "_ISIM_HARIC", ()),
+        "sicil": getattr(_genel, "_SICIL_HARIC", ()),
+        "tarih": getattr(_genel, "_TARIH_HARIC", ()),
+        "tutar": getattr(_genel, "_TUTAR_HARIC", ()),
+    }
+    # kolon_ara harita ister; eski surum baslik listesini veriyordu, AttributeError
+    # yutuluyor ve her dosya 'kisi/sicil/TC kolonu bulunamadi' cikiyordu (olculdu).
+    harita = kolon_haritasi(adlar)
     bulunan: dict[str, str] = {}
     for alan, varsayilan in aday_tablolari.items():
         adaylar = genislet(alan, varsayilan, veri_dizini)
         try:
-            i = kolon_ara(adlar, *adaylar)
+            i = kolon_ara(harita, *adaylar, haric=haric_tablolari.get(alan, ()))
         except Exception:  # noqa: BLE001
             i = None
         if i is not None and 0 <= i < len(adlar) and adlar[i]:
@@ -252,7 +264,7 @@ def tanilama(yol: str | Path, veri_dizini: str | Path = "veri") -> dict:
 
     if sonuc["islenebilir"]:
         sonuc["mesaj"] = (
-            f"Dosya islenebilir. Bulunan alanlar: "
+            "Dosya islenebilir. Bulunan alanlar: "
             + ", ".join(f"{ALANLAR[a]} = '{k}'" for a, k in bulunan.items())
         )
         if sonuc["eksik"]:

@@ -149,12 +149,12 @@ class YinelemeTest(unittest.TestCase):
         self.assertAlmostEqual(t.toplamlar()["USD"]["net"], 250.0, places=2)
 
     def test_isim_sirasi_farkli_olsa_da_yakalanir(self):
-        """Ham dokum 'OZAKAY MUSTAFAKEMAL', elle dagitilmis 'MUSTAFA KEMAL OZAKAY'."""
-        t = self._cift("OZAKAY MUSTAFAKEMAL", "MUSTAFA KEMAL OZAKAY")
+        """Ham dokum 'SAHTEOGLU MUSTAFAKEMAL', elle dagitilmis 'MUSTAFA KEMAL SAHTEOGLU'."""
+        t = self._cift("SAHTEOGLU MUSTAFAKEMAL", "MUSTAFA KEMAL SAHTEOGLU")
         self.assertEqual(t.yinelenen_sayisi, 1)
 
     def test_kirpilmis_isim_de_yakalanir(self):
-        t = self._cift("OZAKAY MUSTAFAKEMAL", "OZAKAY MUSTAFAKEMA")
+        t = self._cift("SAHTEOGLU MUSTAFAKEMAL", "SAHTEOGLU MUSTAFAKEMA")
         self.assertEqual(t.yinelenen_sayisi, 1)
 
     def test_isimsiz_satirlar_da_yakalanir(self):

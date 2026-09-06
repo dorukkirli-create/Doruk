@@ -20,7 +20,7 @@ try:
 except ImportError:
     MODUL_VAR = False
 
-from testler.altin import altin, altin_veya_none
+from testler.altin import altin_veya_none
 
 LISTE = Path("ornek_veri/personel/1C_Personnel_List_31082026.xlsx")
 

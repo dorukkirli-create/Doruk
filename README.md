@@ -66,7 +66,7 @@ Akış:
             +--> bitişik ad açılıyor mu?          --> EŞLEŞTİ  (0,92)
             |        (AHMETCAN -> MUSTAFA KEMAL)
             +--> transliterasyon varyantı tutuyor mu? --> İNCELE  (0,88)
-            |        (IYLMAZ GEKHAN -> YILMAZ GOKHAN)
+            |        (IYLMAZ GEKHAN -> ORNEKTAS GOKHAN)
             +--> kesik isim öneki tutuyor mu?     --> İNCELE   (0,85)
             +--> ek kişi defterinde mi?           --> İNCELE   (0,70)
             +--> bulanık benzerlik yeterli mi?    --> İNCELE   (en çok 0,89; asla otomatik değil)
@@ -208,8 +208,8 @@ işaret çelişkisi olarak ayrıca uyarı verilir.
 Eşleştirme kaba bir kova (belge tarihi + mutlak tutar + para birimi) içinde
 yapılır, sonra kova içinde isimler eşleştirilir. İsim anahtar olarak
 kullanılmaz çünkü iki dosya aynı kişiyi farklı yazar: ham döküm
-`DEMIRALP AHMETCAN`, elle dağıtılmış hal `AHMET CAN DEMIRALP`, bazen de
-kırpılmış (`DEMIRALP AHMETCA`) ya da yanlış (`KARATAS ANIL` /
+`ORNEKSOY AHMETCAN`, elle dağıtılmış hal `AHMET CAN ORNEKSOY`, bazen de
+kırpılmış (`ORNEKSOY AHMETCA`) ya da yanlış (`KARATAS ANIL` /
 `ALI YALCINKAYA`). Kişi adı olmayan kurumsal kalemler (cenaze çelengi,
 toplantı organizasyonu) da bu sayede yakalanır.
 
@@ -512,7 +512,7 @@ tanınmayan kolon adlarıyla sıfır satır dönen bir dosya, üç satır eklend
 sonra tam okundu.
 
 **4. Dosyanın şekli tamamen farklı.** Kişi adı serbest metnin içine gömülüyse
-(seyahat dökümündeki `TK4093099626 DEMIRALP/AHMETCAN MR IST-CDG BILET BEDELI`
+(seyahat dökümündeki `TK1234567890 ORNEKSOY/AHMETCAN MR IST-CDG BILET BEDELI`
 gibi) kolon sözlüğü yetmez, o kalıp için kod yazmak gerekir. Yılda bir iki kez
 karşılaşılacak bir durumdur.
 

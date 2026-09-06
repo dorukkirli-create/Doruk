@@ -64,7 +64,7 @@ class AsciiKatlaTest(unittest.TestCase):
                          "SCHUKA ZHUKOV CHAY YURIY YANA")
 
     def test_ascii_degismez(self):
-        self.assertEqual(ascii_katla("DEMIRALP AHMET CAN"), "DEMIRALP AHMET CAN")
+        self.assertEqual(ascii_katla("ORNEKSOY AHMET CAN"), "ORNEKSOY AHMET CAN")
 
     def test_bos_girdi(self):
         self.assertEqual(ascii_katla(""), "")
@@ -80,7 +80,7 @@ class IsimNormalizeTest(unittest.TestCase):
 
     def test_bolu_isareti_bosluga_doner(self):
         # PNR bicimi: SOYAD/AD
-        self.assertEqual(isim_normalize("DEMIRALP/AHMETCA"), "DEMIRALP AHMETCA")
+        self.assertEqual(isim_normalize("ORNEKSOY/AHMETCA"), "ORNEKSOY AHMETCA")
 
     def test_coklu_bosluk_teke_iner(self):
         self.assertEqual(isim_normalize("Yilmaz   Mehmet  "), "YILMAZ MEHMET")
@@ -90,10 +90,10 @@ class IsimNormalizeTest(unittest.TestCase):
 
     def test_tokenlar_sirasiz_kume(self):
         # 'AD SOYAD' ile 'SOYAD AD' ayni token kumesini vermelidir.
-        self.assertEqual(isim_tokenlari("Ozakay Mustafa Kemal"),
-                         isim_tokenlari("Mustafa Kemal Ozakay"))
-        self.assertEqual(isim_tokenlari("Ozakay Mustafa Kemal"),
-                         frozenset({"OZAKAY", "MUSTAFA", "KEMAL"}))
+        self.assertEqual(isim_tokenlari("Sahteoglu Mustafa Kemal"),
+                         isim_tokenlari("Mustafa Kemal Sahteoglu"))
+        self.assertEqual(isim_tokenlari("Sahteoglu Mustafa Kemal"),
+                         frozenset({"SAHTEOGLU", "MUSTAFA", "KEMAL"}))
 
 
 @unittest.skipUnless(MODUL_VAR, "masraf.metin bulunamadi")
@@ -105,15 +105,15 @@ class TranslitVaryantlariTest(unittest.TestCase):
     """
 
     def test_gekhan_gokhan_uretir(self):
-        varyantlar = translit_varyantlari("IYLMAZ GEKHAN")
-        self.assertIn("YILMAZ GOKHAN", varyantlar)
+        varyantlar = translit_varyantlari("ORNEKTAS GEKHAN")
+        self.assertIn("ORNEKTAS GOKHAN", varyantlar)
 
     def test_mekhmet_veisi_mehmet_veysi_uretir(self):
-        varyantlar = translit_varyantlari("YRMAK MEKHMET VEISI")
-        self.assertIn("IRMAK MEHMET VEYSI", varyantlar)
+        varyantlar = translit_varyantlari("SAHTEIRMAK MEKHMET VEISI")
+        self.assertIn("SAHTEIRMAK MEHMET VEYSI", varyantlar)
 
     def test_orijinal_her_zaman_kumede(self):
-        self.assertIn("IYLMAZ GEKHAN", translit_varyantlari("IYLMAZ GEKHAN"))
+        self.assertIn("ORNEKTAS GEKHAN", translit_varyantlari("ORNEKTAS GEKHAN"))
 
     def test_varyant_sayisi_sinirli(self):
         # Kombinatoryal patlama olmamali; 130 satirlik dosya saniyeler icinde
@@ -161,11 +161,11 @@ class KisiMetniniTemizleTest(unittest.TestCase):
         self.assertEqual(kisi_metnini_temizle(ham), "CANER AKSU")
 
     def test_bilet_satirindan_bilet_no_ve_guzergah_atilir(self):
-        ham = "TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI"
-        self.assertEqual(kisi_metnini_temizle(ham), "DEMIRALP AHMETCAN")
+        ham = "TK1234567890 ORNEKSOY/AHMETCAN MR  IST-CDG BILET BEDELI"
+        self.assertEqual(kisi_metnini_temizle(ham), "ORNEKSOY AHMETCAN")
 
     def test_cinsiyet_isareti_ve_coklu_guzergah(self):
-        ham = "PC2255749381 DEMIR MEHMET\\M  KYA-SAW-LED BILET BEDELI"
+        ham = "PC1234567891 DEMIR MEHMET\\M  KYA-SAW-LED BILET BEDELI"
         self.assertEqual(kisi_metnini_temizle(ham), "DEMIR MEHMET")
 
     def test_vize_metni_temizlenir(self):

@@ -32,7 +32,6 @@ from __future__ import annotations
 import email
 import re
 import sys
-import zipfile
 from pathlib import Path
 
 #: Bu isaretler Windows'ta DOGRU, Linux'ta YANLIS olur. pip Linux'ta
@@ -152,7 +151,7 @@ def denetle(kok: Path) -> int:
             print(f"   - {gereken}  ({sahip} istiyor)")
         print("\n   Bunlar Linux'ta test ederken GORUNMEZ. Indirin:")
         adlar = " ".join(sorted({g for _, g in beklenmeyen}))
-        print(f"     pip download --dest wheels --platform win_amd64 \\")
+        print("     pip download --dest wheels --platform win_amd64 \\")
         print(f"       --only-binary=:all: --python-version 3.11 {adlar}")
         sorun += 1
     else:

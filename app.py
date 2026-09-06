@@ -22,7 +22,10 @@ her etkilesiminde YENIDEN YUKLENMEZ.
 
 from __future__ import annotations
 
+import atexit
 import csv
+import hashlib
+import shutil
 import tempfile
 import traceback
 from dataclasses import dataclass, field
@@ -815,28 +818,43 @@ def mahsup_tablosu(sonuclar: Sequence["Sonuc"]) -> Any:
 
 
 def excel_uret(
-    sonuclar: Sequence["Sonuc"], hedef: Path, boru_ozeti: dict | None = None
+    sonuclar: Sequence["Sonuc"], hedef: Path, boru_ozeti: dict | None = None,
+    hatalar: list[str] | None = None,
 ) -> Path:
-    """Sonuclari cok sayfali Excel dosyasina yazar.
+    """Sonuclari cok sayfali Excel dosyasina yazar; yazilan dosyanin yolunu dondurur.
 
     Once ``masraf.cikti.excel_yaz`` denenir (renkli, bicimli, gerekce
     kolonlariyla birlikte); modul yoksa buradaki yerel yazici kullanilir.
     Cekirdek yazici varsa sayfalar: Mahsuplasma / Kontrol / Sonuc / Incele /
     Eslesmedi / Ozet. Yerel yedek yazici yalnizca Sonuc / Incele / Eslesmedi
     uretir.
+
+    Cekirdek yazici HATA verirse sessizce yedege dusulmez: hata ``hatalar``
+    listesine yazilir ve yedek dosyanin adina '_EKSIK' eklenir; boylece
+    mahsuplasma sayfasi olmayan bir dosya tam ciktiyla karistirilmaz.
     """
     hedef = Path(hedef)
     hedef.parent.mkdir(parents=True, exist_ok=True)
 
     yazici = getattr(CIKTI_MODULU, "excel_yaz", None) if CIKTI_MODULU else None
     if callable(yazici):
+        yazici_sorunu: str | None = None
         try:
             yazici(list(sonuclar), str(hedef), dict(boru_ozeti or {}),
                    mahsup_tablosu(sonuclar))
             if hedef.exists():
                 return hedef
-        except Exception:
-            pass  # Yerel yaziciya dus.
+            yazici_sorunu = "çekirdek yazıcı dosya üretmedi"
+        except Exception as hata:  # noqa: BLE001
+            yazici_sorunu = f"{hata.__class__.__name__}: {hata}"
+        hedef = hedef.with_name(f"{hedef.stem}_EKSIK{hedef.suffix}")
+        if hatalar is not None:
+            hatalar.append(
+                "Tam biçimli Excel (Mahsuplaşma / Kontrol / Özet sayfaları) oluşturulamadı: "
+                f"{yazici_sorunu}. Yalnızca Sonuç / İncele / Eşleşmedi sayfalarını içeren "
+                f"EKSİK bir dosya yazıldı: '{hedef.name}'. Muhasebeye göndermeden önce "
+                "hatayı giderip Excel'i yeniden oluşturun."
+            )
 
     tablo = sonuc_tablosu(sonuclar)
     sayfalar = {
@@ -1064,7 +1082,11 @@ def _oturum_hazirla() -> None:
     for anahtar, deger in varsayilanlar.items():
         st.session_state.setdefault(anahtar, deger)
     if "yukleme_dizini" not in st.session_state:
-        st.session_state["yukleme_dizini"] = tempfile.mkdtemp(prefix="masraf_yukleme_")
+        dizin = tempfile.mkdtemp(prefix="masraf_yukleme_")
+        st.session_state["yukleme_dizini"] = dizin
+        # Yuklenen faturalar kisisel veri tasir; klasor uygulama kapanirken
+        # silinir. Eski surum hic silmiyor, kopyalar %TEMP% altinda birikiyordu.
+        atexit.register(_yukleme_dizinini_sil, dizin)
 
 
 def _defter_var_mi() -> bool:
@@ -1253,6 +1275,8 @@ def sekme_ayarlar() -> None:
         d1.metric("Öğrenilmiş eşleşme", d.get("alias", 0))
         d2.metric("Dış (harici) kişi", d.get("harici", 0))
         d3.metric("Ek kişi kaydı", d.get("ek_kisi", 0))
+        for mesaj in d.get("uyarilar") or []:
+            st.warning(mesaj)
         d4.metric("TCKN köprüsü", d.get("tckn_kopru", 0))
         st.caption(f"Defter klasörü: `{d.get('kok', '')}`")
         if d.get("kaydedilmemis"):
@@ -1275,7 +1299,10 @@ def sekme_ayarlar() -> None:
         st.write("**Klasörler**")
         st.write(f"Veri: `{VERI_KOK}`")
         st.write(f"Çıktı: `{CIKTI_KOK}`")
-        st.write(f"Geçici yüklemeler: `{st.session_state['yukleme_dizini']}`")
+        st.write(
+            f"Geçici yüklemeler: `{st.session_state['yukleme_dizini']}` "
+            "(işlenen parti dışındakiler hemen, kalanı uygulama kapanınca silinir)"
+        )
 
 
 # --------------------------------------------------------------------------
@@ -1283,15 +1310,59 @@ def sekme_ayarlar() -> None:
 # --------------------------------------------------------------------------
 
 
+def _yukleme_dizinini_sil(dizin: str | Path) -> None:
+    """Gecici yukleme klasorunu (fatura kopyalari, kisisel veri) siler."""
+    shutil.rmtree(str(dizin), ignore_errors=True)
+
+
+def _eski_yuklemeleri_temizle(korunan: Iterable[str | Path]) -> int:
+    """Islenmekte olan parti disindaki yukleme partilerini siler.
+
+    Yeniden isleme (ogrenme sonrasi) mevcut partinin dosyalarini yeniden
+    okur; bu yuzden yalnizca artik referans verilmeyen partiler silinir.
+    Kalanlar uygulama kapanirken (atexit) silinir.
+
+    Returns:
+        Silinen parti klasoru sayisi.
+    """
+    kok = Path(st.session_state.get("yukleme_dizini") or "")
+    if not kok.is_dir():
+        return 0
+    korunan_yollar = {Path(y).resolve() for y in korunan}
+    silinen = 0
+    for alt in kok.iterdir():
+        if not alt.is_dir():
+            continue
+        alt_yol = alt.resolve()
+        if any(alt_yol in y.parents for y in korunan_yollar):
+            continue
+        shutil.rmtree(str(alt), ignore_errors=True)
+        silinen += 1
+    return silinen
+
+
 def _yuklenenleri_kaydet(dosyalar: Sequence[Any]) -> list[Path]:
-    """Tarayicidan yuklenen dosyalari gecici klasore yazar ve yollarini dondurur."""
-    hedef_dizin = Path(st.session_state["yukleme_dizini"])
+    """Tarayicidan yuklenen dosyalari gecici klasore yazar ve yollarini dondurur.
+
+    Her yukleme partisi (dosya adi + boyut imzasi) kendi alt klasorune yazilir;
+    boylece isleme bitince onceki partiler silinebilir, mevcut parti ise
+    yeniden isleme icin yerinde kalir.
+    """
+    hedef_kok = Path(st.session_state["yukleme_dizini"])
+    imza = hashlib.sha1(
+        "|".join(f"{d.name}:{len(d.getbuffer())}" for d in dosyalar).encode("utf-8")
+    ).hexdigest()[:10]
+    hedef_dizin = hedef_kok / f"parti_{imza}"
     hedef_dizin.mkdir(parents=True, exist_ok=True)
     yollar: list[Path] = []
     for dosya in dosyalar:
         hedef = hedef_dizin / dosya.name
         try:
-            hedef.write_bytes(dosya.getbuffer())
+            veri = dosya.getbuffer()
+            # Streamlit her etkilesimde betigi yeniden calistirir; ayni dosya
+            # ayni boyutla zaten yazildiysa yeniden yazilmaz.
+            if not (hedef.is_file() and hedef.stat().st_size == len(veri)):
+                hedef.write_bytes(veri)
             yollar.append(hedef)
         except OSError as hata:
             st.error(f"'{dosya.name}' geçici klasöre yazılamadı: {hata}")
@@ -1395,6 +1466,8 @@ def sekme_fatura() -> None:
             st.session_state["yollar"] = [str(y) for y in yollar]
             st.session_state["inceleme_sirasi"] = 0
             st.session_state["son_excel"] = None
+            # Islem bitti: onceki partilerin kopyalari artik gerekmez.
+            _eski_yuklemeleri_temizle(yollar)
             cubuk.empty()
         except Exception as hata:
             cubuk.empty()
@@ -1534,8 +1607,11 @@ def sekme_fatura() -> None:
             damga = datetime.now().strftime("%Y%m%d_%H%M%S")
             hedef = CIKTI_KOK / f"masraf_merkezi_{damga}.xlsx"
             boru_ozeti = ozet.boru_ozeti if ozet is not None else {}
+            excel_hatalari: list[str] = []
             with st.spinner("Excel dosyası hazırlanıyor..."):
-                excel_uret(sonuclar, hedef, boru_ozeti)
+                hedef = excel_uret(sonuclar, hedef, boru_ozeti, hatalar=excel_hatalari)
+            for mesaj in excel_hatalari:
+                st.error(mesaj)
             st.session_state["son_excel"] = str(hedef)
         except Exception as hata:
             _hata_goster("Excel dosyası oluşturulamadı.", hata)
@@ -2172,7 +2248,7 @@ eşiğin (**şu an {float(st.session_state.get('esik', 0.90)):.2f}**) üzerindek
 | 0,98 | Öğrenilmiş eşleşme | Daha önce siz öğrettiniz |
 | 0,95 | Tam isim | İsim personel verisiyle birebir aynı |
 | 0,90 | İsim alt kümesi | Rus ad-baba adı-soyadı varyantı |
-| 0,88 | Transliterasyon | *IYLMAZ GEKHAN* → *Yılmaz Gökhan* gibi |
+| 0,88 | Transliterasyon | *IYLMAZ GEKHAN* → *Örnektaş Gökhan* gibi |
 | 0,85 | Kesilmiş isim | Bilet sisteminde 20 karakterde kesilmiş ad |
 | 0,80 civarı | Bulanık benzerlik | Yazım hatası toleranslı eşleşme |
 | 0,50 | Aile bireyi | Soyadı eşleşen çalışanın eşi/çocuğu olabilir - **mutlaka kontrol edin** |

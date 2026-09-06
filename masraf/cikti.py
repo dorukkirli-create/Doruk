@@ -40,7 +40,22 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from masraf.envanter import DETAY_TIPLERI, KUTUK_TIPLERI
 from masraf.modeller import DURUM_ESLESMEDI, DURUM_INCELE, DURUM_OTOMATIK, Sonuc
+
+#: Dagilima girmeyen kaynak tipleri: kisi kutukleri ve fatura detay listeleri.
+_KUTUK_TIPLER = KUTUK_TIPLERI | DETAY_TIPLERI
+_DAGITILAMAYAN = "(DAGITILAMAYAN)"
+
+
+def kutuk_mu(sonuc: Any) -> bool:
+    """Satir para tasimayan bir kisi listesinden mi geldi?"""
+    return getattr(getattr(sonuc, "satir", None), "kaynak_tip", None) in _KUTUK_TIPLER
+
+
+def _kutuk_sona(sonuclar: Sequence[Sonuc]) -> list[Sonuc]:
+    """Gider satirlari once, kutuk satirlari en sonda (Incele/Eslesmedi sayfalari)."""
+    return sorted(sonuclar, key=kutuk_mu)
 
 __all__ = [
     "excel_yaz", "csv_yaz", "mahsuplasma_csv_yaz",
@@ -49,7 +64,7 @@ __all__ = [
 
 #: (baslik, tip, genislik). Tip: metin | tarih | sayi | tamsayi | yuzde
 KOLONLAR: tuple[tuple[str, str, int], ...] = (
-    ("Kaynak Dosya", "metin", 28),
+    ("Kaynak Dosya", "metin", 34),
     ("Satir", "tamsayi", 7),
     ("Belge Tarihi", "tarih", 12),
     ("Gider Tipi", "metin", 12),
@@ -126,7 +141,7 @@ DOSYA_KOLONLARI: tuple[tuple[str, str, int], ...] = (
 
 #: Envanter durumu -> satir rengi.
 _ENVANTER_RENKLERI = {
-    "OKUNDU": "tamam", "KUTUK": "", "DETAY LISTESI": "", "MAIL": "baslik",
+    "OKUNDU": "tamam", "KUTUK": "", "DETAY LISTESI": "", "MAIL": "baslik", "ARSIV": "baslik",
     "ATLANDI": "uyari", "SATIR YOK": "uyari", "AYNI ICERIK": "uyari",
     "OKUNAMADI": "engel", "PERSONEL": "uyari",
 }
@@ -154,8 +169,11 @@ def dosya_satir_degerleri(sira: int, k: dict) -> list[Any]:
 #: en sonda bilgi amacli olanlar (PDF'ler, tekrarlar).
 _ENVANTER_SIRASI = {
     "OKUNDU": 0, "KUTUK": 1, "DETAY LISTESI": 2, "SATIR YOK": 3, "OKUNAMADI": 4,
-    "PERSONEL": 5, "AYNI ICERIK": 6, "ATLANDI": 7, "MAIL": 8,
+    "PERSONEL": 5, "AYNI ICERIK": 6, "ATLANDI": 7, "MAIL": 8, "ARSIV": 8,
 }
+
+#: Kapsayici kayitlar: kendileri veri tasimaz, icerikleri ayri satirlardadir.
+_KAPSAYICI_DURUMLAR = ("MAIL", "ARSIV")
 
 
 def envanteri_sirala(envanter: Sequence[dict]) -> list[dict]:
@@ -190,7 +208,8 @@ def _dosyalar_yaz(calisma: Any, envanter: Sequence[dict], bicimler: "_Bicimler")
         "SATIR YOK = acildi ama gider satiri cikmadi; kolon adlari taninmamis olabilir "
         "(veri/kolon_esanlamlilari.csv).",
         "OKUNAMADI = acilamadi (bozuk, parola korumali, bos). Dosya 1_FATURALAR'da birakilir.",
-        "MAIL = Outlook mesaji; ekleri ayri satirlardadir.",
+        "MAIL = Outlook mesaji (ekli mailler dahil); ekleri ayri satirlardadir.",
+        "ARSIV = zip arsivi; icindeki dosyalar ayri satirlardadir. Sifreli girdiler ATLANDI olarak gorunur.",
     ):
         sayfa.write_string(satir, 0, metin, bicimler.ozet_metin)
         satir += 1
@@ -314,11 +333,27 @@ def _kaynak_santiye(kaynak: Any, ek: dict) -> str:
 
 def satir_degerleri(sonuc: Sonuc) -> list[Any]:
     """Bir ``Sonuc`` kaydini KOLONLAR sirasina gore degerlere cevirir."""
+    from masraf.mahsuplasma import _kaynak_adi
+
     satir = sonuc.satir
     eslesme = sonuc.eslesme
     ek = satir.ek if isinstance(satir.ek, dict) else {}
+    uyarilar = [str(u) for u in (sonuc.uyarilar or [])]
+    mm_kodu = sonuc.masraf_merkezi
+    mm_adi = ek.get("masraf_merkezi_adi") if isinstance(satir.ek, dict) else ""
+    sirket = sonuc.sirket or sonuc.sirket2
+    if sonuc.durum == DURUM_ESLESMEDI and (mm_kodu or sirket):
+        # Zayif aday (orn. aile kademesi, guven 0.45) sirket ve merkez tasir ama
+        # Mahsuplasma bu tutari (DAGITILAMAYAN)'a yazar. Sonuc sayfasini masraf
+        # merkezine gore toplayan kisi Mahsuplasma ile ayni rakami gormeli;
+        # oneri bilgi olarak uyari sutununa tasinir.
+        uyarilar.append(
+            f"Dagitima girmedi, Mahsuplasma'da {_DAGITILAMAYAN} satirinda; "
+            f"zayif oneri: {mm_kodu or '-'} / {sirket or '-'}")
+        mm_kodu, mm_adi, sirket = _DAGITILAMAYAN, "", ""
     return [
-        _metin(Path(satir.kaynak_dosya).name if satir.kaynak_dosya else ""),
+        # Mahsuplasma, Kontrol ve Dosyalar ile ayni anahtar: mail eki ise ekin adi.
+        _metin(_kaynak_adi(sonuc) if satir.kaynak_dosya else ""),
         satir.satir_no,
         _tarih(satir.belge_tarihi),
         _metin(satir.gider_tipi),
@@ -336,13 +371,16 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
             getattr(sonuc, "donem_eslesme", "") or "",
         ),
         _metin(sonuc.gorev_yeri),
-        _metin(sonuc.masraf_merkezi),
-        _metin(satir.ek.get("masraf_merkezi_adi") if isinstance(satir.ek, dict) else ""),
-        _metin(sonuc.sirket or sonuc.sirket2),
+        _metin(mm_kodu),
+        _metin(mm_adi),
+        _metin(sirket),
         _metin(sonuc.statu),
         _metin(sonuc.kategori),
         _tarih(sonuc.cikis_tarihi),
-        round(satir.tutar, 2) if isinstance(satir.tutar, (int, float)) else satir.tutar,
+        # Yuvarlanmaz: Kontrol sayfasi ham toplami yuvarlar; satirlar da ham
+        # kalsin ki dosya bazinda toplayan kisi kurus farki gormesin. Hucre
+        # bicimi iki ondalik gosterir.
+        float(satir.tutar) if isinstance(satir.tutar, (int, float)) else satir.tutar,
         _metin(satir.para_birimi),
         _kaynak_santiye(satir.masraf_merkezi_kaynak, ek),
         # Denetim izi: bir satir sorgulandiginda hangi belgeye ait oldugu
@@ -350,7 +388,7 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
         _metin(ek.get("evrak_no") or ek.get("fatura_no")),
         _metin(ek.get("mail_konusu")),
         _metin(sonuc.durum),
-        " | ".join(str(u) for u in (sonuc.uyarilar or [])),
+        " | ".join(uyarilar),
     ]
 
 
@@ -567,7 +605,14 @@ def _ozet_yaz(
     sayfa.merge_range(1, 1, 1, 7, "Masraf Merkezi Dağıtımı", bicimler.kapak_baslik)
     donem = _gider_donemi(sonuclar)
     dosya_sayisi = ozet.get("dosya_sayisi", 0)
-    alt = (f"{donem}   |   {dosya_sayisi} kaynak dosya, {len(sonuclar)} satır   |   "
+    # Kutuk satirlari (katilimci, saglik, detay listeleri) para tasimaz; gider
+    # satiri gibi sayilirsa finans 405 satir inceleyecegini sanir (olculdu: 106).
+    gider_satirlar = [s for s in sonuclar if not kutuk_mu(s)]
+    kutuk_satirlar = [s for s in sonuclar if kutuk_mu(s)]
+    satir_metni = f"{len(gider_satirlar)} gider satırı"
+    if kutuk_satirlar:
+        satir_metni += f" + {len(kutuk_satirlar)} kütük satırı"
+    alt = (f"{donem}   |   {dosya_sayisi} kaynak dosya, {satir_metni}   |   "
            f"üretim {datetime.now():%d.%m.%Y %H:%M}   |   Rencons Heavy Industries")
     sayfa.merge_range(2, 1, 2, 7, alt, bicimler.kapak_alt)
 
@@ -609,8 +654,9 @@ def _ozet_yaz(
     # --- Mutabakat durumu ------------------------------------------------
     if mahsup is not None:
         sayfa.set_row(satir, 26)
-        incele_sayisi = sum(1 for s in sonuclar if s.durum == DURUM_INCELE)
-        eslesmedi_sayisi = sum(1 for s in sonuclar if s.durum == DURUM_ESLESMEDI)
+        incele_sayisi = sum(1 for s in gider_satirlar if s.durum == DURUM_INCELE)
+        eslesmedi_sayisi = sum(1 for s in gider_satirlar if s.durum == DURUM_ESLESMEDI)
+        kutuk_bekleyen = sum(1 for s in kutuk_satirlar if s.durum != DURUM_OTOMATIK)
         hatalar = list(ozet.get("hatalar") or [])
         dikkat_nedenleri = _kapak_dikkat_nedenleri(ozet, mahsup, oneriler)
         if hatalar:
@@ -634,9 +680,12 @@ def _ozet_yaz(
             bekleyen = " + ".join(
                 p for p in (
                     f"{incele_sayisi} satır inceleme" if incele_sayisi else "",
-                    f"{eslesmedi_sayisi} satır kişi bulunamadı ((DAGITILAMAYAN))" if eslesmedi_sayisi else "",
+                    f"{eslesmedi_sayisi} satır kişi bulunamadı, {_DAGITILAMAYAN} satırında" if eslesmedi_sayisi else "",
                 ) if p)
             ek_not = f" Ayrıca: {'; '.join(dikkat_nedenleri)}." if dikkat_nedenleri else ""
+            if kutuk_bekleyen:
+                ek_not += (f" Kütük listelerinde ayrıca {kutuk_bekleyen} satır kimlik kararı bekliyor "
+                           "(para taşımaz, defter beslemesi için).")
             sayfa.merge_range(satir, 1, satir, 7,
                               f"MUTABAKAT KAPALI, TASLAK   |   Para kaybolmadı; {bekleyen} "
                               "bekliyor. 'Incele' ve 'Eslesmedi' sayfaları görülmeden onaya sunulmamalı." + ek_not,
@@ -682,15 +731,25 @@ def _ozet_yaz(
         DURUM_INCELE: "Sistem sonuç buldu ama emin değil; gerekçesi satırda yazılı",
         DURUM_ESLESMEDI: "Kişi bulunamadı; tutar (DAGITILAMAYAN) satırında duruyor",
     }
-    dagilim = ozet.get("durum_dagilimi", {})
-    toplam_satir = max(1, sum(dagilim.get(d, 0) for d in aciklama))
+    dagilim = {d: sum(1 for s in gider_satirlar if s.durum == d) for d in aciklama}
+    toplam_satir = max(1, sum(dagilim.values()))
     for i, durum in enumerate(aciklama):
         adet = dagilim.get(durum, 0)
-        zebra = i % 2 == 1
         sayfa.write_string(satir, 1, durum, bicimler.al("metin", durum))
         sayfa.write_number(satir, 2, float(adet), bicimler.al("tamsayi", durum))
         sayfa.write_number(satir, 3, adet / toplam_satir, bicimler.al("yuzde", durum))
         sayfa.merge_range(satir, 4, satir, 7, aciklama[durum], bicimler.al("metin", durum))
+        satir += 1
+    if kutuk_satirlar:
+        kutuk_bekleyen = sum(1 for s in kutuk_satirlar if s.durum != DURUM_OTOMATIK)
+        sayfa.write_string(satir, 1, "KÜTÜK", bicimler.mahsup("metin", "", False))
+        sayfa.write_number(satir, 2, float(len(kutuk_satirlar)), bicimler.mahsup("tamsayi", "", False))
+        sayfa.write_blank(satir, 3, None, bicimler.mahsup("metin", "", False))
+        sayfa.merge_range(
+            satir, 4, satir, 7,
+            "Kişi listeleri (katılımcı, sağlık, fatura detayı); para taşımaz, yüzdeye girmez. "
+            f"Kimlik defterini besler; {kutuk_bekleyen} satırı 'Incele'/'Eslesmedi' sayfalarının sonunda.",
+            bicimler.mahsup("metin", "", False))
         satir += 1
 
     # --- Sirket kirilimi -------------------------------------------------
@@ -789,7 +848,7 @@ def _ozet_yaz(
             bicimler.ozet_metin)
         satir += 1
         tablo_basligi(("Dosya", "Nereden geldi", "Durum", "Satır", "Okunan tutar", "Para", "Not"))
-        gosterilecek = [k for k in envanteri_sirala(envanter) if str(k.get("durum")) != "MAIL"][:30]
+        gosterilecek = [k for k in envanteri_sirala(envanter) if str(k.get("durum")) not in _KAPSAYICI_DURUMLAR][:30]
         for i, k in enumerate(gosterilecek):
             zebra = i % 2 == 1
             renk = _ENVANTER_RENKLERI.get(str(k.get("durum")), "")
@@ -804,7 +863,7 @@ def _ozet_yaz(
             sayfa.write_string(satir, 6, _metin(k.get("para_birimi")), bicimler.mahsup("metin", renk, zebra))
             sayfa.write_string(satir, 7, _metin(k.get("sebep"))[:120], bicimler.mahsup("metin", renk, zebra))
             satir += 1
-        if len(envanter) - sum(1 for k in envanter if str(k.get("durum")) == "MAIL") > 30:
+        if len(envanter) - sum(1 for k in envanter if str(k.get("durum")) in _KAPSAYICI_DURUMLAR) > 30:
             sayfa.merge_range(satir, 1, satir, 7, "... devamı 'Dosyalar' sayfasında.", bicimler.not_metni)
             satir += 1
         satir += 1
@@ -843,6 +902,8 @@ def _ozet_yaz(
     if oneriler is None:
         # Sayfa yazilmadiysa rehberde kirik baglanti olmasin.
         rehber = tuple(r for r in rehber if r[0] != "Harita Onerileri")
+    if mahsup is None:
+        rehber = tuple(r for r in rehber if r[0] not in ("Mahsuplasma", "Sirket Kirilimi", "Kontrol"))
     if not ozet.get("dosya_envanteri"):
         rehber = tuple(r for r in rehber if r[0] != "Dosyalar")
     for i, (ad, aciklama) in enumerate(rehber):
@@ -937,7 +998,8 @@ def kontrol_satir_degerleri(kontrol: Any) -> list[Any]:
         kontrol.tutarsiz_satir,
         kontrol.beyan_toplam,
         kontrol.beyan_farki,
-        round(kontrol.dagitim_orani / 100.0, 4),
+        # Tamamen yinelenen faturada net sifirdir; %0 yazmak yaniltir, bos kalir.
+        (round(kontrol.dagitim_orani / 100.0, 4) if kontrol.net else None),
         kontrol_durum_metni(kontrol),
     ]
 
@@ -982,17 +1044,65 @@ def _tablo_yaz(
         return sayfa
 
     if toplam_sutunlari:
+        _toplam_satirlari_yaz(sayfa, kolonlar, satirlar, toplam_sutunlari, bicimler)
+    return sayfa
+
+
+def _sumif_olcutu(pb: str) -> str:
+    """SUMIF olcutunde ? ve * joker; '?' para birimi icin kacis gerekir."""
+    return pb.replace("~", "~~").replace("?", "~?").replace("*", "~*")
+
+
+def _toplam_satirlari_yaz(sayfa: Any, kolonlar: Sequence[tuple[str, str, int]],
+                          satirlar: Sequence[Sequence[Any]], toplam_sutunlari: Sequence[int],
+                          bicimler: "_Bicimler") -> None:
+    """TOPLAM satir(lar)i. Farkli para birimleri ASLA tek sayida toplanmaz.
+
+    Tek para birimi: bir satir, SUBTOTAL(109) ile; otomatik filtre uygulaninca
+    yalnizca gorunen satirlari toplar (finans bu sayfada filtreleyip bakar).
+    Birden fazla para birimi: her biri icin ayri satir, SUMIF ile (USD + RUB
+    karisik tek bir sayi cikmaz).
+    """
+    son = len(satirlar)
+    para_sutunu = next((i for i, (b, _t, _g) in enumerate(kolonlar) if b in ("Para Birimi", "Para")), None)
+    paralar: list[str] = []
+    if para_sutunu is not None:
+        for d in satirlar:
+            v = d[para_sutunu] if para_sutunu < len(d) else None
+            v = str(v) if v not in (None, "") else "?"
+            if v not in paralar:
+                paralar.append(v)
+
+    def _bicim(sutun: int) -> Any:
+        return bicimler.toplam_tamsayi if kolonlar[sutun][1] == "tamsayi" else bicimler.toplam_sayi
+
+    if len(paralar) <= 1:
+        etiket = f"TOPLAM ({paralar[0]})" if paralar and paralar[0] != "?" else "TOPLAM"
         satir_no = son + 1
-        sayfa.write_string(satir_no, 0, "TOPLAM", bicimler.toplam_metin)
+        sayfa.write_string(satir_no, 0, etiket, bicimler.toplam_metin)
         for sutun in range(1, len(kolonlar)):
-            tip = kolonlar[sutun][1]
             if sutun in toplam_sutunlari:
                 harf = _sutun_harfi(sutun)
-                bicim = bicimler.toplam_tamsayi if tip == "tamsayi" else bicimler.toplam_sayi
-                sayfa.write_formula(satir_no, sutun, f"=SUM({harf}2:{harf}{son + 1})", bicim)
+                sayfa.write_formula(satir_no, sutun, f"=SUBTOTAL(109,{harf}2:{harf}{son + 1})", _bicim(sutun))
             else:
                 sayfa.write_blank(satir_no, sutun, None, bicimler.toplam_metin)
-    return sayfa
+        return
+
+    pharf = _sutun_harfi(para_sutunu)
+    for k, pb in enumerate(paralar):
+        satir_no = son + 1 + k
+        sayfa.write_string(satir_no, 0, f"TOPLAM ({pb})", bicimler.toplam_metin)
+        for sutun in range(1, len(kolonlar)):
+            if sutun == para_sutunu:
+                sayfa.write_string(satir_no, sutun, pb, bicimler.toplam_metin)
+            elif sutun in toplam_sutunlari:
+                harf = _sutun_harfi(sutun)
+                sayfa.write_formula(
+                    satir_no, sutun,
+                    f'=SUMIF({pharf}2:{pharf}{son + 1},"{_sumif_olcutu(pb)}",{harf}2:{harf}{son + 1})',
+                    _bicim(sutun))
+            else:
+                sayfa.write_blank(satir_no, sutun, None, bicimler.toplam_metin)
 
 
 def _sutun_harfi(indeks: int) -> str:
@@ -1072,10 +1182,16 @@ def _harita_onerisi_yaz(calisma: Any, oneriler: Any, bicimler: "_Bicimler") -> N
     satir = len(degerler) + 3
     sayfa.write_string(satir, 0, "Bu sayfa ne icin", bicimler.bolum)
     satir += 1
-    for metin in (
-        "Asagidaki gorev yerleri masraf merkezi haritasinda tanimli degil. Kod "
+    ilk_paragraf = (
+        "Yukaridaki gorev yerleri masraf merkezi haritasinda tanimli degil. Kod "
         "onlari metin olarak tasidi ve isaretledi; finans koduna cevrilmeden "
-        "muhasebeye gitmemeliler.",
+        "muhasebeye gitmemeliler."
+        if degerler else
+        "Bu calistirmada haritada tanimsiz gorev yeri yok. Tanimsiz bir gorev yeri "
+        "cikarsa burada hazir harita satirlari listelenir."
+    )
+    for metin in (
+        ilk_paragraf,
         "SIRKET sutunu 1C personel listesindeki 'Firm 2' kolonundan gelir. "
         "Haritadaki mevcut satirlarla ayni sozlugu kullanir (RHI, UST LUGA, "
         "RSS, RC, BSK), bu yuzden guvenilir.",
@@ -1112,7 +1228,8 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
     _tablo_yaz(
         calisma, "Mahsuplasma", MAHSUP_KOLONLARI, degerler, renkler, bicimler,
         bos_mesaj="(Dagitilacak tutarli satir bulunamadi)",
-        toplam_sutunlari=(6, 9, 10, 11, 12, 13),
+        # 'Kisi' toplanmaz: ayni kisi Bilet ve Otel satirlarinda yeniden sayilir.
+        toplam_sutunlari=(6, 9, 11, 12, 13),
     )
 
     k_degerler = [kontrol_satir_degerleri(k) for k in tablo.kontrol]
@@ -1120,7 +1237,8 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
     sayfa = _tablo_yaz(
         calisma, "Kontrol", KONTROL_KOLONLARI, k_degerler, k_renkler, bicimler,
         bos_mesaj="(Kontrol edilecek fatura yok)",
-        toplam_sutunlari=(2, 3, 4, 5, 6, 8, 9, 10, 11),   # Fark, Beyan Farki ve oran toplanmaz
+        # Fark, Faturada Yazan Toplam (kismi), Beyan Farki ve oran toplanmaz.
+        toplam_sutunlari=(2, 3, 4, 5, 6, 8, 9, 10),
     )
 
     # Kontrol sayfasinin altina aciklamalar ve isaret celiskileri.
@@ -1155,7 +1273,7 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
         satir += 1
         sayfa.write_string(
             satir, 0,
-            "Tedarikci her fatura icin tutarsiz bir katilimci listesi gonderir; "
+            "Tedarikci her fatura icin tutar kolonu olmayan bir katilimci listesi gonderir; "
             "tutar yansitma dosyasindadir. Iki listedeki kisiler ayni olmali.",
             bicimler.ozet_metin,
         )
@@ -1238,7 +1356,7 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
             sayfa.write_string(
                 satir, 0,
                 f"{tablo.kutuk_satir_sayisi} satir kisi kutugunden geldi "
-                "(katilimci listesi, saglik kontrol listesi). Bunlar fatura "
+                "(katilimci listesi, saglik kontrol listesi, fatura detay listeleri). Bunlar fatura "
                 "degildir, tutar tasimazlar.",
                 bicimler.ozet_metin)
             satir += 1
@@ -1300,10 +1418,10 @@ def excel_yaz(
             _harita_onerisi_yaz(calisma, harita_onerileri, bicimler)
         _sayfa_yaz(calisma, "Sonuc", list(sonuclar), bicimler)
         _sayfa_yaz(
-            calisma, "Incele", [s for s in sonuclar if s.durum == DURUM_INCELE], bicimler
+            calisma, "Incele", _kutuk_sona([s for s in sonuclar if s.durum == DURUM_INCELE]), bicimler
         )
         _sayfa_yaz(
-            calisma, "Eslesmedi", [s for s in sonuclar if s.durum == DURUM_ESLESMEDI], bicimler
+            calisma, "Eslesmedi", _kutuk_sona([s for s in sonuclar if s.durum == DURUM_ESLESMEDI]), bicimler
         )
     finally:
         calisma.close()

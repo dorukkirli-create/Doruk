@@ -10,7 +10,6 @@ from pathlib import Path
 
 try:
     from masraf.okuyucular.posta import (
-        CikarilanEk,
         _guvenli_ad,
         _zip_ac,
         msg_aciklarini_cikar,

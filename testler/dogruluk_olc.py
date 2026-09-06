@@ -685,7 +685,7 @@ def rapor_yaz(rapor: DogrulukRaporu, boru: Boru) -> None:
                 print(f"          {durum:<24}{adet:>4}")
     bilgi = rapor.bilgi_tasiyanlar
     yuzde, pay, payda = rapor.dogruluk(OKUMA_PROJE, bilgi)
-    print(f"  [bilgi] sadece elle etiketin GERCEK proje bilgisi tasidigi satirlar")
+    print("  [bilgi] sadece elle etiketin GERCEK proje bilgisi tasidigi satirlar")
     print(f"      {len(bilgi)} satir; bunlarin {payda} tanesi karsilastirilabilir")
     print(f"      %{yuzde}  ({pay}/{payda})")
     for durum in DURUMLAR:

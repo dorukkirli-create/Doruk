@@ -46,8 +46,17 @@ def yaz(*parcalar) -> None:
 
 
 def kok_dizin() -> Path:
-    """Otomasyon klasorunun kokunu bulur (program/kod/calistir.py -> ../..)."""
-    return Path(__file__).resolve().parent.parent.parent
+    """Otomasyon klasorunun kokunu bulur (program/kod/calistir.py -> ../..).
+
+    Dosya beklenen yerlesimde degilse (ornegin depodan `paketle/calistir.py`
+    olarak calistirildiysa) iki ust dizin ev klasoru olabilir ve kisisel veri
+    iceren klasorler oraya acilirdi. O durumda calisma dizininin altinda
+    ayri bir klasor kullanilir ve bu acikca soylenir.
+    """
+    burasi = Path(__file__).resolve()
+    if burasi.parent.name == "kod" and burasi.parent.parent.name == "program":
+        return burasi.parent.parent.parent
+    return Path.cwd() / "OTOMASYON_CALISMA"
 
 
 def dizinleri_hazirla(kok: Path) -> None:
@@ -92,16 +101,21 @@ def personel_dosyalarini_bul(kok: Path) -> tuple[Path | None, Path | None, list[
         (yardimcilar if any(i in ad for i in YARDIMCI_IPUCLARI) else anadaylar).append(y)
 
     ana = max(anadaylar, key=lambda y: y.stat().st_size) if anadaylar else None
-    yardimci = max(yardimcilar, key=lambda y: y.stat().st_size) if yardimcilar else None
+    # 1C listesi aylik gelir; iki ay yan yana durursa EN YENISI (degistirilme
+    # tarihi) gecerlidir, boyutu degil. Atlanan soylenir.
+    yardimci = max(yardimcilar, key=lambda y: y.stat().st_mtime) if yardimcilar else None
 
     if ana is None and yardimci is not None:
         notlar.append(
             "PERSONEL klasorunde yalnizca 1C listesi var, ana personel verisi yok. "
-            "Ana veri olmadan donem (gider ayi) kontrolu yapilamaz."
+            "Ana veri ZORUNLUDUR: kisi eslestirme ve donem (gider ayi) kontrolu onunla yapilir."
         )
     for atlanan in anadaylar:
         if atlanan is not ana:
             notlar.append(f"Atlandi (ana veri olarak en buyugu secildi): {atlanan.name}")
+    for atlanan in yardimcilar:
+        if atlanan is not yardimci:
+            notlar.append(f"Atlandi (1C listesi olarak en yenisi secildi): {atlanan.name}")
     return ana, yardimci, notlar
 
 
@@ -192,8 +206,14 @@ def islenen_ozetleri_oku(kok: Path) -> dict[str, tuple[str, str]]:
 
 
 def islenen_ozetleri_yaz(kok: Path, damga: str, dosyalar: list[Path],
-                         ozetler: dict[str, str | None] | None = None) -> None:
-    """Bu calistirmada islenen dosyalarin ozetlerini kalici listeye ekler."""
+                         ozetler: dict[str, str | None] | None = None,
+                         envanter: list | None = None) -> None:
+    """Bu calistirmada islenen dosyalarin ozetlerini kalici listeye ekler.
+
+    Ust duzey dosyalarin yaninda mail/arsiv iclerinden okunan eklerin ozetleri
+    de yazilir: ayni fatura bir ay mail eki, sonraki ay tedarikciden gelen
+    xlsx olarak gelirse 'DAHA ONCE ISLENDI' uyarisi yine cikar.
+    """
     yol = kok / ARSIV_DIZINI / ISLENEN_OZETLER_DOSYASI
     try:
         yol.parent.mkdir(parents=True, exist_ok=True)
@@ -201,10 +221,20 @@ def islenen_ozetleri_yaz(kok: Path, damga: str, dosyalar: list[Path],
         with open(yol, "a", encoding="utf-8") as f:
             if yeni:
                 f.write("# sha256\tcalistirma\tdosya   (ayni icerik tekrar gelirse uyarilir)\n")
+            yazilan: set[str] = set()
             for d in dosyalar:
-                oz = (ozetler or {}).get(d.name) or dosya_ozeti(d)
-                if oz:
+                oz = (ozetler or {}).get(str(d)) or (ozetler or {}).get(d.name) or dosya_ozeti(d)
+                if oz and oz not in yazilan:
+                    yazilan.add(oz)
                     f.write(f"{oz}\t{damga}\t{d.name}\n")
+            for k in envanter or []:
+                oz = str(k.get("ozet") or "")
+                if len(oz) != 64 or oz in yazilan or not k.get("kaynak"):
+                    continue
+                if str(k.get("durum")) not in ("OKUNDU", "KUTUK", "DETAY LISTESI", "AYNI ICERIK"):
+                    continue
+                yazilan.add(oz)
+                f.write(f"{oz}\t{damga}\t{k.get('kaynak')} > {k.get('ad')}\n")
     except OSError:
         pass
 
@@ -260,12 +290,18 @@ def ozet_bas(sonuclar, mahsup, uyarilar: list[str]) -> None:
             yaz(f"    Dagitilan    : {_sayi(d['dagitilan']):>14s} {para}")
             yaz(f"    Dagitilamayan: {_sayi(d['dagitilamayan']):>14s} {para}")
         yaz()
-        if mahsup.kapali_mi:
-            yaz("  [TAMAM] Butun faturalar kapandi. Para kaybolmadi.")
-        else:
+        if not mahsup.kapali_mi:
             yaz("  [DIKKAT] MUTABAKAT ACIK. Bu tablo muhasebeye gonderilmemeli:")
             for k in mahsup.acik_kontroller:
-                yaz(f"     {k.kaynak} ({k.para_birimi}) fark {k.fark:+.2f}")
+                sebep = getattr(k, "acik_sebebi", "") or f"fark {k.fark:+.2f}"
+                yaz(f"     {k.kaynak} ({k.para_birimi}): {sebep}")
+        elif incele or eslesmedi:
+            # Excel kapagiyla ayni dil: para kaybolmadi ama tablo TASLAKTIR.
+            yaz("  [TASLAK] Para kaybolmadi; mutabakat kapandi. Ama "
+                f"{incele} satir inceleme, {eslesmedi} satir kisi bulunamadi.")
+            yaz("  Excel'deki 'Incele' ve 'Eslesmedi' sayfalari gorulmeden tablo onaya sunulmamali.")
+        else:
+            yaz("  [TAMAM] Butun faturalar kapandi, inceleme bekleyen satir yok. Tablo onaya hazir.")
 
         merkezler = mahsup.merkez_ozeti()
         if merkezler:
@@ -449,7 +485,7 @@ def calistir() -> int:
     if ana is None and yardimci is None:
         yaz("HATA: Personel dosyasi bulunamadi.")
         yaz()
-        yaz(f"  Su klasore personel dosyalarini koyun:")
+        yaz("  Su klasore personel dosyalarini koyun:")
         yaz(f"     {kok / PERSONEL_DIZINI}")
         yaz()
         yaz("  Gereken dosyalar:")
@@ -459,6 +495,14 @@ def calistir() -> int:
         yaz("  Bu dosyalari koyduktan sonra bu programi tekrar calistirin.")
         return 1
 
+    if ana is None:
+        yaz("HATA: Ana personel verisi bulunamadi; yalnizca 1C listesi var.")
+        yaz()
+        yaz("  Ana veri ZORUNLUDUR: kisi eslestirme ve gider ayi kontrolu onunla yapilir.")
+        yaz(f"  Ornek: 2025_2026_giris_cikis.xlsx  ->  {kok / PERSONEL_DIZINI}")
+        yaz("  Not: adinda 'personnel list' ya da '1C' gecen dosya 1C listesi sayilir;")
+        yaz("  ana verinin adinda bu ifadeler gecmemeli.")
+        return 1
     if ana is not None:
         yaz(f"  Ana personel verisi : {ana.name}")
     if yardimci is not None:
@@ -496,8 +540,8 @@ def calistir() -> int:
     from masraf.boru import Boru, CalismaAyarlari
 
     yaz()
-    yaz("  Personel verisi okunuyor. Ilk seferde 30 saniye kadar surebilir,")
-    yaz("  sonraki calistirmalar cok daha hizli olur.")
+    yaz("  Personel verisi okunuyor. Ilk seferde 1-2 dakika surebilir (24 bin kayit),")
+    yaz("  sonraki calistirmalar onbellek sayesinde 10 saniyenin altina iner.")
     yaz()
 
     ayarlar = CalismaAyarlari(
@@ -507,6 +551,19 @@ def calistir() -> int:
         cikti_dizini=str(kok / CIKTI_DIZINI),
     )
     boru = Boru(ayarlar)
+    try:
+        boru.hazirla()
+    except Exception as hata:  # noqa: BLE001 - kullaniciya Turkce soylenir
+        from masraf.boru import _hata_metni
+
+        yaz()
+        yaz("HATA: Personel dosyasi okunamadi.")
+        yaz(f"  {_hata_metni(hata)}")
+        yaz()
+        yaz("  Olasi sebepler: dosya parola korumali (Excel'de acip parolasiz kaydedin),")
+        yaz("  dosya bozuk ya da bos, zorunlu kolonlar yok (Sicil, Adi Soyadi, Gorev Yeri, Donem).")
+        yaz(f"  Dosya: {ana}")
+        return 1
 
     son_yuzde = [-10.0]
 
@@ -517,7 +574,9 @@ def calistir() -> int:
         ve kullanici konsolda ne oldugunu takip edemiyor. Yuzde 5'ten az
         ilerleyen adimlar atlanir, sonuncusu her zaman basilir.
         """
-        if yuzde - son_yuzde[0] < 5 and yuzde < 100:
+        # Her dosyanin 'Okunuyor' satiri gorunsun; kullanici hangi dosyada
+        # beklendigini bilsin (ilk dosya %5 kuralina takilip kayboluyordu).
+        if yuzde - son_yuzde[0] < 5 and yuzde < 100 and not str(mesaj).startswith("Okunuyor"):
             return
         son_yuzde[0] = yuzde
         yaz(f"    [%{yuzde:3.0f}] {mesaj}")
@@ -528,9 +587,31 @@ def calistir() -> int:
     tekrar_uyarilari = daha_once_islenenler(kok, faturalar)
     for u in tekrar_uyarilari:
         yaz(f"  UYARI: {u}")
-    boru.on_uyarilar = list(tekrar_uyarilari)
-    sonuc = boru.calistir(faturalar, cikti_adi=f"Masraf_Dagitimi_{damga}.xlsx",
-                          ilerleme=ilerleme)
+    # Adi personel verisine benzeyen dosyalar islenmedi; bu yalnizca konsolda
+    # kalmasin, Excel kapagina ve OZET.txt'e de gecsin.
+    boru.on_uyarilar = list(tekrar_uyarilari) + [
+        f"ISLENMEDI: {n}" for n in topla_notlari if "personel verisine benziyor" in n
+    ]
+    try:
+        sonuc = boru.calistir(faturalar, cikti_adi=f"Masraf_Dagitimi_{damga}.xlsx",
+                              ilerleme=ilerleme)
+    except (PermissionError, OSError) as hata:
+        yaz()
+        yaz("HATA: Excel ciktisi yazilamadi.")
+        yaz(f"  {hata.__class__.__name__}: {hata}")
+        yaz(f"  Klasor: {kok / CIKTI_DIZINI}")
+        yaz("  Klasor salt okunur olabilir, ag surucusu kopmus olabilir ya da ayni adli")
+        yaz("  bir Excel baska programda acik olabilir. Faturalar yerinde birakildi.")
+        return 1
+    except Exception as hata:  # noqa: BLE001
+        if hata.__class__.__name__ == "FileCreateError":
+            yaz()
+            yaz("HATA: Excel ciktisi yazilamadi (dosya kilitli ya da klasor yazilamiyor).")
+            yaz(f"  {hata}")
+            yaz(f"  Klasor: {kok / CIKTI_DIZINI}")
+            yaz("  Faturalar yerinde birakildi; sorunu giderip tekrar calistirin.")
+            return 1
+        raise
 
     sonuclar = sonuc.get("sonuclar") or []
     if not sonuclar:
@@ -584,10 +665,17 @@ def calistir() -> int:
         #  - mutabakat ACIKSA hicbiri tasinmaz; Excel 'gonderilmemeli' diyor,
         #    kullanici duzeltip tekrar calistiracak, dosyalari aramasin.
         mahsup = sonuc.get("mahsup")
-        okunamayanlar = {h.split(":", 1)[0].strip() for h in boru.hatalar}
+        # 'Kisi defteri beslenemedi: ...' gibi dosya disi hata metinleri
+        # okunamayan dosya sayilmasin; yalnizca fatura adiyla baslayanlar.
+        fatura_adlari = {f.name for f in faturalar}
+        okunamayanlar = {
+            h.split(":", 1)[0].strip() for h in boru.hatalar
+            if h.split(":", 1)[0].strip() in fatura_adlari
+        }
         arsivlenecek = [f for f in faturalar if f.name not in okunamayanlar]
         # Ozetler tasimadan ONCE alinir; tasinan dosyanin eski yolu kalmaz.
-        ozetler = {f.name: dosya_ozeti(f) for f in faturalar}
+        # Anahtar tam yol: farkli alt klasorlerdeki ayni adli dosyalar karismasin.
+        ozetler = {str(f): dosya_ozeti(f) for f in faturalar}
         tasinan, tasima_hatalari = [], []
         if mahsup is not None and not mahsup.kapali_mi:
             yaz()
@@ -602,7 +690,7 @@ def calistir() -> int:
                 yaz(f"    {kok / ARSIV_DIZINI / damga}")
                 yaz("  1_FATURALAR klasoru gelecek ay icin bos. Dosyalar silinmedi,")
                 yaz("  gerekirse arsivden geri alabilirsiniz.")
-            islenen_ozetleri_yaz(kok, damga, arsivlenecek, ozetler)
+            islenen_ozetleri_yaz(kok, damga, arsivlenecek, ozetler, envanter=envanter)
         if okunamayanlar:
             yaz(f"  Okunamayan {len(okunamayanlar)} dosya 1_FATURALAR'da birakildi:")
             for ad in sorted(okunamayanlar):

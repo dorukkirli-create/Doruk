@@ -378,7 +378,7 @@ class Eslestirici:
         """Kesilmis (truncate edilmis) fatura ismine uyan personel isimleri.
 
         PNR alanlari sabit uzunlukta oldugu icin uzun isimler kesilir:
-        'DEMIRALP/AHMETCA', 'SAPARMYRADOV/SAPARMYR'. Kural: her fatura tokeni
+        'ORNEKSOY/AHMETCA', 'DENEMEDOVOV/DENEMEDOV'. Kural: her fatura tokeni
         ya birebir eslesir ya da (en az 4 harfliyse) bir personel tokeninin
         onekidir; en az bir token birebir, en az bir token onek olmalidir.
         """
@@ -648,7 +648,7 @@ class Eslestirici:
         if isimler:
             # Personel adi 'SOYAD AD ...' siralidir. Fatura kelimelerinden biri
             # SOYAD ise alt kume guvenilirdir (patronimik eksik). Soyad hic
-            # tutmuyorsa ('KUMAR ARBIND' -> 'Sahu Arbind Kumar') bambaska bir
+            # tutmuyorsa ('SINGH ORNEKPAL' -> 'Sahu Arbind Kumar') bambaska bir
             # kisi olabilir: incelemeye dus (olculdu: %2,5 yanlis pozitif).
             soyadli = [i for i in isimler if i.split(" ", 1)[0] in tokenlar]
             if soyadli:

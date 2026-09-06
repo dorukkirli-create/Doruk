@@ -9,6 +9,13 @@ cikti/
 # bir yapilandirma dosyasidir ve repoda tutulur.
 veri/*.csv
 !veri/masraf_merkezi_haritasi.csv
+# Defter yedekleri (veri/gecmis/) ve gecici yazma dosyalari da TC tasir.
+veri/gecmis/
+veri/**/*.csv
+veri/*.tmp
+veri/**/*.tmp
+*.csv.tmp
+!veri/masraf_merkezi_haritasi.csv
 
 __pycache__/
 *.pyc

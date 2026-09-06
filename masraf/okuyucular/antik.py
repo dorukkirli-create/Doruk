@@ -55,7 +55,7 @@ _HIZMET_KELIMELERI: frozenset[str] = frozenset({
     "OTOBUS", "ARAC", "KIRALAMA", "KIRA", "SOFOR",
     "CENAZE", "CELENK", "CELENGI", "GONDERIMI", "GONDERIM",
     "TOPLANTI", "ORGANIZASYON", "ORGANIZASYONU", "PAKET", "PAKETI",
-    "CATERING", "YEMEK", "IKRAM", "SALON",
+    "CATERING", "YEMEK", "SALON",
     "DIGER", "GIDER", "GIDERLER", "HIZMET", "HIZMETLER", "SERVIS",
     "YURT", "ICI", "DISI", "YURTICI", "YURTDISI",
     "EKSTRA", "BAGAJ", "TASINDI", "TARAFINDAN",
@@ -63,6 +63,20 @@ _HIZMET_KELIMELERI: frozenset[str] = frozenset({
     "SIGORTA", "ASISTAN", "ASISTANS",
     "FATURA", "EVRAK", "ADET", "TOPLAM", "SARJ", "EDILECEK",
 })
+
+# Hem KISI ADI hem hizmet kelimesi olabilenler. 'IKRAM' Turkiye'de gercek bir
+# addir (olculdu: personel verisinde 7 kisi); kosulsuz hizmet kelimesi
+# sayilinca bu kisilerin adi tek tokene dusuyor ve ESLESMEDI cikiyordu.
+# Kural: yalnizca en az iki ad tokeninden SONRA ve tipik hizmet baglaminda
+# (sonraki token asagidaki kumedeyse: 'IKRAM BEDELI', 'IKRAM HIZMETI')
+# kesilir; tek basina ya da adin icinde gecince ad olarak kalir.
+_BAGLAMLI_HIZMET_KELIMELERI: dict[str, frozenset[str]] = {
+    "IKRAM": frozenset({
+        "BEDELI", "BEDEL", "UCRETI", "UCRET", "TUTARI", "HIZMETI", "HIZMET",
+        "HIZMETLERI", "GIDERI", "GIDERLERI", "SERVISI", "ORGANIZASYONU",
+        "PAKETI", "CATERING",
+    }),
+}
 
 # Bilet numarasi oneki: iki harfli havayolu kodu + uzun rakam dizisi.
 _RE_BILET_ONEK = re.compile(r"^\s*([A-Z]{2})\s*(\d{6,})\s+(?P<kalan>.+)$")
@@ -92,10 +106,25 @@ _RE_BAGAJ = re.compile(
 _YAPISIK_KUYRUKLAR: tuple[str, ...] = (
     "TARAFINDAN", "KONAKLAMA", "TASINDI", "BEDELI", "UCRETI", "FEDERASYONU",
 )
-# Toplam satiri isareti
-_RE_TOPLAM = re.compile(r"\bTOPLAM\b")
-# 'RHI 1/3- RENSTROYDETAL 2/3' bicimli paylasim
-_RE_PAYLASIM = re.compile(r"([A-Z][A-Z0-9]*(?:\s+[A-Z0-9]+)*?)\s*(\d{1,3})\s*/\s*(\d{1,3})")
+# Dokumun kendi toplam/ozet satirinin ETIKETI. Hucrenin TAMAMI bu kaliba
+# uymali: 'TOPLAM', 'GENEL TOPLAM', 'BAKIYE', 'TOPLAM USD', 'TOPLAM BORC:'.
+# Bir veri satirinin aciklamasinda gecen '(TOPLAM 2 KISI)' uymaz.
+_RE_TOPLAM_ETIKETI = re.compile(
+    r"^\s*(?:GENEL\s+|ARA\s+|NET\s+)?(?:TOPLAM|TOTAL|BAKIYE)"
+    r"(?:\s+(?:BORC|ALACAK|BAKIYE|TUTAR|TUTARI|USD|TL|TRY|EUR|RUB|GENEL|NET))*"
+    r"\s*:?\s*$"
+)
+# 'RHI 1/3- RENSTROYDETAL 2/3' bicimli paylasim. Tarih ('GIRIS 10/07/2026') ve
+# saat ('10/07 14:30') kesirleri disarida tutulur: kesirden once rakam ya da
+# '/' bulunamaz, kesirden sonra '/rakam', ':rakam' ya da '.rakam' gelemez.
+# Eski desen 'GIRIS 10/07/2026' notundan pay 10 / bolen 7 = 1,43 uretiyordu.
+_RE_PAYLASIM = re.compile(
+    r"(?<![\d/])([A-Z][A-Z0-9]*(?:\s+[A-Z0-9]+)*?)\s*(\d{1,2})\s*/\s*(\d{1,2})(?!\s*[/:.]\s*\d)(?!\d)"
+)
+#: Paylasim boleni en fazla bu olabilir (1/12 en ince paylasim). Pay bolenden
+#: buyuk olamaz; '10/07' gibi tarih parcalari ve '2/25' gibi sayimlar
+#: paylasim degildir.
+_PAYLASIM_AZAMI_BOLEN = 12
 
 # 'Islem' kolonundan gider tipine esleme (normalize anahtar -> tip).
 _ISLEM_TIPLERI: dict[str, str] = {
@@ -137,16 +166,53 @@ def _kuyruk_kirp(isim: str) -> str:
     'OMER CAN CETIR'
     >>> _kuyruk_kirp("ALI GUNDOGDUTARAFINDAN")
     'ALI GUNDOGDU'
+    >>> _kuyruk_kirp("ALI VELI IKRAM BEDELI")
+    'ALI VELI'
+    >>> _kuyruk_kirp("IKRAM YILMAZ")
+    'IKRAM YILMAZ'
     """
     tokenlar: list[str] = []
-    for token in isim.split():
+    parcalar = isim.split()
+    for k, token in enumerate(parcalar):
         if token in _HIZMET_KELIMELERI:
             break
+        baglam = _BAGLAMLI_HIZMET_KELIMELERI.get(token)
+        if (baglam is not None and len(tokenlar) >= 2
+                and k + 1 < len(parcalar) and parcalar[k + 1] in baglam):
+            break  # 'AD SOYAD IKRAM BEDELI': ad burada biter
         acik = _yapisik_kuyruk_ac(token)
         tokenlar.append(acik)
         if acik != token:
             break  # yapisik hizmet kelimesi bulundu, isim burada biter
     return " ".join(tokenlar)
+
+
+def _toplam_satiri_mi(
+    satir: list[Any], al: Any, i_tarih: int | None, i_evrak: int | None,
+    i_aciklama: int | None,
+) -> bool:
+    """Satir dokumun kendi TOPLAM / BAKIYE satiri mi?
+
+    Iki sart birden aranir:
+      1. Kimlik hucreleri bos: islem tarihi ve evrak no yok; aciklama ya bos
+         ya da kendisi toplam etiketi ('TOPLAM').
+      2. Satirdaki bir hucrenin TAMAMI toplam etiketi (bkz. _RE_TOPLAM_ETIKETI).
+
+    Onceki kural satirin HERHANGI bir hucresinde 'TOPLAM' kelimesini
+    ariyordu; 'AHMET ... (TOPLAM 2 KISI)' gibi aciklama tasiyan bir veri
+    satiri toplam sanilip siliniyor ve beyan toplami o satirin borcuna
+    esitleniyordu (olculdu: 134 satir / 48.962,59 yerine 133 / 428,17).
+    Tarih ve evrak tasiyan satir artik hicbir kosulda toplam sayilmaz.
+    """
+    for i in (i_tarih, i_evrak):
+        if i is not None and hucre_metni(al(i)) is not None:
+            return False
+    aciklama = hucre_metni(al(i_aciklama)) if i_aciklama is not None else None
+    if aciklama is not None and not _RE_TOPLAM_ETIKETI.match(_fold(aciklama)):
+        return False
+    return any(
+        _RE_TOPLAM_ETIKETI.match(_fold(h)) for h in satir if isinstance(h, str) and h.strip()
+    )
 
 
 def _kisi_gecerli_mi(isim: str | None) -> bool:
@@ -181,9 +247,9 @@ def _bilet_kisi(aciklama: str) -> str | None:
     """Bilet satirindan yolcu adini cikarir.
 
     Desteklenen bicimler:
-        'TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI'
-        'PC2255749381 TEMIR MEHMET\\M  KYA-SAW-LED BILET BEDELI'
-        'VF2458393535 CELENLIGIL ARAS\\I  VKO-SAW-ESB-VKO BILET BEDELI'
+        'TK1234567890 SAHTEOGLU/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI'
+        'PC1234567891 DENEMECI MEHMET\\M  KYA-SAW-LED BILET BEDELI'
+        'VF1234567892 YAPAYSOY ARAS\\I  VKO-SAW-ESB-VKO BILET BEDELI'
 
     Her ikisinde de SOYAD once gelir; token sirasi korunur (eslestirici
     sirasiz token kumesi kullanir).
@@ -211,8 +277,8 @@ def _otel_kisi(aciklama: str) -> list[str]:
     '[giris] - [cikis] (gece) KONAKLAMA ...' kuyrugu bulunur. Bir satirda
     ';' ile ayrilmis birden fazla kisi olabilir.
 
-    >>> _otel_kisi("MUSTAFA KEMAL OZAKAY ; POLINA TRAPEZNIKOVA GRAND HYATT ISTANBUL [10.07.2026] - [11.07.2026]  (1) KONAKLAMA YURTICI")
-    ['MUSTAFA KEMAL OZAKAY', 'POLINA TRAPEZNIKOVA']
+    >>> _otel_kisi("MUSTAFA KEMAL SAHTEOGLU ; POLINA PRIMEROVA GRAND HYATT ISTANBUL [10.07.2026] - [11.07.2026]  (1) KONAKLAMA YURTICI")
+    ['MUSTAFA KEMAL SAHTEOGLU', 'POLINA PRIMEROVA']
     """
     metin = _fold(aciklama)
     if not metin:
@@ -292,6 +358,35 @@ def _diger_kisi(aciklama: str) -> str | None:
     return _temizle_ve_dogrula(metin[: min(kesimler)])
 
 
+def _paylasim_etiketi_taniniyor_mu(ad: str) -> bool:
+    """Paylasim etiketi bilinen bir tuzel kisi mi ('RHI', 'RENSTROYDETAL', 'UST LUGA')?
+
+    Kelimeler bastan sona 1-3 kelimelik tuzel kisi etiketleriyle ortulmeli
+    (masraf_merkezi.MasrafMerkeziHaritasi.tuzel_kisi_mi ile ayni kural).
+    'GIRIS', 'ODA', 'GECE' gibi hizmet/not kelimeleri paylasim uretmez.
+    """
+    try:
+        from masraf.masraf_merkezi import SIRKET_KANONIK, TUZEL_KISI_ETIKETLERI
+
+        etiketler = set(TUZEL_KISI_ETIKETLERI) | set(SIRKET_KANONIK)
+    except Exception:  # noqa: BLE001
+        etiketler = {"RHI", "RSD", "RSS", "RC", "RENSTROYDETAL", "RENSERVIS", "UST LUGA"}
+    parcalar = [parca for parca in ad.replace("+", " ").split() if parca.isalpha()]
+    if not parcalar:
+        return False
+    i = 0
+    while i < len(parcalar):
+        uzunluk = 0
+        for n in (3, 2, 1):
+            if " ".join(parcalar[i:i + n]) in etiketler:
+                uzunluk = n
+                break
+        if not uzunluk:
+            return False
+        i += uzunluk
+    return True
+
+
 def _paylasim_ayristir(*metinler: str | None) -> list[dict[str, Any]]:
     """'RHI 1/3- RENSTROYDETAL 2/3' bicimli paylasimlari ayristirir.
 
@@ -308,8 +403,16 @@ def _paylasim_ayristir(*metinler: str | None) -> list[dict[str, Any]]:
             pay, bolen = int(esle.group(2)), int(esle.group(3))
             if not ad or bolen == 0:
                 continue
+            # Makul sinir: 1 <= pay <= bolen, 2 <= bolen <= 12.
+            if pay < 1 or pay > bolen or bolen < 2 or bolen > _PAYLASIM_AZAMI_BOLEN:
+                continue
             # Kuyrugundaki hizmet kelimelerini at ('SARJ EDILECEK' gibi)
             ad = _kuyruk_kirp(ad) or ad
+            # Etiket bilinen bir tuzel kisi degilse ('ODA 2/3 KISI', 'GECE 1/2')
+            # paylasim uretilmez; mahsuplasma taninmayan etiketi zaten reddeder,
+            # burada elemek yanlis alarm uyarisini da onler.
+            if not _paylasim_etiketi_taniniyor_mu(ad):
+                continue
             paylar.append(
                 {
                     "masraf_merkezi": ad,
@@ -415,7 +518,7 @@ def antik_cari_oku(yol: str | Path) -> list[GiderSatiri]:
             return satir[i]
 
         aciklama = hucre_metni(al(i_aciklama))
-        toplam_satiri = any(_RE_TOPLAM.search(_fold(h)) for h in satir)
+        toplam_satiri = _toplam_satiri_mi(satir, al, i_tarih, i_evrak, i_aciklama)
         if toplam_satiri and beyan_borc is None:
             beyan_borc = hucre_sayisi(al(i_borc))
         if aciklama is None:

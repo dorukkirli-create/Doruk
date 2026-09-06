@@ -64,7 +64,9 @@ class GercekMailEnvanteriTest(unittest.TestCase):
 
     def test_her_ek_bir_kayit(self):
         sayim = envanter_ozeti(self.envanter)
-        self.assertEqual(sayim.get(MAIL), 1)
+        # Kok mail tek; ic mailler (ekli .msg) de MAIL satiri olarak envantere girer.
+        self.assertEqual(sum(1 for k in self.envanter if k.durum == MAIL and not k.kaynak), 1, sayim)
+        self.assertGreaterEqual(sayim.get(MAIL, 0), 1, sayim)
         self.assertGreaterEqual(sayim.get(ATLANDI, 0), 10, sayim)     # PDF'ler
         self.assertGreaterEqual(sayim.get(OKUNDU, 0), 4, sayim)       # tutarli tablolar
         self.assertGreaterEqual(sayim.get(KUTUK, 0), 3, sayim)        # katilimci, saglik, sigorta

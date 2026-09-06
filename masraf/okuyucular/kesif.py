@@ -1,26 +1,36 @@
 """Kaynak dosya tipini otomatik tespit eden kesif modulu.
 
 Kullanici dosyayi surukleyip biraktiginda hangi parser'in calistirilacagini
-belirler. Tespit tamamen deterministiktir: dosya acilir, SAYFA ADLARI ve ilk
-15 satirdaki hucre metinleri ASCII katlanmis bicimde toplanir, ardindan
-oncelik sirali ipucu kurallari uygulanir.
+belirler. Tespit tamamen deterministiktir: dosya acilir, SAYFA ADLARI ile her
+sayfanin BASLIK satiri ve ustundeki dosya basligi satirlarindaki hucre
+metinleri ASCII katlanmis bicimde toplanir, ardindan oncelik sirali ipucu
+kurallari uygulanir. Veri hucreleri ipucu SAYILMAZ: saglik listesinde bir
+kisinin gorevi 'ARABULUCU' diye tum dosya arabuluculuk sanilmaz (olculdu:
+80 tutarsiz gider satiri uretiyor, kutuk beslemesine girmiyordu).
 
-Ipuclari:
-    'Cari Hareket Dokumu'                -> antik_cari
-    'SANTIYESI' + 'UCUS GUZERGAHI'       -> yuzyil_dagitilmis
-    'Katilimci' + 'Paket'                -> energo_assessment
-    'ARABULUCU'                          -> energo_arabulucu
-    'BORDROLU LISTE' | 'TCKN'+'SAGLIK'   -> energo_saglik
-    'ID' + 'Alt Fonksiyon'               -> koc_katilimci
-    aksi halde                           -> genel
+Ipuclari (baslik / sayfa adi uzerinden, iceren eslesme):
+    'Cari Hareket Dokumu'                        -> antik_cari
+    'SANTIYESI' + 'UCUS GUZERGAHI'               -> yuzyil_dagitilmis
+    'Katilimci' + ('Paket'|'Energo Payi'|...)    -> energo_assessment
+    'ARABULUCU'                                  -> energo_arabulucu
+    'BORDROLU LISTE' | 'TCKN'+'SAGLIK'           -> energo_saglik
+    'ID' + 'Alt Fonksiyon'                       -> koc_katilimci
+    'Sicil No' + 'Masraf Merkezi', tutar yok     -> referans_liste
+    aksi halde                                   -> genel
+
+Birden fazla kural eslesirse hepsi oncelik sirasiyla ADAY olur: ozel okuyucu
+sablonu tanimayip bos donerse sonraki aday denenir, en son genel okuyucuya
+dusulur ve bu dusus satirlara (ek['okuyucu_uyarisi']) ve envantere yazilir.
 """
 
 from __future__ import annotations
 
 import logging
 
+from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, Iterable
 
 _log = logging.getLogger(__name__)
 
@@ -32,9 +42,35 @@ from masraf.okuyucular.energo import (
     koc_katilimci_oku,
     saglik_oku,
 )
-from masraf.okuyucular.genel import calisma_oku, genel_oku, kolon_anahtari
+from masraf.okuyucular.genel import (
+    baslik_satiri_bul,
+    calisma_oku,
+    genel_oku,
+    hucre_sayisi,
+    kolon_anahtari,
+    kolon_ara,
+    kolon_haritasi,
+)
 
-__all__ = ["dosya_tipini_bul", "oku", "oku_tip", "PARSERLAR"]
+__all__ = [
+    "dosya_tipini_bul", "dosya_tip_adaylari", "oku", "oku_tip", "okuyucu_turu",
+    "PARSERLAR", "OKUYUCU_UYARISI",
+]
+
+#: Satir ek sozlugundeki uyari anahtari. Ozel okuyucu dosyayi tanidi ama
+#: sablonu okuyamadi ve genel okuyucuya dusuldu; tutar/para birimi elle
+#: dogrulanmali. Boru tarafinda bu anahtar satiri INCELE'ye dusurmelidir.
+OKUYUCU_UYARISI = "okuyucu_uyarisi"
+
+#: Genel okuyucunun tutar kolonu adaylari (kural 7 icin). genel.py'deki
+#: listeyle ayni; o modul degisirse buradaki yedek liste kullanilir.
+try:  # pragma: no cover - savunma
+    from masraf.okuyucular.genel import _TUTAR_ADAYLARI as _KESIF_TUTAR_ADAYLARI
+except ImportError:  # pragma: no cover
+    _KESIF_TUTAR_ADAYLARI = (
+        "tutar", "satis", "borc", "amount", "toplam", "bedel", "fiyat",
+        "energo payi", "usd", "total",
+    )
 
 # kaynak_tip -> parser fonksiyonu
 PARSERLAR: dict[str, Callable[[str | Path], list[GiderSatiri]]] = {
@@ -57,29 +93,146 @@ _KUTUK_SATIR_ESIGI = 200
 from masraf.okuyucular.genel import BASLIK_ARAMA_SINIRI as _KESIF_SATIR_SINIRI  # noqa: E402
 
 
-def _ipuclarini_topla(yol: Path) -> tuple[set[str], str]:
-    """Sayfa adlari ve ilk satirlardaki hucre metinlerini toplar.
+@dataclass
+class _SayfaIpucu:
+    """Kesif icin bir sayfanin baslik bilgisi (ilk satirlar)."""
+
+    ad: str
+    baslik_i: int                                   # -1: baslik yok
+    baslik: dict[str, int] = field(default_factory=dict)  # kolon_haritasi
+    satirlar: list[list[Any]] = field(default_factory=list)
+
+
+def _ipuclarini_topla(yol: Path) -> tuple[set[str], str, list[_SayfaIpucu]]:
+    """Sayfa adlari ile baslik ve baslik-ustu satirlarin hucre metinlerini toplar.
+
+    Her sayfada baslik satiri (en cok metin hucresi tasiyan satir) bulunur;
+    yalnizca o satir ve USTUNDEKI dosya basligi satirlari ipucu sayilir.
+    Veri hucreleri sayilmaz: bir kisinin gorevi, pozisyonu ya da aciklamasi
+    dosyanin tipini degistirmemelidir.
 
     Returns:
-        (normalize edilmis benzersiz metinler kumesi, hepsinin birlesimi)
+        (normalize edilmis benzersiz metinler kumesi, hepsinin birlesimi,
+        sayfa basina baslik bilgisi)
     """
     calisma = calisma_oku(yol, satir_siniri=_KESIF_SATIR_SINIRI)
     metinler: set[str] = set()
+    sayfalar: list[_SayfaIpucu] = []
     for sayfa_adi, satirlar in calisma.sayfalar.items():
         anahtar = kolon_anahtari(sayfa_adi)
         if anahtar:
             metinler.add(anahtar)
-        for satir in satirlar:
+        baslik_i = baslik_satiri_bul(satirlar, sinir=_KESIF_SATIR_SINIRI)
+        for satir in satirlar[: baslik_i + 1]:
             for hucre in satir:
                 anahtar = kolon_anahtari(hucre)
                 if anahtar:
                     metinler.add(anahtar)
-    return metinler, " || ".join(sorted(metinler))
+        sayfalar.append(_SayfaIpucu(
+            ad=sayfa_adi, baslik_i=baslik_i,
+            baslik=kolon_haritasi(satirlar[baslik_i]) if baslik_i >= 0 else {},
+            satirlar=satirlar,
+        ))
+    return metinler, " || ".join(sorted(metinler)), sayfalar
+
+
+def _tutar_kolonu(sayfalar: Iterable[_SayfaIpucu]) -> str | None:
+    """Taninan bir tutar kolonu ve altinda sayisal deger var mi?
+
+    Kural 7 icin: 'Sicil No' + 'Masraf Merkezi' tasiyan dosya ancak tutar
+    kolonu YOKSA kisi kutugudur. Tutar kolonu (yerlesik adaylar + kullanici
+    sozlugu) ve ilk satirlarda en az bir sayisal degeri varsa gider
+    dosyasidir. Bulunursa kolonun adi doner, yoksa None.
+    """
+    adaylar: tuple[str, ...] = tuple(_KESIF_TUTAR_ADAYLARI)
+    try:
+        from masraf.kolon_sozlugu import genislet as _genislet
+        adaylar = tuple(_genislet("tutar", adaylar))
+    except Exception:  # noqa: BLE001 - sozluk okunamazsa yerlesik liste yeter
+        pass
+    for sayfa in sayfalar:
+        if sayfa.baslik_i < 0:
+            continue
+        i = kolon_ara(sayfa.baslik, *adaylar)
+        if i is None:
+            continue
+        for satir in sayfa.satirlar[sayfa.baslik_i + 1:]:
+            if i < len(satir) and hucre_sayisi(satir[i]) is not None:
+                return next((ad for ad, k in sayfa.baslik.items() if k == i), None) or "tutar"
+    return None
 
 
 def _iceriyor(blob: str, *parcalar: str) -> bool:
     """Birlesik metinde verilen parcalarin HEPSI geciyor mu?"""
     return all(kolon_anahtari(p) in blob for p in parcalar)
+
+
+def dosya_tip_adaylari(yol: str | Path) -> list[str]:
+    """Dosyaya uyan kaynak tiplerini ONCELIK SIRASIYLA listeler.
+
+    Ilk eleman ``dosya_tipini_bul`` sonucudur; sonrakiler, ozel okuyucu
+    sablonu tanimayip bos donerse sirayla denenecek adaylardir. Liste her
+    zaman 'genel' ile biter (Outlook mesaji haric). Dosya acilamiyorsa
+    ['genel'] doner (istisna firlatmaz).
+    """
+    p = Path(yol)
+
+    # 0) Outlook mesaji: icerik degil uzanti belirler. Mesaj bir kapsayicidir,
+    #    icindeki tablo dosyalari ayri ayri tespit edilir.
+    if p.suffix.lower() == ".msg":
+        return ["outlook_msg"]
+
+    try:
+        metinler, blob, sayfalar = _ipuclarini_topla(p)
+    except Exception:
+        return ["genel"]
+
+    adaylar: list[str] = []
+
+    # 1) Antik ham cari hareket dokumu
+    if _iceriyor(blob, "cari hareket"):
+        adaylar.append("antik_cari")
+
+    # 2) Yuzyil elle dagitilmis (santiye + ucus kolonlari birlikte)
+    if (_iceriyor(blob, "santiyesi") and _iceriyor(blob, "ucus guzergahi")) or (
+            _iceriyor(blob, "ucus guzergahi") and _iceriyor(blob, "ucus bilgisi")):
+        adaylar.append("yuzyil_dagitilmis")
+
+    # 3) Energo assessment: kisi kolonu ('Katilimci', 'Katilimci Adi'...) ve
+    #    sablona ozgu kolonlardan biri. Tam hucre esitligi degil, iceren
+    #    eslesme: 'Katilimci Adi' de 'Katilimci'dir, 'Paket' 'Program' olsa
+    #    da 'Energo Payi' / 'Uygulama Turu' sablonu ele verir.
+    if _iceriyor(blob, "katilimci") and any(
+            _iceriyor(blob, k) for k in ("paket", "energo payi", "uygulama turu")):
+        adaylar.append("energo_assessment")
+
+    # 4) Energo arabuluculuk (baslik ya da sayfa adinda; veri hucresinde degil)
+    if _iceriyor(blob, "arabulucu"):
+        adaylar.append("energo_arabulucu")
+
+    # 5) Saglik kontrol listesi
+    if (_iceriyor(blob, "bordrolu liste") or _iceriyor(blob, "bordrosuz liste")
+            or (_iceriyor(blob, "tckn") and _iceriyor(blob, "saglik kontrol"))):
+        adaylar.append("energo_saglik")
+
+    # 6) Koc Universitesi katilimci listesi
+    if "id" in metinler and _iceriyor(blob, "alt fonksiyon"):
+        adaylar.append("koc_katilimci")
+
+    # 7) Ferdi kaza sigorta listesi ve benzeri PERSONEL KUTUKLERI.
+    #    Bunlar fatura degil, kisi kutugudur: sicil ve masraf merkezi tasir
+    #    ama tutar tasimaz. Gider satiri olarak islenirlerse binlerce sahte
+    #    satir uretirler; ayri tip olarak isaretlenip defter beslemesine
+    #    yonlendirilirler. Taninan bir tutar kolonu ve altinda sayisal deger
+    #    VARSA kutuk degil gider dosyasidir (olculdu: 5 satir 510 USD
+    #    dagitilmiyor, uyari da yanlis yere 'kolon_esanlamlilari.csv'ye
+    #    ekleyin' diyordu).
+    if (_iceriyor(blob, "sicil no") and _iceriyor(blob, "masraf merkezi")
+            and _tutar_kolonu(sayfalar) is None):
+        adaylar.append("referans_liste")
+
+    adaylar.append("genel")
+    return adaylar
 
 
 def dosya_tipini_bul(yol: str | Path) -> str:
@@ -88,55 +241,7 @@ def dosya_tipini_bul(yol: str | Path) -> str:
     Donen deger modeller.KAYNAK_TIPLERI kumesindendir. Dosya acilamiyorsa
     veya hicbir ipucu eslesmiyorsa 'genel' doner (istisna firlatmaz).
     """
-    p = Path(yol)
-
-    # 0) Outlook mesaji: icerik degil uzanti belirler. Mesaj bir kapsayicidir,
-    #    icindeki tablo dosyalari ayri ayri tespit edilir.
-    if p.suffix.lower() == ".msg":
-        return "outlook_msg"
-
-    try:
-        metinler, blob = _ipuclarini_topla(p)
-    except Exception:
-        return "genel"
-
-    # 1) Antik ham cari hareket dokumu
-    if _iceriyor(blob, "cari hareket"):
-        return "antik_cari"
-
-    # 2) Yuzyil elle dagitilmis (santiye + ucus kolonlari birlikte)
-    if _iceriyor(blob, "santiyesi") and _iceriyor(blob, "ucus guzergahi"):
-        return "yuzyil_dagitilmis"
-    if _iceriyor(blob, "ucus guzergahi") and _iceriyor(blob, "ucus bilgisi"):
-        return "yuzyil_dagitilmis"
-
-    # 3) Energo assessment
-    if "katilimci" in metinler and "paket" in metinler:
-        return "energo_assessment"
-
-    # 4) Energo arabuluculuk
-    if "arabulucu" in metinler or _iceriyor(blob, "arabulucu"):
-        return "energo_arabulucu"
-
-    # 5) Saglik kontrol listesi
-    if _iceriyor(blob, "bordrolu liste") or _iceriyor(blob, "bordrosuz liste"):
-        return "energo_saglik"
-    if _iceriyor(blob, "tckn") and _iceriyor(blob, "saglik kontrol"):
-        return "energo_saglik"
-
-    # 6) Koc Universitesi katilimci listesi
-    if "id" in metinler and _iceriyor(blob, "alt fonksiyon"):
-        return "koc_katilimci"
-
-    # 7) Ferdi kaza sigorta listesi ve benzeri PERSONEL KUTUKLERI.
-    #    Bunlar fatura degil, kisi kutugudur: sicil ve masraf merkezi tasir
-    #    ama tutar tasimaz. Gider satiri olarak islenirlerse binlerce sahte
-    #    satir uretirler; ayri tip olarak isaretlenip defter beslemesine
-    #    yonlendirilirler.
-    if _iceriyor(blob, "sicil no") and _iceriyor(blob, "masraf merkezi"):
-        return "referans_liste"
-
-    return "genel"
+    return dosya_tip_adaylari(yol)[0]
 
 
 def oku_tip(yol: str | Path, tip: str) -> list[GiderSatiri]:
@@ -177,7 +282,6 @@ def _msg_oku(
     import shutil
     from tempfile import mkdtemp
 
-    from masraf.okuyucular.posta import msg_aciklarini_cikar
 
     # Cikarilan ekler KISISEL VERI tasir (ad soyad, TC, tutar). Gecici dizini
     # biz actiysak is bitince SILMEK zorundayiz; aksi halde her calistirmada
@@ -208,10 +312,17 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
 
     ``envanter`` verilirse her ek icin bir ``DosyaKaydi`` eklenir: okunan,
     kutuk sayilan, bos donen, hata veren, ayni icerik oldugu icin atlanan ve
-    tablo olmayan (PDF) ekler. Sessiz atlama yoktur.
+    tablo olmayan (PDF, sifreli arsiv, bozuk ek) ekler. Ic mailler ve zip
+    arsivleri de 'MAIL' / 'ARSIV' bilgi satiri olarak girer. Sessiz atlama
+    yoktur.
+
+    Envanter, uyari ve kontrol satirlarinda ekin MAILDEKI ORIJINAL ADI
+    (``gosterim_adi``) kullanilir; diske yazilan kisaltilmis/'_2' ekli ad
+    kullaniciya gosterilmez. Boylece boru'daki ad tabanli 'ayni adli dosya'
+    kontrolu ve mahsuplasmadaki fatura anahtari maildeki adla calisir.
     """
     from masraf.envanter import (
-        ATLANDI, AYNI_ICERIK, MAIL, OKUNAMADI, DosyaKaydi, _boyut, satirlardan_kayit,
+        ARSIV, ATLANDI, AYNI_ICERIK, MAIL, OKUNAMADI, DosyaKaydi, _boyut, satirlardan_kayit,
     )
     from masraf.okuyucular.posta import msg_aciklarini_cikar
 
@@ -219,23 +330,58 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
         if envanter is not None:
             envanter.append(k)
 
+    def _kaynak(zincir) -> str:
+        """'mail.msg > konu > ic mail > arsiv.zip' bicimindeki kaynak zinciri."""
+        return " > ".join([yol.name] + [str(z) for z in (zincir or [])])
+
     satirlar: list[GiderSatiri] = []
     atlananlar_yerel: list = atlanan_ekler if atlanan_ekler is not None else []
     onceki_atlanan = len(atlananlar_yerel)
-    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlananlar_yerel)
-    for a in atlananlar_yerel[onceki_atlanan:]:
+    kapsayicilar: list = []
+    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlananlar_yerel, kapsayicilar=kapsayicilar)
+    yeni_atlananlar = atlananlar_yerel[onceki_atlanan:]
+    # Tablo olmayan ekler (PDF) mailler ARASINDA da tekillenir: ayni PDF iki
+    # ayri mailde gelirse kapak/Kontrol 'okunmayan ek' sayisi farkli dosya
+    # sayisini versin. (Mail ICINDEKI tekrarlari posta zaten isaretledi.)
+    if gorulen_ozetler is not None:
+        for a in yeni_atlananlar:
+            ozet = getattr(a, "ozet", None)
+            if not ozet or getattr(a, "tekrar", False):
+                continue
+            if ozet in gorulen_ozetler:
+                a.tekrar = True
+                a.sebep = "icerigi baska bir mailde daha once gorulen ekle birebir ayni; tekrar sayilmadi"
+            else:
+                gorulen_ozetler.add(ozet)
+    tekrar_sayisi = sum(1 for a in yeni_atlananlar if getattr(a, "tekrar", False))
+    ic_mail_sayisi = sum(1 for k in kapsayicilar if getattr(k, "tur", "") == "mail")
+    arsiv_sayisi = sum(1 for k in kapsayicilar if getattr(k, "tur", "") == "arsiv")
+    ozet_metni = f"{len(ekler)} tablo eki, {len(yeni_atlananlar) - tekrar_sayisi} okunmayan ek"
+    if tekrar_sayisi:
+        ozet_metni += f", {tekrar_sayisi} tekrar eden ek"
+    if ic_mail_sayisi:
+        ozet_metni += f", {ic_mail_sayisi} ekli mail"
+    if arsiv_sayisi:
+        ozet_metni += f", {arsiv_sayisi} arsiv"
+    _kaydet(DosyaKaydi(ad=yol.name, kaynak="", tur="outlook_msg", durum=MAIL,
+                       sebep=ozet_metni, boyut=_boyut(yol)))
+    # Kapsayicilar (ic mail, zip): tablo degiller ama envanterde gorunmeliler;
+    # aksi halde 'm1.msg 3 ek tasiyordu, 1'i sifreliydi' bilgisi kaybolur.
+    for k in kapsayicilar:
+        mail_mi = getattr(k, "tur", "") == "mail"
         _kaydet(DosyaKaydi(
-            ad=getattr(a, "ad", str(a)), kaynak=f"{yol.name} > {getattr(a, 'kaynak_aciklamasi', '')}".rstrip(" >"),
-            tur=Path(getattr(a, "ad", str(a))).suffix.lower().lstrip(".") or "?",
+            ad=getattr(k, "ad", str(k)), kaynak=_kaynak(getattr(k, "zincir", [])),
+            tur="outlook_msg" if mail_mi else "zip", durum=MAIL if mail_mi else ARSIV,
+            sebep=getattr(k, "aciklama", ""), boyut=getattr(k, "boyut", None)))
+    for a in yeni_atlananlar:
+        ad = getattr(a, "ad", str(a))
+        _kaydet(DosyaKaydi(
+            ad=ad, kaynak=_kaynak(getattr(a, "zincir", [])),
+            tur=Path(ad).suffix.lower().lstrip(".") or "?",
             durum=AYNI_ICERIK if getattr(a, "tekrar", False) else ATLANDI,
             sebep=getattr(a, "sebep", "tablo degil; acilmadi"),
-            boyut=getattr(a, "boyut", None)))
-    yeni_atlananlar = atlananlar_yerel[onceki_atlanan:]
-    tekrar_sayisi = sum(1 for a in yeni_atlananlar if getattr(a, "tekrar", False))
-    _kaydet(DosyaKaydi(ad=yol.name, kaynak="", tur="outlook_msg", durum=MAIL,
-                       sebep=(f"{len(ekler)} tablo eki, {len(yeni_atlananlar) - tekrar_sayisi} okunmayan ek"
-                              + (f", {tekrar_sayisi} tekrar eden ek" if tekrar_sayisi else "")),
-                       boyut=_boyut(yol)))
+            boyut=getattr(a, "boyut", None),
+            ozet=(getattr(a, "ozet", None) or None)))
 
     # Ayni ek iki farkli mailde (iletilmis, tekrar gonderilmis) gelirse
     # icerigi birebir aynidir. Ikisini de okumak parayi cift sayar; yineleme
@@ -244,15 +390,17 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
     if gorulen_ozetler is not None:
         kalan = []
         for ek in ekler:
-            try:
-                ozet = _dosya_ozeti(ek.yol)
-            except OSError:
-                kalan.append(ek); continue
+            ozet = getattr(ek, "ozet", None)
+            if not ozet:
+                try:
+                    ozet = _dosya_ozeti(ek.yol)
+                except OSError:
+                    kalan.append(ek); continue
             if ozet in gorulen_ozetler:
-                _log.warning("Ayni ek daha once okundu, atlandi: %s (%s)", ek.ad, yol.name)
+                _log.warning("Ayni ek daha once okundu, atlandi: %s (%s)", ek.gosterim_adi, yol.name)
                 _kaydet(DosyaKaydi(
-                    ad=ek.ad, kaynak=f"{yol.name} > {ek.kaynak_aciklamasi}".replace(f" > {ek.ad}", ""),
-                    tur=Path(ek.ad).suffix.lower().lstrip("."), durum=AYNI_ICERIK,
+                    ad=ek.gosterim_adi, kaynak=_kaynak(ek.zincir),
+                    tur=Path(ek.gosterim_adi).suffix.lower().lstrip("."), durum=AYNI_ICERIK,
                     sebep="icerigi daha once okunan bir ekle birebir ayni; cift sayim olmasin diye atlandi",
                     boyut=_boyut(ek.yol), ozet=ozet))
                 continue
@@ -267,18 +415,25 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
             )
 
     if not ekler:
+        okunmayan = len(yeni_atlananlar) - tekrar_sayisi
+        ipucu = ""
+        if okunmayan:
+            ornekler = [getattr(a, "ad", str(a)) for a in yeni_atlananlar if not getattr(a, "tekrar", False)][:5]
+            ipucu = (f" Mailde {okunmayan} okunmayan ek var (orn. {', '.join(ornekler)}); "
+                     "sebepleri Dosyalar sayfasinda.")
         raise MesajOkunamadi(
             "mesajin icinde okunabilir tablo eki bulunamadi. Aranan uzantilar: "
             ".xlsx .xls .xlsm .csv .tsv. Mail yalnizca metin/gorsel tasiyor "
             "olabilir, ya da ekler mailin govdesine gomulu olabilir. Ekleri "
-            "Outlook'ta kaydedip dogrudan 1_FATURALAR klasorune atmayi deneyin."
+            "Outlook'ta kaydedip dogrudan 1_FATURALAR klasorune atmayi deneyin." + ipucu
         )
 
     # Her ek icin ne oldugunu ayri ayri tut; hepsi basarisiz olursa raporla.
     bos_kalanlar: list[str] = []
     hatalilar: list[str] = []
     for ek in ekler:
-        ek_kaynak = f"{yol.name} > {ek.kaynak_aciklamasi}".replace(f" > {ek.ad}", "")
+        ek_adi = ek.gosterim_adi
+        ek_kaynak = _kaynak(ek.zincir)
         try:
             ek_tip = dosya_tipini_bul(ek.yol)
         except Exception:  # noqa: BLE001
@@ -286,17 +441,26 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
         try:
             ic_satirlar = oku(ek.yol)
         except Exception as hata:  # noqa: BLE001 - kullaniciya gosterilecek
-            hatalilar.append(f"{ek.ad}: {hata.__class__.__name__}: {hata}")
-            _kaydet(DosyaKaydi(ad=ek.ad, kaynak=ek_kaynak, tur=ek_tip, durum=OKUNAMADI,
+            hatalilar.append(f"{ek_adi}: {hata.__class__.__name__}: {hata}")
+            _kaydet(DosyaKaydi(ad=ek_adi, kaynak=ek_kaynak, tur=ek_tip, durum=OKUNAMADI,
                                sebep=f"{hata.__class__.__name__}: {hata}", boyut=_boyut(ek.yol)))
             continue
-        _kaydet(satirlardan_kayit(ek.ad, ek_kaynak, ek_tip, ic_satirlar, boyut=_boyut(ek.yol)))
+        # Envanter turu fiilen kullanilan okuyucudur ('energo_assessment -> genel'
+        # gibi); ozel okuyucu sablonu tanimayip genel'e dustuyse sebebi de yazilir.
+        kayit = satirlardan_kayit(ek_adi, ek_kaynak, okuyucu_turu(ic_satirlar, ek_tip), ic_satirlar,
+                                  boyut=_boyut(ek.yol), ozet=getattr(ek, "ozet", None))
+        uyari = next((str(s.ek.get(OKUYUCU_UYARISI)) for s in ic_satirlar
+                      if isinstance(getattr(s, "ek", None), dict) and s.ek.get(OKUYUCU_UYARISI)), "")
+        if uyari:
+            kayit.sebep = f"{kayit.sebep}; {uyari}" if kayit.sebep else uyari
+        _kaydet(kayit)
         if not ic_satirlar:
-            bos_kalanlar.append(ek.ad)
+            bos_kalanlar.append(ek_adi)
             continue
         for s in ic_satirlar:
-            # Kaynak dosya adini mesaj + ek olarak yaz, izlenebilirlik icin.
-            s.kaynak_dosya = f"{yol.name} > {ek.ad}"
+            # Kaynak dosya adini mesaj + ORIJINAL ek adi olarak yaz; izlenebilirlik
+            # ve ad tabanli kontroller (ayni adli dosya, fatura anahtari) icin.
+            s.kaynak_dosya = f"{yol.name} > {ek_adi}"
             if isinstance(s.ek, dict):
                 s.ek.setdefault("mail_konusu", ek.mail_konusu)
                 s.ek.setdefault("mail_gonderen", ek.mail_gonderen)
@@ -321,6 +485,30 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
     raise MesajOkunamadi(" ".join(parcalar))
 
 
+def okuyucu_turu(satirlar: Iterable[Any], tespit_tipi: str,
+                 kullanilan_tip: str | None = None) -> str:
+    """Envanterde gosterilecek 'Tur': fiilen kullanilan okuyucunun tipi.
+
+    Satirlarin ``kaynak_tip`` alanindan turetilir (assessment okuyucusu
+    tutarsiz listeyi 'energo_assessment_detay' olarak etiketler; envanter de
+    oyle gostermeli). Ozel okuyucu bos donup baska bir okuyucuya dusulduyse
+    'energo_assessment -> genel' bicimindedir; satirlarin ek sozlugundeki
+    'okuyucu_turu' notu (oku() yazar) varsa dogrudan o kullanilir, boylece
+    mail eklerinde de dogru gorunur.
+    """
+    satirlar = list(satirlar)
+    for s in satirlar:
+        ek = getattr(s, "ek", None)
+        if isinstance(ek, dict) and ek.get("okuyucu_turu"):
+            return str(ek["okuyucu_turu"])
+    tipler = Counter(getattr(s, "kaynak_tip", "") for s in satirlar)
+    tipler.pop("", None)
+    fiili = tipler.most_common(1)[0][0] if tipler else (kullanilan_tip or tespit_tipi)
+    if kullanilan_tip is None or kullanilan_tip == tespit_tipi or fiili == tespit_tipi:
+        return fiili
+    return f"{tespit_tipi} -> {fiili}"
+
+
 def oku(
     yol: str | Path,
     cikarma_dizini: str | Path | None = None,
@@ -333,29 +521,73 @@ def oku(
     Outlook mesajlari kapsayici olarak ele alinir: icindeki tum tablo ekleri
     cikarilip ayri ayri okunur ve tek listede birlestirilir.
 
-    Ozel parser hic satir uretmezse (sablon beklenenden farkliysa) genel
-    parser'a duser; boylece bilinmeyen bir surum sessizce bos sonuc vermez.
+    Ozel parser hic satir uretmezse (sablon beklenenden farkliysa) oncelik
+    sirasindaki sonraki aday, en son genel parser denenir; boylece bilinmeyen
+    bir surum sessizce bos sonuc vermez. Ama SESSIZCE de dusulmez: genel
+    okuyucu kolonlari tahminle sectigi icin (TL 'Toplam' kolonunu USD gibi
+    dagitabilir, olculdu) her satirin ek['okuyucu_uyarisi'] alanina ve
+    envanter kaydinin sebebine uyari yazilir; bu satirlar elle dogrulanmali.
     """
     p = Path(yol)
-    tip = dosya_tipini_bul(p)
+    adaylar = dosya_tip_adaylari(p)
+    tip = adaylar[0]
     if tip == "outlook_msg":
         return _msg_oku(p, cikarma_dizini, gorulen_ozetler, atlanan_ekler, envanter)
-    satirlar = oku_tip(p, tip)
-    if not satirlar and tip != "genel":
-        satirlar = genel_oku(p)
+
+    satirlar: list[GiderSatiri] = []
+    kullanilan = tip
+    bos_donenler: list[str] = []
+    for aday in adaylar:
+        kullanilan = aday
+        satirlar = oku_tip(p, aday)
+        if satirlar:
+            break
+        bos_donenler.append(aday)
+
+    # Ozel okuyucu dosyayi tanidi ama sablonu okuyamadi; genel okuyucuyla
+    # (ya da onun kutuk haliyle) okundu. Kolon secimi tahmindir.
+    sablon_taninmadi = kullanilan != tip and PARSERLAR[kullanilan] is genel_oku
+    uyari: str | None = None
+    if sablon_taninmadi:
+        uyari = (
+            f"ozel okuyucu ({tip}) sablonu tanimadi, genel okuyucuyla okundu; "
+            "tutar ve para birimi elle dogrulanmali"
+        )
+        _log.warning("%s: %s", p.name, uyari)
 
     # Guvenlik agi: cok satirli ve hicbir satirinda tutar olmayan bir dosya
     # fatura degil kisi kutugudur. Gider olarak islenirse sahte satir uretir.
-    if (tip == "genel" and len(satirlar) >= _KUTUK_SATIR_ESIGI
+    kutuk_sebebi: str | None = None
+    if kullanilan == "referans_liste":
+        kutuk_sebebi = "sicil ve masraf merkezi kolonlari var, tutar kolonu yok"
+    elif (kullanilan == "genel" and len(satirlar) >= _KUTUK_SATIR_ESIGI
             and not any(s.tutar is not None for s in satirlar)):
-        tip = "referans_liste"
+        kullanilan = "referans_liste"
+        kutuk_sebebi = f"{len(satirlar)} satirin hicbirinde tutar yok"
 
-    if tip == "referans_liste":
+    if kullanilan == "referans_liste":
         for s in satirlar:
             s.kaynak_tip = "referans_liste"
             if isinstance(s.ek, dict):
                 s.ek["referans_liste"] = True
+                s.ek["kutuk_sebebi"] = kutuk_sebebi
+
+    tur = okuyucu_turu(satirlar, tip, kullanilan)
+    for s in satirlar:
+        if not isinstance(s.ek, dict):
+            continue
+        if kullanilan != tip:
+            s.ek["okuyucu_turu"] = tur
+        if uyari:
+            s.ek[OKUYUCU_UYARISI] = uyari
+
     if envanter is not None:
         from masraf.envanter import _boyut, satirlardan_kayit
-        envanter.append(satirlardan_kayit(p.name, "", tip, satirlar, boyut=_boyut(p)))
+        kayit = satirlardan_kayit(p.name, "", tur, satirlar, boyut=_boyut(p))
+        notlar = [n for n in (uyari, kutuk_sebebi) if n]
+        if bos_donenler and not satirlar:
+            notlar.append("denenen okuyucular: " + ", ".join(bos_donenler))
+        if notlar:
+            kayit.sebep = "; ".join(([kayit.sebep] if kayit.sebep else []) + notlar)
+        envanter.append(kayit)
     return satirlar

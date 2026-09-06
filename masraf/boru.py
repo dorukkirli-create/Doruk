@@ -27,7 +27,7 @@ Calisma zamaninda yapay zeka veya internet KULLANILMAZ.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
@@ -131,20 +131,27 @@ def _parola_korumali_mi(yol: Path) -> bool:
             bas = akis.read(8)
         if bas != _OLE_IMZASI:
             return False
-        # ZIP olmasi gereken bicim OLE cikti: sifreli.
-        if uzanti in (".xlsx", ".xlsm"):
-            return True
-        # .xls ve .msg zaten OLE'dir; icerideki akislara bakmak gerekir.
+        # ZIP olmasi gereken bicim OLE cikti: ya sifreli, ya da uzantisi
+        # degistirilmis eski bir .xls (olculdu: 'parola korumali' denip
+        # kullanici parola aramaya gonderiliyordu). Akislara bakmadan karar yok.
         try:
             import olefile
         except ImportError:
-            return False
+            return uzanti in (".xlsx", ".xlsm")
         try:
             with olefile.OleFileIO(yol) as ole:
                 adlar = {parca for yollar in ole.listdir() for parca in yollar}
         except Exception:  # noqa: BLE001
-            return False
-        return bool(adlar & _SIFRELI_AKISLAR)
+            # OLE imzali ama okunamayan .xlsx: sifreli kabin varsayilir (eski
+            # davranis); .xls/.msg icin normal hata yoluna dusulur.
+            return uzanti in (".xlsx", ".xlsm")
+        if adlar & _SIFRELI_AKISLAR:
+            return True
+        if uzanti in (".xlsx", ".xlsm"):
+            # 'Workbook'/'Book' akisi olan OLE, adi degistirilmis eski bir .xls'tir:
+            # parola yok. Okuma yoluna gider ve oradaki mesaj 'adini .xls yapin' der.
+            return not bool(adlar & {"Workbook", "Book"})
+        return False
     except OSError:
         return False
 
@@ -162,13 +169,29 @@ _YAZMA_HATALARI = (PermissionError, _FileCreateError)
 def _hata_metni(hata: BaseException) -> str:
     """Ham istisnayi kullanicinin anlayacagi cumleye cevirir."""
     ad = hata.__class__.__name__
-    if ad in ("BadZipFile", "XLRDError", "EmptyDataError") or "File is not a zip" in str(hata) \
-            or "size is 0" in str(hata):
-        return ("dosya bos ya da bozuk; Excel de acamiyorsa biz de acamayiz "
-                f"({ad}: {hata})")
+    metin = str(hata)
     if ad in ("MesajAcilamadi", "MesajOkunamadi"):
-        return str(hata)
-    return f"okunamadi ({ad}: {hata})"
+        return metin
+    if ad == "MemoryError":
+        return "dosya cok buyuk, bellek yetmedi; dosyayi bolerek ya da daha az sayfayla deneyin"
+    if "Excel xlsx file; not supported" in metin:
+        return ("uzantisi .xls ama icerigi .xlsx; dosyanin adini .xlsx yapip tekrar deneyin "
+                f"({ad}: {metin})")
+    if "Workbook is encrypted" in metin or "encrypted" in metin.lower():
+        return ("dosya PAROLA KORUMALI, acilamadi. Excel'de acip parolayi girin, 'Farkli Kaydet' "
+                f"ile parolasiz kaydedin ve tekrar deneyin ({ad}: {metin})")
+    if "[Content_Types].xml" in metin:
+        return ("dosya zip bicimli ama Excel degil (bozuk ya da yanlis uzanti); Excel'de acip "
+                f".xlsx olarak yeniden kaydedin ({ad}: {metin})")
+    if "File is not a zip" in metin or ad == "BadZipFile":
+        return ("uzantisi .xlsx ama icerigi eski .xls ya da baska bir bicim; Excel'de acip "
+                f".xlsx olarak 'Farkli Kaydet' yapin ({ad}: {metin})")
+    if ad in ("XLRDError", "EmptyDataError") or "size is 0" in metin:
+        return ("dosya bos ya da bozuk; Excel de acamiyorsa biz de acamayiz "
+                f"({ad}: {metin})")
+    if "Desteklenmeyen dosya uzantisi" in metin:
+        return "dosya tipi desteklenmiyor (klasor ya da uzantisiz dosya); .xlsx/.xls/.csv/.msg verin"
+    return f"okunamadi ({ad}: {metin})"
 
 
 def _mahsup_ozeti(mahsup) -> dict:
@@ -244,6 +267,7 @@ class Boru:
         self.yardimci: Any = None
         self.hatalar: list[str] = []
         self.uyarilar: list[str] = []
+        self.yinelenen_dosyalar: list[str] = []   # ekleri baska mailden okunmus ikiz mailler
         #: Calistirici (calistir.py) 'bu dosya daha once islendi' gibi
         #: uyarilari buraya koyar; isle() bunlari uyarilara tasir.
         self.on_uyarilar: list[str] = []
@@ -277,6 +301,12 @@ class Boru:
         )
         donemler = self.defter.donemler
         self._son_donem = donemler[-1] if donemler else None
+        if not donemler or not getattr(self.defter, "gorev_yerleri", None):
+            self.uyarilar.append(
+                "PERSONEL VERISI BOS: dosya acildi ama hicbir kayit/donem okunmadi "
+                f"({self.ayarlar.personel_yolu}). Yanlis sayfa, filtreli kopya ya da bozuk disa "
+                "aktarim olabilir; hicbir satir OTOMATIK olamaz. Dosyayi kontrol edin."
+            )
 
         self.yardimci = None
         if self.ayarlar.yardimci_personel_yolu:
@@ -289,6 +319,9 @@ class Boru:
                     f"1C personel listesi yuklenemedi ({self.ayarlar.yardimci_personel_yolu}): {hata}")
 
         self.defterler = Defterler(self.ayarlar.veri_dizini)
+        # Bozuk / yanlis ayiricili defter dosyasi sessizce bos okunmasin:
+        # kullanicinin ogrettigi alias ve harici kayitlar kaybolur.
+        self.uyarilar.extend(getattr(self.defterler, "uyarilar", None) or [])
 
         # Okuyucular kolon sozlugunu (kolon_esanlamlilari.csv) varsayilan
         # olarak calisma dizinindeki 'veri' altinda arar. Boru hatti gercek veri
@@ -313,6 +346,7 @@ class Boru:
                     "Masraf merkezi haritasinda tanimsiz gorev yeri: " + ", ".join(eksik)
                 )
 
+        self._hazirlik_uyarilari = list(self.uyarilar)
         self._hazir = True
 
     def _eslestirici_kur(self) -> None:
@@ -352,6 +386,7 @@ class Boru:
         # Ayni AD ile gelen ama icerigi farkli dosyalar (Excel'de yeniden
         # kaydedilmis kopya gibi): ad -> (satir sayisi, toplam, yol).
         gorulen_adlar: dict[str, tuple[int, float, str]] = {}
+        self._kopya_sayaci = {}
         for sira, yol in enumerate(dosya_yollari, start=1):
             hedef = Path(yol)
             _bildir(ilerleme, 5 + 25 * (sira - 1) / toplam, f"Okunuyor: {hedef.name}")
@@ -387,9 +422,19 @@ class Boru:
                 tip = dosya_tipini_bul(hedef)
                 # kesif.oku Outlook mesajlarini, referans listelerini ve
                 # ozel parser bos donerse genel parser'a dusmeyi kendi ele alir.
+                envanter_basi = len(self.envanter)
                 dosya_satirlari = kesif_oku(hedef, gorulen_ozetler=gorulen_ozetler,
                                             atlanan_ekler=self.atlanan_ekler,
                                             envanter=self.envanter)
+                # Mailin bir eki okunamadiysa diger ekler okunsa bile bu bir
+                # HATADIR: o ekin parasi tabloda yok. Sessiz kalirsa mail
+                # arsive gider ve 'para kaybolmadi' denir (olculdu).
+                for k in self.envanter[envanter_basi:]:
+                    if k.durum == OKUNAMADI and k.kaynak:
+                        self.hatalar.append(
+                            f"{hedef.name}: ek '{k.ad}' okunamadi ({k.sebep}); bu ekin tutari "
+                            "tabloda YOK. Eki duzeltip maili yeniden calistirin."
+                        )
                 if not dosya_satirlari:
                     self.hatalar.append(
                         f"{hedef.name}: dosyadan hic gider satiri cikarilamadi "
@@ -399,6 +444,17 @@ class Boru:
                     dosya_satirlari, gorulen_adlar)
                 satirlar.extend(dosya_satirlari)
             except Exception as hata:  # noqa: BLE001 - kullaniciya gosterilecek
+                if hata.__class__.__name__ == "MesajOkunamadi" and "zaten okunmustu" in str(hata):
+                    # Iletilmis / yeniden gonderilmis mail: ekleri baska bir mailden
+                    # zaten okundu. Bu bir hata degil; hata sayilirsa calistirici
+                    # dosyayi yerinde birakir ve gelecek ay ayni para ikinci kez
+                    # dagitilir (olculdu). Ayni icerik olarak kaydedilir, arsive gider.
+                    self.yinelenen_dosyalar.append(hedef.name)
+                    self.uyarilar.append(f"{hedef.name}: {hata} Dosya ayni icerik sayildi.")
+                    self.envanter.append(DosyaKaydi(
+                        ad=hedef.name, tur=hedef.suffix.lower().lstrip("."), durum=AYNI_ICERIK,
+                        sebep=str(hata), boyut=_boyut(hedef), ozet=ozet))
+                    continue
                 self.hatalar.append(f"{hedef.name}: {_hata_metni(hata)}")
                 self.envanter.append(DosyaKaydi(
                     ad=hedef.name, tur=hedef.suffix.lower().lstrip("."), durum=OKUNAMADI,
@@ -450,7 +506,11 @@ class Boru:
                         k.sebep = f"ayni adli ve ayni icerikli dosya daha once okundu ({onceki[2]}); atlandi"
                         break
                 continue
-            etiket = tam_yol if "> " in tam_yol else f"kopya-{sum(1 for k in gorulen_adlar if k == ad) + 1} > {ad}"
+            sayac = getattr(self, "_kopya_sayaci", None)
+            if sayac is None:
+                sayac = self._kopya_sayaci = {}
+            sayac[ad] = sayac.get(ad, 1) + 1
+            etiket = tam_yol if "> " in tam_yol else f"kopya-{sayac[ad]} > {ad}"
             for s in grup:
                 if isinstance(s.ek, dict):
                     s.ek["kaynak_etiketi"] = etiket
@@ -473,6 +533,11 @@ class Boru:
         self.hatalar = []
         self.atlanan_ekler = []
         self.envanter = []
+        self.yinelenen_dosyalar = []
+        # Ayni Boru ile ikinci calistirmada onceki calistirmanin uyarilari
+        # (MUTABAKAT ACIK, isaret celiskisi...) birikmesin; hazirlik uyarilari
+        # (harita eksikleri, bozuk defter) her calistirmada gecerlidir, kalir.
+        self.uyarilar = list(getattr(self, "_hazirlik_uyarilari", None) or [])
         _bildir(ilerleme, 1, "Personel verisi yukleniyor")
         self.hazirla()
         # Calistiricinin (ornegin 'bu dosya daha once islendi') onceden verdigi
@@ -489,20 +554,16 @@ class Boru:
         # aksi halde binlerce sahte satir uretilir.
         satirlar = [s for s in tum_satirlar if s.kaynak_tip != "referans_liste"]
         referanslar = [s for s in tum_satirlar if s.kaynak_tip == "referans_liste"]
+        kutuk_uyari_i: int | None = None
         if referanslar:
             # Bu bir hata degil, beklenen davranistir: kullaniciya 'hata' diye
             # gostermek yanlis alarm uretir. Ama HANGI dosyanin kutuk sayildigi
             # yazilmali: tutar kolonu taninmayan bir fatura da buraya duser ve
-            # dagilimdan sessizce cikar (olculdu).
-            from collections import Counter
-            sayim = Counter(str(s.kaynak_dosya or "").split("> ")[-1] for s in referanslar)
-            self.uyarilar.append(
-                f"{len(referanslar)} satir kisi kutugu olarak ayrildi ve gider "
-                "satiri sayilmadi; defter beslemesinde kullanildi. Dosyalar: "
-                + "; ".join(f"{ad} ({n} satir)" for ad, n in sayim.most_common())
-                + ". Bunlardan biri FATURAYSA tutar kolonu taninmamis demektir: "
-                "kolon adini veri/kolon_esanlamlilari.csv dosyasina ekleyin."
-            )
+            # dagilimdan sessizce cikar (olculdu). Defteri besleyip beslemedigi
+            # besleme bittikten sonra gercek sayilarla yeniden yazilir; eski
+            # metin 'defter beslemesinde kullanildi' derken 0 satir besliyordu.
+            self.uyarilar.append(self._kutuk_uyarisi(referanslar, besleme=None))
+            kutuk_uyari_i = len(self.uyarilar) - 1
         if not satirlar:
             _bildir(ilerleme, 100, "Islenecek gider satiri bulunamadi")
             return []
@@ -512,13 +573,26 @@ class Boru:
             _bildir(ilerleme, 30, "Yardimci listelerden kisi defteri besleniyor")
             try:
                 besleme = self.defterler.yardimci_kaynaktan_besle(list(tum_satirlar), defter=self.defter)
+                if kutuk_uyari_i is not None:
+                    self.uyarilar[kutuk_uyari_i] = self._kutuk_uyarisi(referanslar, besleme=besleme)
+                self._kutuk_envanterini_guncelle(besleme)
                 if self.ayarlar.ogrenmeyi_kaydet and (
                     besleme.get("ek_kisi") or besleme.get("tckn_kopru")
                 ):
                     self.defterler.kaydet()
+                    kalan = (self.defterler.istatistik() or {}).get("kaydedilmemis") or []
+                    if kalan:
+                        self.uyarilar.append(
+                            f"DEFTER KAYDEDILEMEDI: {', '.join(map(str, kalan))} veri klasorune "
+                            "yazilamadi (salt okunur ya da kilitli). Ogrenilen kayitlar bu "
+                            "calistirmada saklanmadi; gelecek ay yeniden ogrenilecek."
+                        )
             except Exception as hata:  # noqa: BLE001
                 self.hatalar.append(f"Kisi defteri beslenemedi: {hata}")
+        else:
+            self._kutuk_envanterini_guncelle(None)
 
+        if self.ayarlar.defterleri_besle:
             # TC kimlik koprusunu ve dogum tarihiyle dogrulanmis aliaslari turet.
             # Personel ana verisinde TC kimlik yok; kopru ad soyad ve dogum
             # tarihi uzerinden kurulur ve kalici olarak saklanir.
@@ -531,10 +605,14 @@ class Boru:
                     kopruyu_deftere_yaz,
                 )
 
+                # ogrenmeyi_kaydet=False ise defterler yalnizca bellekte
+                # beslenir; TC iceren CSV'ler ve gecmis yedekleri diske yazilmaz.
                 yeni_kopru = kopruyu_deftere_yaz(
-                    kopru_turet(tum_satirlar, self.defter), self.defterler)
+                    kopru_turet(tum_satirlar, self.defter), self.defterler,
+                    kaydet=self.ayarlar.ogrenmeyi_kaydet)
                 yeni_alias = aliaslari_deftere_yaz(
-                    alias_turet(tum_satirlar, self.defter), self.defterler)
+                    alias_turet(tum_satirlar, self.defter), self.defterler,
+                    kaydet=self.ayarlar.ogrenmeyi_kaydet)
                 if yeni_kopru or yeni_alias:
                     # Basari bildirimi; hata listesine girmemeli.
                     self.uyarilar.append(
@@ -602,6 +680,95 @@ class Boru:
             if kayit and kayit.get("santiye"):
                 return str(kayit["santiye"])
         return None
+
+    # ------------------------------------------------------------------
+    # Kisi kutugu uyari metni
+    # ------------------------------------------------------------------
+
+    def _kutuk_uyarisi(self, referanslar: list, besleme: dict | None) -> str:
+        """Kisi kutugu uyarisi: kac satir, kac benzersiz kisi, hangi dosya ve
+        sayfalar, tekrar eden sayfalar, defteri fiilen besledi mi."""
+        from collections import Counter
+
+        from masraf.defter import besleme_aciklamasi
+        from masraf.okuyucular.genel import kisi_anahtari
+
+        def dosya_adi(s) -> str:
+            return str(s.kaynak_dosya or "").split("> ")[-1]
+
+        kisiler = {k for k in (kisi_anahtari(s) for s in referanslar) if k}
+        parcalar: list[str] = []
+        tutar_kolonu_eksik: list[str] = []
+        for ad, n in Counter(dosya_adi(s) for s in referanslar).most_common():
+            dosya_satirlari = [s for s in referanslar if dosya_adi(s) == ad]
+            # Kesif kutuk sayma nedenini satira yazar ('tutar kolonu yok' /
+            # 'N satirin hicbirinde tutar yok'); kullaniciya oldugu gibi soylenir.
+            nedenler = Counter(
+                str(s.ek.get("kutuk_sebebi")) for s in dosya_satirlari
+                if isinstance(s.ek, dict) and s.ek.get("kutuk_sebebi")
+            )
+            # Tutar kolonu hic cozulmediyse fatura olma ihtimali var: sozluk
+            # tavsiyesi yalnizca o zaman anlamli. Kolon var ama bos ise kutuktur.
+            tutar_cozuldu = any(
+                ((s.ek or {}).get("cozulen_kolonlar") or {}).get("tutar") is not None
+                for s in dosya_satirlari
+            )
+            if not tutar_cozuldu:
+                tutar_kolonu_eksik.append(ad)
+            sayfa_sayim = Counter(str((s.ek or {}).get("sayfa") or "") for s in dosya_satirlari)
+            tekrarlar = {
+                str(s.ek.get("sayfa")): str(s.ek.get("sayfa_tekrari"))
+                for s in dosya_satirlari if isinstance(s.ek, dict) and s.ek.get("sayfa_tekrari")
+            }
+            sayfalar = []
+            for sayfa, m in sayfa_sayim.most_common():
+                if not sayfa:
+                    continue
+                metin = f"{sayfa} {m}"
+                if sayfa in tekrarlar:
+                    metin += f" ('{tekrarlar[sayfa]}' sayfasindaki kisileri tekrar ediyor)"
+                sayfalar.append(metin)
+            metin = f"{ad} ({n} satir"
+            if nedenler:
+                metin += "; neden: " + ", ".join(nedenler)
+            if len(sayfalar) > 1:
+                metin += "; sayfalar: " + ", ".join(sayfalar)
+            parcalar.append(metin + ")")
+        durum = besleme_aciklamasi(
+            besleme, "referans_liste", besleme_acik=bool(self.ayarlar.defterleri_besle)
+        )
+        metin = (
+            f"{len(referanslar)} satir ({len(kisiler)} benzersiz kisi) kisi kutugu olarak "
+            "ayrildi ve gider satiri sayilmadi. Dosyalar: " + "; ".join(parcalar)
+            + f". Kutuk {durum}."
+        )
+        if tutar_kolonu_eksik:
+            metin += (
+                " Tutar kolonu bulunamayan dosya" + ("lar" if len(tutar_kolonu_eksik) > 1 else "")
+                + " (" + "; ".join(tutar_kolonu_eksik) + ") FATURAYSA tutar kolonunun adi "
+                "taninmamis demektir: kolon adini veri/kolon_esanlamlilari.csv dosyasina ekleyin."
+            )
+        return metin
+
+    def _kutuk_envanterini_guncelle(self, besleme: dict | None) -> None:
+        """Envanterdeki KUTUK kayitlarinin aciklamasini gercek besleme sonucuyla yazar.
+
+        Envanter kaydi okuma sirasinda 'defter beslemesinde kullanildi' der;
+        besleme sonradan olur ve referans listeleri hic beslemez. Aciklama
+        burada 'defteri besledi/beslemedi: neden' ile degistirilir.
+        """
+        try:
+            from masraf.defter import besleme_aciklamasi
+            from masraf.envanter import KUTUK
+        except Exception:  # noqa: BLE001
+            return
+        for kayit in getattr(self, "envanter", []) or []:
+            if getattr(kayit, "durum", None) != KUTUK:
+                continue
+            aciklama = besleme_aciklamasi(
+                besleme, str(kayit.tur or ""), besleme_acik=bool(self.ayarlar.defterleri_besle)
+            )
+            kayit.sebep = f"kisi listesi; dagilima girmedi, {aciklama}"
 
     # ------------------------------------------------------------------
     # Ozet
@@ -773,13 +940,15 @@ class Boru:
             self.uyarilar.append(
                 "MUTABAKAT ACIK: "
                 + "; ".join(
-                    f"{k.kaynak} ({k.para_birimi}) fark {k.fark:+.2f}"
+                    f"{k.kaynak} ({k.para_birimi}): {getattr(k, 'acik_sebebi', '') or f'fark {k.fark:+.2f}'}"
                     for k in mahsup.acik_kontroller
                 )
                 + ". Mahsuplasma tablosu muhasebeye gonderilmeden once kontrol edilmeli."
             )
         for celiski in mahsup.isaret_celiskileri:
-            self.uyarilar.append(celiski.aciklama())
+            # Adsiz surum: bu liste konsola, OZET.txt'e ve kalici calistirma
+            # kaydina gider. Adli ayrintisi Excel'in Kontrol sayfasindadir.
+            self.uyarilar.append("Isaret celiskisi: " + celiski.kisa_aciklama())
         self.uyarilar.extend(mahsup.uyarilar)
         ozet["mahsuplasma"] = _mahsup_ozeti(mahsup)
 

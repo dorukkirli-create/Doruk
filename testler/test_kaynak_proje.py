@@ -18,7 +18,7 @@ import datetime
 import unittest
 from pathlib import Path
 
-from testler.altin import altin, altin_veya_none
+from testler.altin import altin_veya_none
 
 try:
     from masraf.boru import _kaynak_proje_ozeti
@@ -50,7 +50,7 @@ def _satir(kaynak_etiket: str | None) -> "GiderSatiri":
 
 
 def _eslesme() -> "Eslesme":
-    return Eslesme(sicil=SICIL, ad_soyad="Ozakay Mustafa Kemal", yontem="sicil",
+    return Eslesme(sicil=SICIL, ad_soyad="Sahteoglu Mustafa Kemal", yontem="sicil",
                    guven=1.0, aday_sayisi=1, aciklama="test")
 
 

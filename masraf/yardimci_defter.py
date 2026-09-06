@@ -35,6 +35,7 @@ Kolon eslesmesi (Ingilizce basliklar, esnek cozulur)::
 from __future__ import annotations
 
 import logging
+import os
 import pickle
 from datetime import date, datetime
 from pathlib import Path
@@ -227,6 +228,10 @@ class YardimciDefter:
                 with open(ob, "wb") as f:
                     pickle.dump({"imza": imza, "kayitlar": kayitlar}, f,
                                 protocol=pickle.HIGHEST_PROTOCOL)
+                try:
+                    os.chmod(ob, 0o600)   # kisisel veri: yalnizca sahibi okusun
+                except OSError:
+                    pass
             except OSError as e:
                 _log.warning("Yardimci defter onbellegi yazilamadi: %s", e)
 

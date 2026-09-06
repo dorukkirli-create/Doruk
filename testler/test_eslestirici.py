@@ -30,7 +30,7 @@ KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
 
-from testler.altin import altin, altin_veya_none
+from testler.altin import altin
 
 try:
     from masraf.defter import Defterler

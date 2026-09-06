@@ -460,7 +460,7 @@ class MasrafMerkeziHaritasi:
             # Ayni gorev yeri iki kez yazildiysa ILK satir kazanir; kullanici
             # duzeltmeyi sona eklerse etkisiz kalir. Bunu soylemek gerekir.
             uyarilar.append(
-                f"Masraf merkezi haritasinda ayni gorev yeri birden fazla satirda: "
+                "Masraf merkezi haritasinda ayni gorev yeri birden fazla satirda: "
                 + "; ".join(tekrarlar[:5]) + ". Ilk satir gecerli sayildi; digerini silin."
             )
         harita = cls(kayitlar, kaynak=str(hedef), kaynak_var=True,
@@ -624,6 +624,17 @@ def _yardimci_es_isimliler(yardimci: Any, eslesme: Any, gorev_yeri: str | None,
     return sonuc
 
 
+def _okuyucu_uyarilari(satir: GiderSatiri) -> list[str]:
+    """Okuyucu katmaninin satira dustugu uyarilar (ozel sablon taninmadi vb.).
+
+    Boyle bir satir OTOMATIK olamaz: tutar ve para birimi yanlis kolondan
+    gelmis olabilir. Uyari listesine girer, _durum_belirle onu INCELE'ye ceker.
+    """
+    ek = satir.ek if isinstance(satir.ek, dict) else {}
+    metin = str(ek.get("okuyucu_uyarisi") or "").strip()
+    return [f"OKUYUCU: {metin}"] if metin else []
+
+
 def _durum_belirle(guven: float, uyarilar: list[str], masraf_merkezi: str | None,
                    guven_esigi: float, alt_esik: float) -> str:
     """Guven skoru ve uyarilara bakarak cikti sayfasini belirler."""
@@ -650,7 +661,7 @@ def _sicilsiz_sonuc(
           daha once ogretttigi bilgi)
         * kaynak dosyanin kendi santiye kolonu
     """
-    uyarilar: list[str] = []
+    uyarilar: list[str] = _okuyucu_uyarilari(satir)
     masraf_merkezi: str | None = None
     masraf_merkezi_adi: str | None = None
     gorev_yeri: str | None = None
@@ -768,7 +779,7 @@ def masraf_merkezi_coz(
             satir, eslesme, harita, ek_masraf_merkezi, guven_esigi, alt_esik
         )
 
-    uyarilar: list[str] = []
+    uyarilar: list[str] = _okuyucu_uyarilari(satir)
     belge_tarihi = _gecerli_tarih(satir.belge_tarihi)
     kayit = defter.donem_kaydi(eslesme.sicil, belge_tarihi)
     if kayit is None and yardimci is not None:

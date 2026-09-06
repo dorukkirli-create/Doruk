@@ -32,8 +32,8 @@ Yineleme anahtari
 -----------------
 (belge tarihi, mutlak tutar, isim harflerinin siralanmis hali) uclusudur.
 Isim SIRADAN BAGIMSIZ karsilastirilir cunku iki dosya ayni kisiyi farkli
-yazar: ham dokum 'DEMIRALP AHMETCAN', elle dagitilmis hal
-'AHMET CAN DEMIRALP'. Harfler siralandiginda ikisi ayni anahtari verir.
+yazar: ham dokum 'ORNEKSOY AHMETCAN', elle dagitilmis hal
+'AHMET CAN ORNEKSOY'. Harfler siralandiginda ikisi ayni anahtari verir.
 Tarih ve tutar zaten esitken iki farkli kisinin isminin harf harf ayni
 olmasi pratikte imkansizdir.
 
@@ -81,12 +81,10 @@ _KAYNAK_ONCELIGI: dict[str, int] = {
 }
 
 #: Dagilima girmeyen kaynak tipleri: bunlar fatura degil kisi kutugudur.
-_KUTUK_TIPLERI = frozenset({
-    "referans_liste", "energo_saglik", "koc_katilimci",
-    # Tedarikcinin fatura basina gonderdigi tutarsiz katilimci listesi;
-    # tutar yansitma dosyasindadir. Dagilima girmez, capraz kontrol edilir.
-    "energo_assessment_detay",
-})
+from masraf.envanter import DETAY_TIPLERI as _DETAY_TIPLERI, KUTUK_TIPLERI as _ENV_KUTUK
+#: Dagilima girmeyen satir tipleri: kisi kutukleri + fatura detay listeleri
+#: (tutar yansitma dosyasindadir; capraz kontrol edilir). Tek kaynak: envanter.
+_KUTUK_TIPLERI = _ENV_KUTUK | _DETAY_TIPLERI
 #: Detay listesinin karsiligi olan, tutar tasiyan kaynak tipi.
 _DETAY_KARSILIGI = "energo_assessment"
 
@@ -627,7 +625,7 @@ def _kaynak_adi(sonuc: Any) -> str:
 def _isim_imzasi(ham: str | None) -> str:
     """Isim sirasindan ve bosluklardan bagimsiz karsilastirma imzasi.
 
-    'DEMIRALP AHMETCAN' ve 'AHMET CAN DEMIRALP' ayni imzayi verir; iki
+    'ORNEKSOY AHMETCAN' ve 'AHMET CAN ORNEKSOY' ayni imzayi verir; iki
     dosya ayni kisiyi farkli sirayla ve farkli bitisiklikte yazdigi icin
     gereklidir. Tanim ``masraf.metin`` icindedir; harici kisiler defteri de
     ayni imzayi kullanir, ikisi ayrisamasin diye tek kaynaktan gelir.
@@ -639,8 +637,8 @@ def _yineleme_anahtari(sonuc: Any) -> tuple | None:
     """Ayni islemi iki farkli dosyada tanimak icin KABA anahtar.
 
     (belge tarihi, mutlak tutar, para birimi). Isim BILEREK disarida birakilir:
-    iki dosya ayni kisiyi farkli yazar, hatta kirpar ('DEMIRALP AHMETCA'),
-    hatta yanlis yazar ('YALCINKAYA ANIL' / 'ALI YALCINKAYA'). Isim bu kaba
+    iki dosya ayni kisiyi farkli yazar, hatta kirpar ('ORNEKSOY AHMETCA'),
+    hatta yanlis yazar ('ORNEKKAYA ANIL' / 'ALI YALCINKAYA'). Isim bu kaba
     kova icinde ESLESTIRICI olarak kullanilir, anahtar olarak degil.
 
     Mutlak tutar kullanilir: bir dosya iadeyi eksi, digeri arti yazabilir.
@@ -687,7 +685,7 @@ def _eslesme_puani(a: Any, b: Any) -> int:
     """Ayni kovadaki iki kaydin ayni kisi olma gucu. Buyuk = daha guclu.
 
     3: isim imzalari birebir ayni.
-    2: biri digerinin kirpilmis hali ('DEMIRALP AHMETCA' <- 'DEMIRALP AHMETCAN').
+    2: biri digerinin kirpilmis hali ('ORNEKSOY AHMETCA' <- 'ORNEKSOY AHMETCAN').
     1: ortak token var (bir kelime yanlis yazilmis olabilir).
     0: isim yok veya hicbir benzerlik yok.
     """

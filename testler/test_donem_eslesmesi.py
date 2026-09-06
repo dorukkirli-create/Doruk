@@ -25,7 +25,7 @@ import datetime
 import unittest
 from pathlib import Path
 
-from testler.altin import altin, altin_veya_none
+from testler.altin import altin
 
 try:
     from masraf.kayit import PersonelDefteri
@@ -125,14 +125,14 @@ class DonemEslesmesiTest(unittest.TestCase):
         self.assertIn("kasim 2025", birlesik, "kullanilan donem uyarida yazmali")
 
     def test_ayni_ay_uyari_uretmez(self):
-        s = _satir(datetime.date(2026, 7, 15), "Ozakay Mustafa Kemal")
+        s = _satir(datetime.date(2026, 7, 15), "Sahteoglu Mustafa Kemal")
         sonuc = masraf_merkezi_coz(s, _eslesme(self.aktif_sicil), self.defter, self.harita)
         self.assertEqual(sonuc.donem_eslesme, "tam")
         donem_uyarisi = [u for u in sonuc.uyarilar if "donem" in u.lower() or "ay" in u.lower()]
         self.assertFalse(donem_uyarisi, f"ayni ayda gereksiz uyari: {donem_uyarisi}")
 
     def test_ise_girmeden_once_uyari_verir(self):
-        s = _satir(datetime.date(2020, 3, 10), "Ozakay Mustafa Kemal")
+        s = _satir(datetime.date(2020, 3, 10), "Sahteoglu Mustafa Kemal")
         sonuc = masraf_merkezi_coz(s, _eslesme(self.aktif_sicil), self.defter, self.harita)
         self.assertEqual(sonuc.donem_eslesme, "ilk_donem_oncesi")
         self.assertEqual(sonuc.durum, DURUM_INCELE)

@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 
 import bisect
+import os
 import pickle
 from datetime import date, datetime
 from pathlib import Path
@@ -27,7 +28,7 @@ from typing import Any
 
 import pandas as pd
 
-from masraf.metin import ascii_katla, isim_normalize, isim_tokenlari
+from masraf.metin import ascii_katla, isim_normalize
 
 # Onbellek bicim surumu. Indeks yapisi degisirse artirilmalidir; eski onbellek
 # dosyalari otomatik olarak gecersiz sayilir.
@@ -367,6 +368,14 @@ class PersonelDefteri:
                         {"imza": imza, "defter": defter}, dosya, protocol=pickle.HIGHEST_PROTOCOL
                     )
                 gecici.replace(onbellek_yolu)
+                # Onbellek 24 bin kisinin kaydini tasir; kaynak dosya kadar dar
+                # izinle kalsin (Windows'ta chmod yalnizca salt-okunur bitini
+                # etkiler, zararsizdir). Yukleme yalnizca 'imza' eslesirse
+                # yapilir; bu dosya guvenilen yerel klasorden okunur.
+                try:
+                    os.chmod(onbellek_yolu, 0o600)
+                except OSError:
+                    pass
             except OSError:
                 pass  # Onbellek yazilamazsa calismaya devam et.
 

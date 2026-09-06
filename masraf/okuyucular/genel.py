@@ -22,7 +22,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from masraf.metin import ascii_katla
+from masraf.metin import ascii_katla, isim_normalize
 from masraf.modeller import GiderSatiri
 
 __all__ = [
@@ -35,7 +35,11 @@ __all__ = [
     "baslik_satiri_bul",
     "hucre_metni",
     "hucre_sayisi",
+    "sayi_coz",
     "hucre_tarihi",
+    "sicil_bicimi_mi",
+    "kisi_anahtari",
+    "sayfa_tekrarlarini_isaretle",
     "tckn_normalize",
     "dolu_hucre_sayisi",
     "genel_oku",
@@ -51,9 +55,20 @@ _SERI_UST = 80000.0
 _TARIH_BICIMLERI: tuple[str, ...] = (
     "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y",
     "%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d",
-    "%d.%m.%y", "%d/%m/%y",
-    "%d.%m.%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
+    "%d.%m.%y", "%d/%m/%y", "%d-%m-%y",
+    "%Y%m%d",
+    "%d %B %Y", "%B %d, %Y", "%d %b %Y", "%b %d, %Y",
 )
+#: Gun/ay olarak cozulemeyen ('07/15/2026': 15. ay yok) metinler icin ay/gun
+#: denemesi. Gun <= 12 ise Turkce okuma (gun/ay) her zaman once kazanir.
+_AY_GUN_BICIMLERI: tuple[str, ...] = ("%m/%d/%Y", "%m-%d-%Y", "%m.%d.%Y")
+#: '15.07.2026 14:30', '2026-07-15T00:00:00', '... 14:30:00.000Z' saat kuyrugu.
+_SAAT_KUYRUGU = re.compile(
+    r"(?:[T ]\s*\d{1,2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?\s*(?:Z|[+-]\d{2}:?\d{2})?)$"
+)
+#: Bu araliktaki tam sayilar Excel seri numarasi degil YILDIR ('2026' hucresi
+#: 1905-07-18 olarak cozuluyordu). Tek basina yil tarih sayilmaz.
+_YIL_ALT, _YIL_UST = 1900, 2100
 
 _SADECE_RAKAM = re.compile(r"\D+")
 _COKLU_BOSLUK = re.compile(r"\s+")
@@ -88,41 +103,116 @@ def hucre_metni(deger: Any) -> str | None:
     return metin
 
 
+#: Bilimsel gosterim: '1.5e3', '1,23457E+10'.
+_BILIMSEL = re.compile(r"^[-+]?\d+(?:[.,]\d+)?[eE][-+]?\d+$")
+#: Gecerli binlik gruplamasi: '1.234.567' evet, '15.07.2026' (son grup 4 hane) hayir.
+_BINLIK_NOKTA = re.compile(r"^\d{1,3}(?:\.\d{3})+$")
+_BINLIK_VIRGUL = re.compile(r"^\d{1,3}(?:,\d{3})+$")
+
+#: sayi_coz'un dondurdugu not: metin hucresindeki tek nokta binlik sayildi.
+BINLIK_VARSAYILDI = "binlik_varsayildi"
+
+
+def sayi_coz(deger: Any) -> tuple[float | None, str | None]:
+    """Hucre degerini ondalik sayiya cevirir; ``(sayi, not)`` dondurur.
+
+    Sayisal hucreler oldugu gibi gecer (not None). Metin hucrelerinde Turkce
+    tedarikci dosyalarinin yazim aliskanliklari uygulanir:
+
+    * '1.234,56' Turkce (nokta binlik, virgul ondalik); '1,234.56' Ingilizce.
+    * Yalniz nokta, birden cok grup: '1.234.567' -> 1234567 (binlik).
+    * Tek nokta + tam 3 hane + virgul yok: '2.500' -> 2500. Bu alanda tutarlar
+      2 ondalikli yazilir, 3 ondalikli tutar gorulmez; yine de karar
+      ``BINLIK_VARSAYILDI`` notuyla dondurulur, okuyucu satirin ek'ine yazar.
+      '0.500' ve '12.5' ondaliktir.
+    * 'x,yy' virgul ondalik; '36 000,00' bosluk binlik; "1'234.50" kesme binlik.
+    * Muhasebe eksisi: '(100)' -> -100, '100-' -> -100.
+    * Bilimsel gosterim ('1.5e3') dogru cozulur (1500); 'e' yutulup 1.53
+      uretilmez.
+    * Gruplari 3'er hane olmayan noktali/virgullu metinler ('15.07.2026',
+      '2026-07-15') sayi DEGILDIR: None.
+    """
+    if deger is None or isinstance(deger, bool):
+        return None, None
+    if isinstance(deger, (int, float)):
+        return (None if deger != deger else float(deger)), None
+    metin = hucre_metni(deger)
+    if metin is None:
+        return None, None
+    negatif = False
+    if metin.startswith("(") and metin.endswith(")"):
+        negatif, metin = True, metin[1:-1]
+    # Para birimi, bosluk ve kesme isareti atilir; 'e' yalnizca bilimsel
+    # gosterimde kalir ('EUR 12,5' -> '12,5').
+    govde = re.sub(r"[^\d,.\-+eE]", "", metin)
+    if not _BILIMSEL.match(govde):
+        govde = re.sub(r"[eE]", "", govde)
+    if not govde or not any(ch.isdigit() for ch in govde):
+        return None, None
+    if _BILIMSEL.match(govde):
+        try:
+            sayi = float(govde.replace(",", "."))
+        except ValueError:
+            return None, None
+        return (-sayi if negatif else sayi), None
+    # Eksi isareti yalnizca basta ya da sonda olabilir; ortadaki tire tarih
+    # ('2026-07-15') ya da aralik belirtir, sayi degildir.
+    if govde.startswith("-") or govde.endswith("-"):
+        negatif = True
+    govde = govde.strip("+-")
+    if "-" in govde or "+" in govde:
+        return None, None
+    not_ = None
+    n_nokta, n_virgul = govde.count("."), govde.count(",")
+    if n_nokta and n_virgul:
+        if govde.rfind(",") > govde.rfind("."):
+            tam = govde.replace(".", "").replace(",", ".")  # Turkce
+        else:
+            tam = govde.replace(",", "")  # Ingilizce
+    elif n_nokta > 1:
+        if not _BINLIK_NOKTA.match(govde):
+            return None, None
+        tam = govde.replace(".", "")
+    elif n_nokta == 1:
+        bas, son = govde.split(".")
+        if len(son) == 3 and 1 <= len(bas) <= 3 and bas != "0":
+            tam, not_ = bas + son, BINLIK_VARSAYILDI
+        else:
+            tam = govde
+    elif n_virgul > 1:
+        if not _BINLIK_VIRGUL.match(govde):
+            return None, None
+        tam = govde.replace(",", "")
+    elif n_virgul == 1:
+        tam = govde.replace(",", ".")  # Turkce ondalik
+    else:
+        tam = govde
+    try:
+        sayi = float(tam)
+    except ValueError:
+        return None, None
+    return (-sayi if negatif else sayi), not_
+
+
 def hucre_sayisi(deger: Any) -> float | None:
     """Hucre degerini ondalik sayiya cevirir; cevrilemezse None.
 
-    Turkce ('1.234,56') ve Ingilizce ('1,234.56') bicimlerini ayirt eder,
-    para birimi sembollerini ve bosluklari atar.
+    Kurallar icin ``sayi_coz``'a bakin; bu sarmalayici yalnizca sayiyi
+    dondurur (binlik varsayimi notunu atar).
     """
-    if deger is None or isinstance(deger, bool):
-        return None
-    if isinstance(deger, (int, float)):
-        return None if deger != deger else float(deger)
-    metin = hucre_metni(deger)
-    if metin is None:
-        return None
-    metin = re.sub(r"[^\d,.\-]", "", metin)
-    if not metin or metin in {"-", ".", ","}:
-        return None
-    son_nokta = metin.rfind(".")
-    son_virgul = metin.rfind(",")
-    if son_virgul > son_nokta:
-        # Turkce bicim: nokta binlik ayiraci, virgul ondalik
-        metin = metin.replace(".", "").replace(",", ".")
-    else:
-        # Ingilizce bicim: virgul binlik ayiraci
-        metin = metin.replace(",", "")
-    try:
-        return float(metin)
-    except ValueError:
-        return None
+    return sayi_coz(deger)[0]
 
 
 def hucre_tarihi(deger: Any, datemode: int = 0) -> date | None:
     """Hucre degerini tarihe cevirir; cevrilemezse None.
 
     datetime/date nesnelerini, Excel seri numaralarini (xlrd datemode ile)
-    ve yaygin metin bicimlerini ('22.05.2026', '2026-05-22') destekler.
+    ve yaygin metin bicimlerini destekler: '22.05.2026', '2026-05-22',
+    '15.07.2026 14:30', '2026-07-15T00:00:00', '07/15/2026' (gun 12'den
+    buyukse ay/gun), 'July 15, 2026'.
+
+    Tek basina yil ('2026' ya da 2026 sayisi) tarih DEGILDIR; None doner.
+    Eski surum bunu Excel seri numarasi sanip 1905'e cozuyordu.
     """
     if deger is None or isinstance(deger, bool):
         return None
@@ -131,25 +221,37 @@ def hucre_tarihi(deger: Any, datemode: int = 0) -> date | None:
     if isinstance(deger, date):
         return deger
     if isinstance(deger, (int, float)):
-        if deger != deger or not (_SERI_ALT <= float(deger) <= _SERI_UST):
+        if deger != deger:
+            return None
+        sayi = float(deger)
+        if sayi.is_integer() and _YIL_ALT <= int(sayi) <= _YIL_UST:
+            return None
+        if not (_SERI_ALT <= sayi <= _SERI_UST):
             return None
         try:
             import xlrd
 
-            return xlrd.xldate_as_datetime(float(deger), datemode).date()
+            return xlrd.xldate_as_datetime(sayi, datemode).date()
         except Exception:
             return None
     metin = hucre_metni(deger)
     if metin is None:
         return None
+    govde = _SAAT_KUYRUGU.sub("", metin).strip()
     for bicim in _TARIH_BICIMLERI:
         try:
-            return datetime.strptime(metin, bicim).date()
+            return datetime.strptime(govde, bicim).date()
         except ValueError:
             continue
-    # Salt sayi iceren metin Excel seri numarasi olabilir
+    for bicim in _AY_GUN_BICIMLERI:
+        try:
+            return datetime.strptime(govde, bicim).date()
+        except ValueError:
+            continue
+    # Salt sayi iceren metin Excel seri numarasi olabilir ('45000'); yil
+    # ('2026') yukaridaki sayi kuraliyla elenir.
     try:
-        return hucre_tarihi(float(metin.replace(",", ".")), datemode)
+        return hucre_tarihi(float(govde.replace(",", ".")), datemode)
     except ValueError:
         return None
 
@@ -224,8 +326,60 @@ def kolon_haritasi(baslik: Sequence[Any]) -> dict[str, int]:
     return harita
 
 
+#: Bu uzunlukta ve daha kisa adaylar ('id', 'kod', 'tc', 'no', 'usd', 'pb')
+#: 'icerir' modunda yalnizca KELIME olarak aranir. Eskiden alt dizi aranirdi:
+#: 'id' -> 'Provider', 'Valid', 'Paid'; 'tc' -> 'Batch No'; 'kod' -> 'Proje
+#: Kodu' sicil/TCKN kolonu sayiliyor, degeri bir sicile denk gelen satir
+#: bambaska bir personele baglaniyordu (olculdu).
+_KISA_ADAY_SINIRI = 3
+#: Kisa aday kelimeye Turkce iyelik eki gelmis olabilir: 'Kodu', 'Sicil Nosu'.
+_KISA_ADAY_EKLERI = frozenset({"", "u", "i", "su", "si", "nu", "ni", "lari", "leri"})
+#: Kisa aday kelime olarak gecse bile bu bilesiklerde baska bir seyi
+#: numaralandirir: 'Proje Kodu' proje, 'Invoice ID' fatura. Kisi kimligi degil.
+_KISA_ADAY_YASAKLARI: dict[str, tuple[str, ...]] = {
+    "kod": (
+        "proje", "posta", "masraf", "ulke", "para birimi", "doviz", "vergi", "hesap",
+        "urun", "firma", "sirket", "departman", "tedarikci", "musteri", "birim", "is kod",
+        "gider", "hizmet", "santiye", "kod adi", "banka", "iban", "swift",
+    ),
+    "id": (
+        "invoice", "fatura", "belge", "kayit", "transaction", "islem", "order", "siparis",
+        "booking", "document", "record", "ticket", "bilet", "payment", "odeme", "batch",
+    ),
+    "no": (
+        "invoice", "fatura", "belge", "evrak", "kayit", "islem", "order", "siparis",
+        "ticket", "bilet", "batch", "sira", "s no", "telefon", "phone", "hesap", "iban",
+        "pasaport", "passport", "police", "policy", "seri", "oda", "room", "ucus", "flight",
+    ),
+    "tc": ("batch", "etc",),
+}
+
+
+def _kelime_olarak_gecer(aday: str, ad: str) -> bool:
+    """Kisa aday, kolon adinda ayri bir kelime (ya da ek almis hali) mi?
+
+    Bilesik yasak listesindeki basliklar ('proje kodu', 'invoice id') kelime
+    olarak gecse de eslesmez.
+
+    >>> _kelime_olarak_gecer("id", "personel id")
+    True
+    >>> _kelime_olarak_gecer("id", "provider")
+    False
+    >>> _kelime_olarak_gecer("kod", "personel kodu")
+    True
+    >>> _kelime_olarak_gecer("kod", "proje kodu")
+    False
+    """
+    if any(yasak in ad for yasak in _KISA_ADAY_YASAKLARI.get(aday, ())):
+        return False
+    for kelime in ad.split():
+        if kelime.startswith(aday) and kelime[len(aday):] in _KISA_ADAY_EKLERI:
+            return True
+    return False
+
+
 def kolon_ara(
-    harita: dict[str, int],
+    harita: dict[str, int] | Sequence[Any],
     *adaylar: str,
     icerir: bool = True,
     haric: Sequence[str] = (),
@@ -233,12 +387,20 @@ def kolon_ara(
     """Aday adlardan biriyle eslesen kolonun indeksini dondurur.
 
     Once tam eslesme, sonra (icerir=True ise) 'aday, kolon adinin icinde
-    geciyor mu' kontrolu yapilir. Adaylar oncelik sirasindadir.
+    geciyor mu' kontrolu yapilir. Adaylar oncelik sirasindadir. Uc ve daha
+    az harfli adaylar icerme kontrolunde yalnizca kelime olarak aranir
+    ('sicil no', 'personel id', 'tc kimlik' evet; 'provider', 'valid',
+    'batch' hayir).
 
     Args:
+        harita: ``kolon_haritasi`` ciktisi. Baslik listesi verilirse harita
+            burada uretilir (eski surumde liste verilince AttributeError
+            yutuluyor ve her dosya 'kolon bulunamadi' cikiyordu).
         haric: bu parcalari iceren kolon adlari hicbir zaman secilmez
             (orn. tarih ararken 'dogum tarihi' kolonunu elemek icin).
     """
+    if not isinstance(harita, dict):
+        harita = kolon_haritasi(list(harita))
     yasakli = [kolon_anahtari(h) for h in haric if kolon_anahtari(h)]
 
     def uygun(ad: str) -> bool:
@@ -254,8 +416,14 @@ def kolon_ara(
         anahtar = kolon_anahtari(aday)
         if not anahtar:
             continue
+        kisa = len(anahtar) <= _KISA_ADAY_SINIRI
         for ad, i in harita.items():
-            if anahtar in ad and uygun(ad):
+            if not uygun(ad):
+                continue
+            if kisa:
+                if _kelime_olarak_gecer(anahtar, ad):
+                    return i
+            elif anahtar in ad:
                 return i
     return None
 
@@ -447,9 +615,23 @@ _TCKN_ADAYLARI = (
     "tckn", "tc kimlik no", "tc kimlik", "personel t c", "t c kimlik",
     "kimlik no", "tc no", "tc",
 )
+# 'ucreti' (iyelik: 'Arabulucu Ucreti', 'Hizmet Ucreti') bir HIZMET BEDELIDIR;
+# yalin 'Ucret' ve 'Brut/Net Ucret' ise kutuk listelerindeki MAAS kolonudur.
+# Maas tutar sayilirsa 20 bin satirlik personel kutugu fatura gibi dagitilir;
+# bu yuzden yalin 'ucret' aday DEGILDIR (gerekirse kullanici sozlugune
+# eklenir) ve maas bilesikleri _TUTAR_HARIC ile elenir.
 _TUTAR_ADAYLARI = (
     "tutar", "satis", "borc", "amount", "toplam", "bedel", "fiyat",
     "energo payi", "usd", "total",
+    "hizmet ucreti", "servis ucreti", "islem ucreti", "arabulucu ucreti",
+    "arabuluculuk ucreti", "danismanlik ucreti", "egitim ucreti", "vize ucreti",
+    "bagaj ucreti", "konaklama ucreti", "ucreti",
+)
+# Tutar kolonu ararken asla secilmemesi gereken kolonlar: maas/ucret skalasi.
+_TUTAR_HARIC = (
+    "brut ucret", "net ucret", "aylik ucret", "gunluk ucret", "saat ucreti",
+    "saatlik ucret", "maas", "salary", "wage", "ucret skalasi", "baz ucret",
+    "temel ucret", "asgari ucret",
 )
 _TARIH_ADAYLARI = (
     "belge tarihi", "fatura tarihi", "islem tarihi", "kayit tarihi",
@@ -462,6 +644,213 @@ _MERKEZ_ADAYLARI = (
 
 # Tarih kolonu ararken asla secilmemesi gereken kolonlar.
 _TARIH_HARIC = ("dogum tarihi", "dogum")
+
+#: Isim kolonu bulunamayinca aciklama satirdaki dolu hucrelerden kurulur; bu
+#: kolonlar ASLA aciklamaya alinmaz (kimlik, dogum tarihi, telefon, pasaport,
+#: IBAN, adres, e-posta). Eski surum hepsini ' | ' ile birlestirip Excel'e
+#: (Sonuc/Incele/Eslesmedi) dusuruyordu (olculdu).
+_ACIKLAMA_HARIC_BASLIK = re.compile(
+    r"(?:^|\s)(?:tc|t c|tckn|tcno|kimlik|dogum|tel|telefon|phone|gsm|cep|mobile|"
+    r"pasaport|passport|iban|adres|address|e posta|eposta|email|e mail|mail)(?:\s|$)"
+)
+#: Telefon numarasi: '+7 921 123 45 67', '0 532 123 45 67', '(212) 555-1234'.
+_RE_TELEFON = re.compile(r"^\+?\d[\d\s().-]{7,}\d$")
+
+
+def _metin_tarih_mi(metin: str) -> bool:
+    """Metin bir tarih mi ('01.01.1990', '1990-01-01T00:00:00')? Sayi/seri degil."""
+    govde = _SAAT_KUYRUGU.sub("", metin).strip()
+    for bicim in _TARIH_BICIMLERI + _AY_GUN_BICIMLERI:
+        try:
+            datetime.strptime(govde, bicim)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _aciklama_hucreleri(satir: Sequence[Any], ters_harita: dict[int, str]) -> list[str]:
+    """Aciklamaya alinabilecek hucre metinleri: kimlik/dogum/telefon disarida.
+
+    Baslik yasakli kolonlar atlanir; basligi ne olursa olsun 11 haneli
+    kimlik, tarih ve telefon bicimli degerler de atlanir.
+    """
+    parcalar: list[str] = []
+    for i, hucre in enumerate(satir):
+        metin = hucre_metni(hucre)
+        if metin is None:
+            continue
+        baslik = ters_harita.get(i, "")
+        if baslik and _ACIKLAMA_HARIC_BASLIK.search(baslik):
+            continue
+        if tckn_normalize(hucre) is not None:
+            continue
+        if isinstance(hucre, (datetime, date)) or (isinstance(hucre, str) and _metin_tarih_mi(metin)):
+            continue
+        if len(_SADECE_RAKAM.sub("", metin)) >= 10 and _RE_TELEFON.match(metin):
+            continue
+        parcalar.append(metin)
+    return parcalar
+
+# Sicil kolonu ararken asla secilmemesi gereken kolonlar: 'kod' / 'id' / 'no'
+# kelimesi tasiyan ama kisiyi degil baska bir seyi numaralandiran basliklar.
+_SICIL_HARIC = (
+    "proje kodu", "proje kod", "posta kodu", "masraf merkezi kod", "masraf yeri kod",
+    "ulke kodu", "para birimi kod", "doviz kod", "vergi kod", "hesap kod",
+    "urun kodu", "firma kod", "sirket kod", "departman kod", "tedarikci kod",
+    "musteri kod", "birim kod", "is kodu", "gider kod", "masraf kod", "hizmet kod",
+    "santiye kod", "kod adi", "project code", "postal code", "zip code",
+    "cost center code", "cost centre code", "currency code", "country code",
+    "tax code", "account code", "product code", "vendor code", "customer code",
+    "service code", "invoice id", "invoice no", "fatura id", "fatura no", "belge id",
+    "belge no", "kayit id", "kayit no", "transaction id", "islem id", "islem no",
+    "order id", "siparis id", "siparis no", "booking id", "document id", "document no",
+    "record id", "ticket no", "bilet no", "pnr", "batch",
+)
+# Kisi kolonu ararken asla secilmemesi gereken kolonlar ('name' icerir ama
+# kisi adi degildir).
+_ISIM_HARIC = (
+    "company name", "firma adi", "sirket adi", "hotel name", "otel adi",
+    "proje adi", "project name", "dosya adi", "file name", "bank name", "banka adi",
+)
+
+#: Sicil degeri bicimi: 2-9 haneli tam sayi ('632481') ya da kisa alfasayisal
+#: kod ('RHI-1234', 'A1234'). 11 haneli TCKN, tarih, ondalikli tutar ve serbest
+#: metin sicil degildir.
+_SICIL_BICIMI = re.compile(r"^(?:\d{2,9}|[A-Z]{1,4}[-/ ]?\d{2,8}|\d{2,8}[-/ ]?[A-Z]{1,3})$")
+#: Secilen sicil kolonunda dolu degerlerin en az bu orani sicil bicimine
+#: uymali; uymuyorsa kolon sicil sayilmaz.
+_SICIL_KOLON_ESIGI = 0.6
+_SICIL_ORNEK_SINIRI = 300
+
+
+def sicil_bicimi_mi(deger: Any) -> bool:
+    """Deger bir sicil numarasina benziyor mu? ('632481' evet, '15.07.2026' hayir)"""
+    metin = hucre_metni(deger)
+    if metin is None:
+        return False
+    if isinstance(deger, float) and deger.is_integer():
+        metin = str(int(deger))
+    elif metin.endswith(".0") and metin[:-2].isdigit():
+        metin = metin[:-2]
+    return bool(_SICIL_BICIMI.match(ascii_katla(metin).upper()))
+
+
+def _sicil_kolonu_uygun_mu(satirlar: Sequence[Sequence[Any]], baslik_i: int, i_sicil: int) -> bool:
+    """Secilen sicil kolonunun degerleri cogunlukla sicil bicimine uyuyor mu?
+
+    'Proje Kodu' ya da 'Kodu' gibi basliklar sicil sanilabilir; degerler
+    ('GPP', 'SK-01') sicil degilse kolon reddedilir. Dolu deger yoksa
+    yargilanamaz, kolon korunur.
+    """
+    dolu = uygun = 0
+    for r in range(baslik_i + 1, len(satirlar)):
+        satir = satirlar[r]
+        if i_sicil >= len(satir):
+            continue
+        deger = satir[i_sicil]
+        if hucre_metni(deger) is None:
+            continue
+        dolu += 1
+        if sicil_bicimi_mi(deger):
+            uygun += 1
+        if dolu >= _SICIL_ORNEK_SINIRI:
+            break
+    if dolu == 0:
+        return True
+    return uygun / dolu >= _SICIL_KOLON_ESIGI
+
+
+#: Pivot / ozet tablosu isaretleri. Baslik satirinda ya da ustundeki satirlarda
+#: bunlardan biri gecen sayfa kisi listesi DEGIL, ozet tablosudur: 'Count of
+#: PERSONEL' kolonu isim sanilip 'Grand Total' ve proje adlari kisi olarak
+#: uretiliyordu (olculdu: 34 sahte kisi). Kiril basliklar ascii katlanmis
+#: haliyle ('Названия строк' -> 'nazvaniya strok') listelenir.
+_PIVOT_ISARETLERI: tuple[str, ...] = (
+    "count of", "sum of", "average of", "min of", "max of",
+    "row labels", "column labels", "satir etiketleri", "sutun etiketleri",
+    "nazvaniya strok", "nazvaniya stolbtsov", "kolichestvo po polyu", "summa po polyu",
+)
+#: Yalnizca baslik satirinda kolon adi olarak gecerse pivot sayilan isaretler.
+_PIVOT_BASLIK_ISARETLERI: frozenset[str] = frozenset({
+    "grand total", "genel toplam", "obschiy itog", "toplam", "total",
+})
+
+
+def _pivot_sayfasi_mi(satirlar: Sequence[Sequence[Any]], baslik_i: int) -> bool:
+    """Sayfa bir pivot/ozet tablosu mu?"""
+    for r in range(0, min(baslik_i + 1, len(satirlar))):
+        for hucre in satirlar[r]:
+            anahtar = kolon_anahtari(hucre)
+            if not anahtar:
+                continue
+            if any(isaret in anahtar for isaret in _PIVOT_ISARETLERI):
+                return True
+            if r == baslik_i and anahtar in _PIVOT_BASLIK_ISARETLERI:
+                return True
+    return False
+
+
+#: Bir sayfanin kisileri baska bir sayfadakilerin bu oraninda tekrariysa
+#: 'tekrar eden sayfa' sayilir.
+_SAYFA_TEKRAR_ESIGI = 0.8
+_SAYFA_TEKRAR_ASGARI = 10
+
+
+def kisi_anahtari(satir: GiderSatiri) -> str | None:
+    """Satirdaki kisinin sayim anahtari: sicil, yoksa TCKN, yoksa normalize isim."""
+    if satir.sicil_ham:
+        return "S:" + str(satir.sicil_ham)
+    if satir.tckn_ham:
+        return "T:" + str(satir.tckn_ham)
+    if satir.kisi_ham:
+        norm = isim_normalize(satir.kisi_ham)
+        return ("I:" + norm) if norm else None
+    return None
+
+
+def sayfa_tekrarlarini_isaretle(satirlar: list[GiderSatiri]) -> dict[str, str]:
+    """Ayni calisma kitabinda ayni kisileri tekrar eden sayfalari isaretler.
+
+    Kisi anahtari sicil, yoksa TCKN, yoksa normalize isimdir. Kisileri en
+    kalabalik sayfa 'asil' sayilir; kisilerinin %80'i asil bir sayfada da
+    bulunan daha kucuk sayfa 'tekrar' sayilir ve satirlarinin ek'ine
+    ``sayfa_tekrari = <asil sayfa adi>`` yazilir. Sayim/besleme yapan katman
+    bu notla kisileri iki kez saymaz.
+
+    Returns:
+        {tekrar eden sayfa: asil sayfa}
+    """
+    kumeler: dict[str, set[str]] = {}
+    sira: dict[str, int] = {}
+    for s in satirlar:
+        sayfa = str((s.ek or {}).get("sayfa") or "")
+        anahtar = kisi_anahtari(s)
+        if not sayfa or anahtar is None:
+            continue
+        kumeler.setdefault(sayfa, set()).add(anahtar)
+        sira.setdefault(sayfa, len(sira))
+    sirali = sorted(kumeler, key=lambda ad: (-len(kumeler[ad]), sira[ad]))
+    asillar: list[str] = []
+    tekrarlar: dict[str, str] = {}
+    for ad in sirali:
+        kume = kumeler[ad]
+        asil = None
+        if len(kume) >= _SAYFA_TEKRAR_ASGARI:
+            for aday in asillar:
+                if len(kume & kumeler[aday]) / len(kume) >= _SAYFA_TEKRAR_ESIGI:
+                    asil = aday
+                    break
+        if asil is None:
+            asillar.append(ad)
+        else:
+            tekrarlar[ad] = asil
+    if tekrarlar:
+        for s in satirlar:
+            sayfa = str((s.ek or {}).get("sayfa") or "")
+            if sayfa in tekrarlar and isinstance(s.ek, dict):
+                s.ek["sayfa_tekrari"] = tekrarlar[sayfa]
+    return tekrarlar
 
 #: Baslik satiri bu kadar satir icinde aranir. Kesif (dosya tipi tespiti) de
 #: AYNI siniri kullanir; iki sinir ayrisirsa dosya 'genel' tanilip 0 satir
@@ -547,23 +936,36 @@ def _gider_tipi_tahmin(*metinler: str | None) -> str:
     return "Diger"
 
 
-def genel_oku(yol: str | Path) -> list[GiderSatiri]:
+def genel_oku(yol: str | Path, notlar: list[str] | None = None) -> list[GiderSatiri]:
     """Sablonu taninmayan Excel/CSV dosyasini en iyi cabayla ayristirir.
 
-    Baslik satirini ilk 10 satir icinde en cok dolu hucreye sahip satir
+    Baslik satirini ilk 15 satir icinde en cok dolu hucreye sahip satir
     olarak belirler, ardindan kolon adlarindan isim / sicil / tckn / tutar /
     tarih / masraf merkezi kolonlarini anahtar kelimeyle tahmin eder.
     Bulunamayan alanlar None birakilir.
 
     Tum sayfalar taranir; her sayfa icin ayri baslik/kolon cozumu yapilir.
+    Pivot/ozet sayfalari ('Count of', 'Row Labels', 'Grand Total') atlanir;
+    ayni kisileri tekrar eden sayfalarin satirlari ``ek['sayfa_tekrari']``
+    ile isaretlenir. Secilen sicil kolonunun degerleri sicil bicimine
+    uymuyorsa kolon kullanilmaz (``ek['sicil_kolonu_reddedildi']``).
+
+    Args:
+        notlar: verilirse atlanan sayfalar ve reddedilen kolonlar hakkinda
+            kullaniciya gosterilebilecek Turkce notlar buraya eklenir.
     """
     p = Path(yol)
     calisma = calisma_oku(p)
     sonuclar: list[GiderSatiri] = []
+    if notlar is None:
+        notlar = []
 
     for sayfa_adi, satirlar in calisma.sayfalar.items():
         baslik_i = baslik_satiri_bul(satirlar, sinir=BASLIK_ARAMA_SINIRI)
         if baslik_i < 0:
+            continue
+        if _pivot_sayfasi_mi(satirlar, baslik_i):
+            notlar.append(f"'{sayfa_adi}' sayfasi pivot/ozet tablosu; kisi listesi olarak okunmadi.")
             continue
         harita = kolon_haritasi(satirlar[baslik_i])
         if not harita:
@@ -578,10 +980,10 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
             def _genislet(alan, varsayilanlar, veri_dizini="veri"):
                 return tuple(varsayilanlar)
 
-        i_isim = kolon_ara(harita, *_genislet("kisi", _ISIM_ADAYLARI))
-        i_sicil = kolon_ara(harita, *_genislet("sicil", _SICIL_ADAYLARI))
+        i_isim = kolon_ara(harita, *_genislet("kisi", _ISIM_ADAYLARI), haric=_ISIM_HARIC)
+        i_sicil = kolon_ara(harita, *_genislet("sicil", _SICIL_ADAYLARI), haric=_SICIL_HARIC)
         i_tckn = kolon_ara(harita, *_genislet("tckn", _TCKN_ADAYLARI))
-        i_tutar = kolon_ara(harita, *_genislet("tutar", _TUTAR_ADAYLARI))
+        i_tutar = kolon_ara(harita, *_genislet("tutar", _TUTAR_ADAYLARI), haric=_TUTAR_HARIC)
         i_tarih = kolon_ara(harita, *_genislet("tarih", _TARIH_ADAYLARI), haric=_TARIH_HARIC)
         i_merkez = kolon_ara(harita, *_genislet("santiye", _MERKEZ_ADAYLARI))
         i_doviz = kolon_ara(harita, *_genislet("doviz", _DOVIZ_ADAYLARI))
@@ -596,7 +998,10 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
                     break
         # Iki ayri tutar kolonu (RUB ve USD gibi) varsa ilki secilir; bunu
         # sessizce yapmak yanlis: satir ek'ine not dusulur, ozet uyari uretir.
-        tutar_adaylari = [ad for ad in harita if kolon_ara({ad: harita[ad]}, *_genislet("tutar", _TUTAR_ADAYLARI)) is not None]
+        tutar_adaylari = [
+            ad for ad in harita
+            if kolon_ara({ad: harita[ad]}, *_genislet("tutar", _TUTAR_ADAYLARI), haric=_TUTAR_HARIC) is not None
+        ]
 
         # Ayni kolon hem isim hem masraf merkezi olarak secilmesin.
         if i_merkez is not None and i_merkez == i_isim:
@@ -604,11 +1009,24 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
         if i_sicil is not None and i_sicil == i_tckn:
             i_sicil = None
 
+        # Basligi sicil gibi gorunen kolonun degerleri sicil degilse ('Kodu'
+        # altinda 'SK-01') kolon kullanilmaz; aksi halde deger tesadufen bir
+        # sicile denk gelen satir yanlis personele baglanir.
+        sicil_reddedilen = None
+        if i_sicil is not None and not _sicil_kolonu_uygun_mu(satirlar, baslik_i, i_sicil):
+            sicil_reddedilen = next((ad for ad, k in harita.items() if k == i_sicil), None)
+            notlar.append(
+                f"'{sayfa_adi}' sayfasinda '{sicil_reddedilen}' kolonu sicil gibi adlandirilmis "
+                "ama degerleri sicil bicimine uymuyor; sicil olarak kullanilmadi."
+            )
+            i_sicil = None
+
         if i_isim is None and i_sicil is None and i_tckn is None:
             continue  # kisi bilgisi yok, bu sayfa gider satiri uretmez
 
         from masraf.kayit import sicil_normalize
 
+        ters_harita = {i: ad for ad, i in harita.items()}
         for r in range(baslik_i + 1, len(satirlar)):
             satir = satirlar[r]
             if dolu_hucre_sayisi(satir) == 0:
@@ -632,9 +1050,15 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
                 if any(_ozet_satiri_mi(k) for k in kimlikler):
                     continue
 
-            aciklama = isim or " | ".join(
-                m for m in (hucre_metni(h) for h in satir) if m
-            )
+            if isim:
+                aciklama = isim
+            else:
+                # Kimlik, dogum tarihi ve telefon aciklamaya girmez; geriye bir
+                # sey kalmazsa kimlik maskelenmis yazilir (eslestirici uslubu).
+                aciklama = " | ".join(_aciklama_hucreleri(satir, ters_harita))
+                if not aciklama:
+                    aciklama = f"TCKN {tckn[:3]}******" if tckn else (f"Sicil {sicil}" if sicil else "")
+            tutar, tutar_notu = sayi_coz(al(i_tutar))
             sonuclar.append(
                 GiderSatiri(
                     kaynak_dosya=p.name,
@@ -645,7 +1069,7 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
                     kisi_ham=isim,
                     sicil_ham=sicil,
                     tckn_ham=tckn,
-                    tutar=hucre_sayisi(al(i_tutar)),
+                    tutar=tutar,
                     para_birimi=_doviz_coz(al(i_doviz), tutar_basligi),
                     masraf_merkezi_kaynak=hucre_metni(al(i_merkez)),
                     gider_tipi=_gider_tipi_tahmin(p.name, sayfa_adi),
@@ -659,7 +1083,13 @@ def genel_oku(yol: str | Path) -> list[GiderSatiri]:
                         },
                         **({"tutar_kolonu_secenekleri": tutar_adaylari}
                            if len(tutar_adaylari) > 1 else {}),
+                        **({tutar_notu: True} if tutar_notu else {}),
+                        **({"sicil_kolonu_reddedildi": sicil_reddedilen}
+                           if sicil_reddedilen else {}),
                     },
                 )
             )
+    tekrarlar = sayfa_tekrarlarini_isaretle(sonuclar)
+    for tekrar, asil in tekrarlar.items():
+        notlar.append(f"'{tekrar}' sayfasi '{asil}' sayfasindaki kisileri tekrar ediyor.")
     return sonuclar

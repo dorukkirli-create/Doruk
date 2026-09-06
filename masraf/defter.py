@@ -71,6 +71,59 @@ BESLEYEN_KAYNAKLAR: frozenset[str] = frozenset({
     "koc_katilimci",
 })
 
+#: Besleme listesinde OLMAYAN kaynak tipleri icin kullaniciya soylenecek neden.
+#: Kutuk uyarisi 'defter beslemesinde kullanildi' derken fiilen hicbir satir
+#: beslemiyordu (olculdu: ek_kisi 0, atlanan 20919); artik neden yazilir.
+BESLEMEYEN_NEDENLER: dict[str, str] = {
+    "referans_liste": (
+        "sicil tasiyan personel kutugu; kisileri ana veri ve 1C listesiyle zaten "
+        "eslesir, ek kisi defteri TCKN'li kucuk listeler icindir"
+    ),
+    "antik_cari": "kisi adi serbest metinden tahmin ediliyor, dogrulanmis kimlik degil",
+    "yuzyil_dagitilmis": "kisi adi serbest metinden tahmin ediliyor, dogrulanmis kimlik degil",
+    "genel": "sablonu taninmayan dosya; kolonlar tahminle secildi, dogrulanmis kimlik degil",
+}
+
+
+def besleme_nedeni(kaynak_tip: str) -> str:
+    """Bir kaynak tipinin ek kisi defterini neden beslemedigini soyler."""
+    if kaynak_tip in BESLEYEN_KAYNAKLAR:
+        return "besleme kaynagi"
+    return BESLEMEYEN_NEDENLER.get(kaynak_tip, "bu kaynak tipi besleme listesinde degil")
+
+
+def besleme_aciklamasi(ozet: dict | None, kaynak_tip: str, besleme_acik: bool = True) -> str:
+    """Bir kaynak tipinin defteri besleyip beslemedigini finansciya anlatir.
+
+    ``ozet`` ``yardimci_kaynaktan_besle`` ciktisidir; None ise besleme
+    henuz yapilmamis ya da yapilamamistir. Donen metin 'defteri besledi: ...'
+    ya da 'defteri beslemedi: ...' ile baslar.
+    """
+    if not besleme_acik:
+        return "defteri beslemedi: defter beslemesi bu calistirmada kapali (ayar)"
+    if kaynak_tip not in BESLEYEN_KAYNAKLAR:
+        return f"defteri beslemedi: {besleme_nedeni(kaynak_tip)}"
+    if not ozet:
+        return "defteri beslemedi: besleme yapilmadi"
+    tip = (ozet.get("tip_ozeti") or {}).get(kaynak_tip)
+    if not tip:
+        return "defteri beslemedi: bu tipte satir islenmedi"
+    parcalar: list[str] = []
+    if tip["ek_kisi"]:
+        parcalar.append(f"{tip['ek_kisi']} kisi ek kisi defterine yazildi")
+    if tip["tckn_kopru"]:
+        parcalar.append(f"{tip['tckn_kopru']} TCKN-sicil koprusu kuruldu")
+    if tip["calisan"]:
+        parcalar.append(f"{tip['calisan']} satir zaten ana verideki calisan (yazilmadi)")
+    if tip["kimliksiz"]:
+        parcalar.append(f"{tip['kimliksiz']} satirda ad/TCKN yok")
+    mevcut = tip["satir"] - tip["ek_kisi"] - tip["calisan"] - tip["kimliksiz"]
+    if mevcut > 0:
+        parcalar.append(f"{mevcut} satir defterde zaten kayitli")
+    if not tip["ek_kisi"] and not tip["tckn_kopru"]:
+        return "defteri beslemedi: " + ("; ".join(parcalar) or "yeni bilgi yok")
+    return "defteri besledi: " + "; ".join(parcalar)
+
 
 def yedekle(hedef: Path, azami: int = 30) -> Path | None:
     """Ustune yazmadan once mevcut dosyayi veri/gecmis/ altina kopyalar.
@@ -172,6 +225,14 @@ class Defterler:
         self._ek_satirlari: dict[str, dict[str, str]] = {}
         self._tckn_satirlari: dict[str, dict[str, str]] = {}
         self._kirli: set[str] = set()
+        #: Yukleme sirasinda saptanan sorunlar (bozuk dosya, yanlis ayirici,
+        #: bilinmeyen kodlama, ayristirilamayan satirlar). Bos liste = sorun yok.
+        #: Boru hatti bunlari calistirma uyarilarina tasir; eski surum bozuk bir
+        #: defteri sessizce bos okuyor, ogretilen kayitlar kayboluyordu.
+        self.uyarilar: list[str] = []
+        #: Dosya bazinda okunan (CSV satiri) ve yuklenen (gecerli kayit) sayilari.
+        self.okunan: dict[str, int] = {}
+        self.yuklenen: dict[str, int] = {}
 
         if olustur:
             self._dosyalari_hazirla()
@@ -202,32 +263,91 @@ class Defterler:
                 pass  # Salt okunur dizin: bellekte calismaya devam et.
 
     @staticmethod
-    def _satirlari_oku(hedef: Path) -> list[dict[str, str]]:
-        """CSV dosyasini sozluk listesi olarak okur; ayiriciyi kendi bulur."""
+    def _csv_oku(hedef: Path, beklenen: tuple[str, ...]) -> tuple[list[dict[str, str]], str | None]:
+        """CSV dosyasini sozluk listesi olarak okur; ``(satirlar, sorun)`` dondurur.
+
+        Kodlama (UTF-16 BOM, utf-8-sig, cp1254) ve ayirici (';' ',' sekme '|')
+        dosyadan cikarilir. Beklenen ilk baslik hicbir ayiriciyla bulunamazsa
+        ya da icerik metin degilse ``sorun`` dolu doner ve liste bos kalir.
+        """
         if not hedef.exists():
-            return []
+            return [], None
         try:
-            ham = hedef.read_text(encoding=KODLAMA)
-        except (OSError, UnicodeDecodeError):
-            try:
-                ham = hedef.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                return []
+            ham = hedef.read_bytes()
+        except OSError as hata:
+            return [], f"okunamadi ({hata.__class__.__name__}: {hata})"
         if not ham.strip():
-            return []
-        ilk_satir = ham.splitlines()[0]
-        ayirici = AYIRICI if ilk_satir.count(AYIRICI) >= ilk_satir.count(",") else ","
-        okuyucu = csv.DictReader(ham.splitlines(), delimiter=ayirici)
-        satirlar: list[dict[str, str]] = []
-        for ham_satir in okuyucu:
-            satir = {
-                (anahtar or "").strip(): _metin(deger)
-                for anahtar, deger in ham_satir.items()
-                if anahtar
-            }
-            if any(satir.values()):
-                satirlar.append(satir)
+            return [], None
+        metin: str | None = None
+        if ham[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            try:
+                metin = ham.decode("utf-16")
+            except UnicodeDecodeError:
+                metin = None
+        if metin is None:
+            for kodlama in (KODLAMA, "cp1254"):
+                try:
+                    metin = ham.decode(kodlama)
+                    break
+                except UnicodeDecodeError:
+                    continue
+        if metin is None or "\x00" in metin:
+            return [], "icerik metin dosyasi degil ya da kodlamasi taninmiyor"
+        satir_metinleri = metin.splitlines()
+        ilk_satir = satir_metinleri[0] if satir_metinleri else ""
+        ayirici: str | None = None
+        for aday in (AYIRICI, ",", "\t", "|"):
+            basliklar = [b.strip().lstrip("\ufeff").strip() for b in ilk_satir.split(aday)]
+            if beklenen[0] in basliklar:
+                ayirici = aday
+                break
+        if ayirici is None:
+            return [], (
+                f"beklenen basliklar ({', '.join(beklenen[:3])}...) bulunamadi; "
+                f"ilk satir: '{ilk_satir[:60]}'"
+            )
+        try:
+            okuyucu = csv.DictReader(satir_metinleri, delimiter=ayirici)
+            satirlar: list[dict[str, str]] = []
+            for ham_satir in okuyucu:
+                satir = {
+                    (anahtar or "").strip(): _metin(deger)
+                    for anahtar, deger in ham_satir.items()
+                    if anahtar
+                }
+                if any(satir.values()):
+                    satirlar.append(satir)
+        except csv.Error as hata:
+            return [], f"CSV ayristirilamadi ({hata})"
+        return satirlar, None
+
+    @staticmethod
+    def _satirlari_oku(hedef: Path) -> list[dict[str, str]]:
+        """CSV dosyasini sozluk listesi olarak okur (sorunlar yutulur; geriye uyum)."""
+        dosya = hedef.name if hedef.name in BASLIKLAR else DOSYA_ALIAS
+        return Defterler._csv_oku(hedef, BASLIKLAR[dosya])[0]
+
+    def _dosya_oku(self, dosya: str) -> list[dict[str, str]]:
+        """Bir defter dosyasini okur; sorun varsa ``uyarilar``'a yazar."""
+        satirlar, sorun = self._csv_oku(self.yol(dosya), BASLIKLAR[dosya])
+        self.okunan[dosya] = len(satirlar)
+        if sorun:
+            self.uyarilar.append(
+                f"{dosya} okunamadi/bozuk: {sorun} (0 kayit yuklendi). Dosyayi Excel'de "
+                "acip ';' ayiricili CSV (UTF-8) olarak yeniden kaydedin; ogretilen "
+                "kayitlar bu calistirmada kullanilamadi."
+            )
         return satirlar
+
+    def _yukleme_kontrolu(self, dosya: str, yuklenen: int) -> None:
+        """Okunan satirlarin cogu yuklenemediyse (zorunlu alanlar bos) uyarir."""
+        self.yuklenen[dosya] = yuklenen
+        okunan = self.okunan.get(dosya, 0)
+        if okunan and yuklenen * 2 < okunan:
+            self.uyarilar.append(
+                f"{dosya} bozuk olabilir: {okunan} satirdan yalnizca {yuklenen} kayit "
+                "yuklendi (zorunlu alanlar bos ya da ayirici yanlis). Dosyayi kontrol edin."
+            )
 
     def _yaz(self, dosya: str, satirlar: Iterable[dict[str, str]]) -> bool:
         """Bir defter dosyasini basliklariyla birlikte yeniden yazar."""
@@ -265,8 +385,11 @@ class Defterler:
         self._ek_satirlari.clear()
         self._tckn_satirlari.clear()
         self._kirli.clear()
+        self.uyarilar.clear()
+        self.okunan.clear()
+        self.yuklenen.clear()
 
-        for satir in self._satirlari_oku(self.yol(DOSYA_ALIAS)):
+        for satir in self._dosya_oku(DOSYA_ALIAS):
             isim = isim_normalize(satir.get("isim_norm", ""))
             sicil = _sicil_metni(satir.get("sicil"))
             if not isim or not sicil:
@@ -275,8 +398,9 @@ class Defterler:
             satir["sicil"] = sicil
             self.aliases[isim] = sicil
             self._alias_satirlari[isim] = satir
+        self._yukleme_kontrolu(DOSYA_ALIAS, len(self._alias_satirlari))
 
-        for satir in self._satirlari_oku(self.yol(DOSYA_HARICI)):
+        for satir in self._dosya_oku(DOSYA_HARICI):
             isim = isim_normalize(satir.get("isim_norm", "")) or isim_normalize(
                 satir.get("ad_soyad", "")
             )
@@ -291,8 +415,9 @@ class Defterler:
                 "kaynak": satir.get("kaynak", ""),
             }
             self._harici_satirlari[isim] = satir
+        self._yukleme_kontrolu(DOSYA_HARICI, len(self._harici_satirlari))
 
-        for satir in self._satirlari_oku(self.yol(DOSYA_EK_KISI)):
+        for satir in self._dosya_oku(DOSYA_EK_KISI):
             tckn = tckn_normalize(satir.get("tckn"))
             ad_soyad = satir.get("ad_soyad", "")
             isim = isim_normalize(satir.get("anahtar", "")) or isim_normalize(ad_soyad)
@@ -312,8 +437,9 @@ class Defterler:
             self.ek_kisiler[anahtar] = kayit
             if isim:
                 self.ek_kisiler.setdefault(isim, kayit)
+        self._yukleme_kontrolu(DOSYA_EK_KISI, len(self._ek_satirlari))
 
-        for satir in self._satirlari_oku(self.yol(DOSYA_TCKN)):
+        for satir in self._dosya_oku(DOSYA_TCKN):
             tckn = tckn_normalize(satir.get("tckn"))
             sicil = _sicil_metni(satir.get("sicil"))
             if not tckn or not sicil:
@@ -322,6 +448,7 @@ class Defterler:
             satir["sicil"] = sicil
             self.tckn_sicil[tckn] = sicil
             self._tckn_satirlari[tckn] = satir
+        self._yukleme_kontrolu(DOSYA_TCKN, len(self._tckn_satirlari))
 
     # ------------------------------------------------------------------
     # Ekleme (ogrenme)
@@ -469,7 +596,7 @@ class Defterler:
     # Yardimci kaynaklardan besleme
     # ------------------------------------------------------------------
 
-    def yardimci_kaynaktan_besle(self, satirlar: list[GiderSatiri], defter: Any = None) -> dict[str, int]:
+    def yardimci_kaynaktan_besle(self, satirlar: list[GiderSatiri], defter: Any = None) -> dict[str, Any]:
         """Yardimci kaynak satirlarindan ek kisi defterini ve TCKN koprusunu doldurur.
 
         Saglik kontrol listesi, arabuluculuk listesi ve egitim katilimci
@@ -480,21 +607,50 @@ class Defterler:
 
         Seyahat faturasi (``antik_cari``) gibi kisi adinin serbest metinden
         tahmin edildigi kaynaklar defteri BESLEMEZ; oradaki isimler dogrulanmis
-        kimlik degildir.
+        kimlik degildir. Sicil tasiyan personel kutukleri (``referans_liste``,
+        ferdi kaza sigorta listesi gibi) de beslemez: kisileri ana veri ve 1C
+        listesiyle zaten eslesir, ek kisi defteri sicil tutmaz ve on binlerce
+        satirlik kutuk defteri sisirir. Nedenler ``BESLEMEYEN_NEDENLER``'de.
 
-        Dondurulen sozluk: eklenen ek kisi ve TCKN koprusu sayilari.
+        Returns:
+            {'ek_kisi': eklenen ek kisi, 'tckn_kopru': eklenen kopru,
+             'atlanan': islenmeyen satir (kaynak disi + kimliksiz),
+             'islenen': besleme kaynagi olup ad/TCKN tasiyan satir,
+             'calisan': ana veride zaten olan (yazilmayan) satir,
+             'kimliksiz': ad ve TCKN'si olmayan satir,
+             'kaynak_disi': {kaynak_tip: satir}  # besleme listesinde olmayanlar
+             'tip_ozeti': {kaynak_tip: {'satir', 'ek_kisi', 'tckn_kopru',
+                                        'calisan', 'kimliksiz', 'atlanan', 'neden'}}}
         """
-        ozet = {"ek_kisi": 0, "tckn_kopru": 0, "atlanan": 0}
+        ozet: dict[str, Any] = {
+            "ek_kisi": 0, "tckn_kopru": 0, "atlanan": 0, "islenen": 0,
+            "calisan": 0, "kimliksiz": 0, "kaynak_disi": {}, "tip_ozeti": {},
+        }
+
+        def tip_kaydi(kaynak_tip: str) -> dict[str, Any]:
+            return ozet["tip_ozeti"].setdefault(kaynak_tip, {
+                "satir": 0, "ek_kisi": 0, "tckn_kopru": 0, "calisan": 0,
+                "kimliksiz": 0, "atlanan": 0, "neden": besleme_nedeni(kaynak_tip),
+            })
+
         for satir in satirlar:
+            tip = tip_kaydi(satir.kaynak_tip)
+            tip["satir"] += 1
             if satir.kaynak_tip not in BESLEYEN_KAYNAKLAR:
                 ozet["atlanan"] += 1
+                tip["atlanan"] += 1
+                ozet["kaynak_disi"][satir.kaynak_tip] = ozet["kaynak_disi"].get(satir.kaynak_tip, 0) + 1
                 continue
             ad = _metin(satir.kisi_ham)
             tckn = tckn_normalize(satir.tckn_ham)
             sicil = _sicil_metni(satir.sicil_ham)
             if not ad and not tckn:
                 ozet["atlanan"] += 1
+                ozet["kimliksiz"] += 1
+                tip["atlanan"] += 1
+                tip["kimliksiz"] += 1
                 continue
+            ozet["islenen"] += 1
             santiye = _metin(satir.masraf_merkezi_kaynak)
             # Ana veride zaten olan calisan ek kisi defterine yazilmaz; defter
             # sicili olmayanlar icindir (olculdu: 106 satirin 81'i calisandi).
@@ -509,11 +665,16 @@ class Defterler:
                     )
                 except Exception:  # noqa: BLE001
                     calisan_mi = False
-            if not calisan_mi and self.ek_kisi_ekle(ad, tckn=tckn, santiye=santiye, kaynak=satir.kaynak_tip):
+            if calisan_mi:
+                ozet["calisan"] += 1
+                tip["calisan"] += 1
+            elif self.ek_kisi_ekle(ad, tckn=tckn, santiye=santiye, kaynak=satir.kaynak_tip):
                 ozet["ek_kisi"] += 1
+                tip["ek_kisi"] += 1
             if tckn and sicil:
                 if self.tckn_kopru_ekle(tckn, sicil, ad_soyad=ad, kaynak=satir.kaynak_tip):
                     ozet["tckn_kopru"] += 1
+                    tip["tckn_kopru"] += 1
         return ozet
 
     # ------------------------------------------------------------------
@@ -551,4 +712,8 @@ class Defterler:
             "tckn_kopru": len(self.tckn_sicil),
             "kok": str(self.kok),
             "kaydedilmemis": sorted(self._kirli),
+            # Dosya bazinda: CSV'den okunan satir ve gecerli yuklenen kayit sayisi.
+            "okunan": dict(self.okunan),
+            "yuklenen": dict(self.yuklenen),
+            "uyarilar": list(self.uyarilar),
         }

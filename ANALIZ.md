@@ -48,8 +48,8 @@ Dosya bir cari hareket dökümü. Masraf merkezi kolonu hiç yok. Kişi adı aç
 ve dört farklı kalıpta geçiyor:
 
 ```
-TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI
-PC2255749381 DEMIR MEHMET\M  KYA-SAW-LED BILET BEDELI
+TK1234567890 ORNEKSOY/AHMETCAN MR  IST-CDG BILET BEDELI
+PC1234567891 DEMIR MEHMET\M  KYA-SAW-LED BILET BEDELI
 CANER AKSU GRAND PLAZA HOTEL HANOI [11.07.2026] - [13.07.2026]  (2) KONAKLAMA YURTDISI
 EKSTRA BAGAJ UCRETI ALI MURAT SAHIN TARAFINDAN TASINDI
 ```
@@ -145,7 +145,7 @@ projesine gitmeli.
 |---|---|---|---|
 | AKSOY D., AKSOY S., AKSOY Y. (eş ve iki çocuk) | Aksoy E. | (gizli) | RHI Russia Headquarter Moscow |
 | KARATAS A., KARATAS S. (eş ve çocuk) | Karatas O. | (gizli) | ALNG2-GBS Project |
-| DEMIRALP E. M. G. (eş) | Demiralp A. | (gizli) | GPP Project |
+| ORNEKSOY E. M. G. (eş) | Orneksoy A. | (gizli) | GPP Project |
 | iki farklı soyadlı OLGA | soyadı eşleşen çalışan | - | - |
 
 Kural: soyadı tek bir çalışan ile eşleşiyorsa aile bireyi olarak işaretle, masraf merkezini
@@ -170,7 +170,7 @@ Excel kopyalama sırasında isimler 20 karakterde kesilmiş.
 
 | Faturadaki yazım | Gerçek kişi | Sicil |
 |---|---|---|
-| DEMIRALP/AHMETCA | Demiralp Ahmet Can | (gizli) |
+| ORNEKSOY/AHMETCA | Orneksoy Ahmet Can | (gizli) |
 | (SOYAD)/(SOYA | aynı soyadlı biri; kırpık isim tek kişiye inmiyor | - |
 | (SOYAD)/(AD), Rus uyruklu | - | - |
 
@@ -544,8 +544,8 @@ Sebep basit: iki dosya aynı kişiyi farklı yazıyor.
 
 | Ham döküm | Elle dağıtılmış | Sorun |
 |---|---|---|
-| `DEMIRALP AHMETCAN` | `AHMET CAN DEMIRALP` | Sıra ters, ad bitişik |
-| `DEMIRALP AHMETCA` | `AHMET CAN DEMIRALP` | Kırpılmış (18 karakter) |
+| `ORNEKSOY AHMETCAN` | `AHMET CAN ORNEKSOY` | Sıra ters, ad bitişik |
+| `ORNEKSOY AHMETCA` | `AHMET CAN ORNEKSOY` | Kırpılmış (18 karakter) |
 | `KARATAS ANIL` | `ALI YALCINKAYA` | Ad yanlış yazılmış |
 | (boş) | (boş) | Kurumsal kalem, kişi yok |
 

@@ -251,8 +251,8 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--dim);font-size:12.5px;
         <div class="cap"><span><span class="dot">●</span> ENERGO TEMMUZ.xls</span><span>144 satır × 13 kolon &middot; satır 9</span></div>
 <pre>kolon  0  İşlem Tarihi : 46204.0                     <span class="mut">&lt;- Excel seri numarasi</span>
 kolon  3  İşlem        : Bilet İşlem
-kolon  5  Evrak No     : TK 4093099626                <span class="mut">&lt;- bilet numarasi</span>
-kolon  6  Açıklama     : <span class="hi">TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI</span>
+kolon  5  Evrak No     : TK 1234567890                <span class="mut">&lt;- bilet numarasi</span>
+kolon  6  Açıklama     : <span class="hi">TK1234567890 ORNEKSOY/AHMETCAN MR  IST-CDG BILET BEDELI</span>
 kolon 10  Döviz        : USD
 kolon 11  Borc         : 47.30103346435598
 kolon 12  Alacak       : 0.0</pre>
@@ -277,7 +277,7 @@ kolon 12  Alacak       : 0.0</pre>
 <pre>belge tarihi   : 2026-07-01          <span class="mut">&lt;- 46204 cevrildi</span>
 gider tipi     : Bilet               <span class="mut">&lt;- 'Bilet Islem' kolonundan</span>
 tutar          : 47.30 USD
-CIKARILAN KISI : <span class="hi">'DEMIRALP AHMETCAN'</span>
+CIKARILAN KISI : <span class="hi">'ORNEKSOY AHMETCAN'</span>
 sicil_ham      : None                <span class="mut">&lt;- faturada sicil YOK</span>
 tckn_ham       : None                <span class="mut">&lt;- faturada TC kimlik YOK</span>
 ek alanlar     : evrak_no, guzergah, borc, alacak, kisiler, kisi_sayisi</pre>
@@ -301,15 +301,15 @@ ek alanlar     : evrak_no, guzergah, borc, alacak, kisiler, kisi_sayisi</pre>
       açmayı dener.</p>
       <div class="shot">
         <div class="cap"><span><span class="dot">●</span> eşleştirme kademesi</span><span>tam_isim</span></div>
-<pre>normalize   : DEMIRALP AHMETCAN
-tokenlar    : ['AHMETCAN', 'DEMIRALP']
+<pre>normalize   : ORNEKSOY AHMETCAN
+tokenlar    : ['AHMETCAN', 'ORNEKSOY']
               |
               |  <span class="mut">'AHMETCAN' sozlukte yok, acilmayi dene</span>
               v
 acilan      : AHMETCAN -> <span class="hi">MUSTAFA KEMAL</span>
               |
               v
-<span class="good">BULUNDU</span>      : Demiralp Ahmet Can  /  sicil <b>123456</b>
+<span class="good">BULUNDU</span>      : Orneksoy Ahmet Can  /  sicil <b>123456</b>
 yontem      : tam_isim        guven <b>0,92</b>
 gerekce     : "Bitisik yazilmis ad acildi (AHMETCAN -> MUSTAFA KEMAL)"</pre>
       </div>
@@ -503,11 +503,11 @@ uyarilar       : yok</pre>
       <div class="cap"><span><span class="dot">●</span> tek satırın tam yolculuğu</span><span>47,30 USD</span></div>
 <pre>Yuzyilturizm ... .msg
   └── ENERGO TEMMUZ.xls  satir 9
-        "TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI"   47,30 USD
+        "TK1234567890 ORNEKSOY/AHMETCAN MR  IST-CDG BILET BEDELI"   47,30 USD
           |
-          |  isim cekildi        DEMIRALP AHMETCAN
+          |  isim cekildi        ORNEKSOY AHMETCAN
           |  ad acildi           AHMETCAN -> MUSTAFA KEMAL
-          |  personel bulundu    Demiralp Ahmet Can / 123456   guven 0,92
+          |  personel bulundu    Orneksoy Ahmet Can / 123456   guven 0,92
           |  donem secildi       2026-07-01  (giderin yapildigi ay)
           |  gorev yeri          RHI Russia - Headquarter (Moscow)
           |  harita              -> HQ-MOSCOW

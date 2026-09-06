@@ -130,7 +130,7 @@ def kopru_turet(
             elif len(uyan) > 1:
                 # ayni isim ayni dogum tarihi: karar verilemez, atla
                 _log.warning("TC %s icin %d aday ayni dogum tarihini tasiyor, atlandi",
-                             tckn, len(uyan))
+                             _tc_maske(tckn), len(uyan))
                 continue
 
         if secilen is None and not dogum_zorunlu and len(adaylar) == 1:
@@ -153,7 +153,13 @@ def kopru_turet(
     return list(gorulen.values())
 
 
-def kopruyu_deftere_yaz(adaylar: Iterable[KopruAdayi], defterler) -> int:
+def _tc_maske(tckn) -> str:
+    """Log ve uyarilarda TC'nin yalnizca ilk uc hanesi gorunur."""
+    m = str(tckn or "")
+    return (m[:3] + "*" * max(0, len(m) - 3)) if m else "?"
+
+
+def kopruyu_deftere_yaz(adaylar: Iterable[KopruAdayi], defterler, kaydet: bool = True) -> int:
     """Kopru adaylarini Defterler.tckn_sicil tablosuna yazar.
 
     Zaten kayitli olan TC numaralari atlanir; mevcut kayit ustune yazilmaz
@@ -178,8 +184,8 @@ def kopruyu_deftere_yaz(adaylar: Iterable[KopruAdayi], defterler) -> int:
             defterler.tckn_kopru_ekle(a.tckn, a.sicil)
             eklenen += 1
         except Exception as e:
-            _log.warning("Kopru yazilamadi TC %s: %s", a.tckn, e)
-    if eklenen:
+            _log.warning("Kopru yazilamadi TC %s: %s", _tc_maske(a.tckn), e)
+    if eklenen and kaydet:
         try:
             defterler.kaydet()
         except Exception as e:
@@ -347,7 +353,7 @@ def alias_turet(satirlar: Iterable, defter, esik: int = _BENZERLIK_ESIGI) -> lis
     return list(sonuc.values())
 
 
-def aliaslari_deftere_yaz(adaylar: Iterable[KopruAdayi], defterler) -> int:
+def aliaslari_deftere_yaz(adaylar: Iterable[KopruAdayi], defterler, kaydet: bool = True) -> int:
     """Turetilmis aliaslari Defterler.aliases tablosuna yazar.
 
     Elle onaylanmis mevcut kayitlarin ustune yazmaz.
@@ -367,7 +373,7 @@ def aliaslari_deftere_yaz(adaylar: Iterable[KopruAdayi], defterler) -> int:
             eklenen += 1
         except Exception as e:
             _log.warning("Alias yazilamadi %s: %s", norm, e)
-    if eklenen:
+    if eklenen and kaydet:
         try:
             defterler.kaydet()
         except Exception as e:
