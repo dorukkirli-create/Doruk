@@ -40,6 +40,26 @@ AZAMI_DOSYA_SAYISI = 2000
 
 
 @dataclass
+class AtlananEk:
+    """Mail agacinda gorulen ama okunmayan ek (PDF, docx...). Envanter icin."""
+
+    ad: str
+    zincir: list[str] = field(default_factory=list)
+    sebep: str = "tablo degil"
+    boyut: int | None = None
+    #: True ise dosya tablo ama daha once ayni ad+boyutla cikmis bir kopyanin
+    #: tekrari; envanterde 'AYNI ICERIK' olarak gorunur.
+    tekrar: bool = False
+
+    @property
+    def kaynak_aciklamasi(self) -> str:
+        return " > ".join(self.zincir)
+
+    def __str__(self) -> str:  # eski metin bicimiyle uyumlu
+        return f"{self.ad}  [{self.kaynak_aciklamasi}]" if self.zincir else self.ad
+
+
+@dataclass
 class CikarilanEk:
     """Mail agacindan cikarilmis tek bir dosya ve nereden geldigi."""
 
@@ -216,7 +236,13 @@ def _msg_yuru(
                     _msg_ac_ve_yuru(icerik, dal, yeni_zincir + [yol.name], derinlik + 1,
                                     sonuc, atlananlar)
                 elif ic_uzanti not in GORSEL_UZANTILARI and atlananlar is not None:
-                    atlananlar.append(f"{icerik.name}  [{yol.name} icinde, mail: {konu}]")
+                    try:
+                        boyut = icerik.stat().st_size
+                    except OSError:
+                        boyut = None
+                    atlananlar.append(AtlananEk(
+                        ad=icerik.name, zincir=yeni_zincir + [yol.name],
+                        sebep=f"tablo degil ({ic_uzanti or 'uzantisiz'}); acilmadi", boyut=boyut))
             continue
 
         if uzanti == ".msg":
@@ -228,7 +254,9 @@ def _msg_yuru(
                 yol=yol, ad=yol.name, mail_konusu=konu, mail_gonderen=gonderen,
                 mail_tarihi=tarih, zincir=yeni_zincir, derinlik=derinlik))
         elif atlananlar is not None:
-            atlananlar.append(f"{yol.name}  [mail: {konu}]")
+            atlananlar.append(AtlananEk(
+                ad=yol.name, zincir=list(yeni_zincir),
+                sebep=f"tablo degil ({uzanti or 'uzantisiz'}); acilmadi", boyut=len(veri)))
 
 
 class MesajAcilamadi(Exception):
@@ -302,10 +330,16 @@ def msg_aciklarini_cikar(msg_yolu: str | Path, hedef_dizin: str | Path,
     benzersiz: list[CikarilanEk] = []
     for ek in sonuc:
         try:
-            anahtar = (ek.ad, ek.yol.stat().st_size)
+            boyut = ek.yol.stat().st_size
         except OSError:
             continue
+        anahtar = (ek.ad, boyut)
         if anahtar in gorulen:
+            # Sessiz atlama yok: envanterde 'AYNI ICERIK' olarak gorunsun.
+            if atlananlar is not None:
+                atlananlar.append(AtlananEk(
+                    ad=ek.ad, zincir=list(ek.zincir), boyut=boyut, tekrar=True,
+                    sebep="ayni ad ve boyutla daha once cikan ekin tekrari (ic mail / zip); ilk kopya okundu"))
             continue
         gorulen.add(anahtar)
         benzersiz.append(ek)

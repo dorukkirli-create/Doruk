@@ -63,7 +63,7 @@ O zaman 1_FATURALAR klasorune koymaniza gerek kalmaz.
 EXCEL'I NASIL OKUYACAKSINIZ
 ============================
 
-Sekiz sayfa var. Sirasi okuma sirasidir.
+Dokuz sayfa var. Sirasi okuma sirasidir.
 
   Ozet          KAPAK. Tutarlar, mutabakat durumu (yesil = para kaybolmadi),
                 sirket kirilimi, dikkat notlari ve sayfa rehberi. Dosya
@@ -83,6 +83,12 @@ Sekiz sayfa var. Sirasi okuma sirasidir.
                 dagitilan / dagitilamayan tutar.
                 >>> "Fark" sutunu SIFIR olmak zorunda. <<<
                 Sifir degilse tablo muhasebeye gonderilmemeli.
+
+  Dosyalar      DOSYA ENVANTERI. Verdiginiz her dosya ve mailin icindeki her
+                ek icin bir satir: OKUNDU / KUTUK / DETAY LISTESI / ATLANDI
+                (PDF gibi tablo olmayan) / AYNI ICERIK / OKUNAMADI. Satir
+                sayisi ve o dosyadan okunan tutar yazar; dosyayi acip kendi
+                toplamiyla karsilastirarak elle kontrol edebilirsiniz.
 
   Sonuc         Butun satirlar, 28 kolon. Her satirda kisinin nasil
                 bulundugu, guven skoru, Turkce gerekce, EVRAK / FATURA NO ve

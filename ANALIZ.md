@@ -447,7 +447,7 @@ ALNG2-GBS 12, RSD-UL-GPC 8.)*
 
 ### Çıktı
 
-Sekiz sayfalı Excel üretiliyor: Ozet (kapak), Mahsuplasma, Kontrol, Sirket
+Dokuz sayfalı Excel üretiliyor: Ozet (kapak), Mahsuplasma, Kontrol, Dosyalar, Sirket
 Kirilimi, Harita Onerileri, Sonuc, Incele, Eslesmedi. Satır dökümünde her satır
 28 kolon taşıyor: eşleştirme yöntemi, güven skoru, Türkçe gerekçe, evrak / fatura
 numarası ve mail konusu. Böylece "bu satır neden bu projeye yazıldı" ve "hangi

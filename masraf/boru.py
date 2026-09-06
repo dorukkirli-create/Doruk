@@ -250,6 +250,10 @@ class Boru:
         #: Mail eklerinden okunmadan gecilenler (PDF, docx...). Sessizce
         #: atlanmaz; Kontrol sayfasinda ve kapakta listelenir.
         self.atlanan_ekler: list[str] = []
+        #: Dosya envanteri: her ust duzey dosya ve her mail eki icin bir kayit
+        #: (okundu / kutuk / atlandi / ayni icerik / okunamadi). Excel'in
+        #: 'Dosyalar' sayfasi ve OZET.txt buradan beslenir.
+        self.envanter: list = []
         self._son_donem: date | None = None
         self._hazir = False
 
@@ -335,6 +339,7 @@ class Boru:
         from masraf.okuyucular.kesif import dosya_tipini_bul
         from masraf.okuyucular.kesif import oku as kesif_oku
 
+        from masraf.envanter import AYNI_ICERIK, OKUNAMADI, DosyaKaydi, _boyut
         from masraf.okuyucular.kesif import _dosya_ozeti
 
         satirlar: list[GiderSatiri] = []
@@ -360,6 +365,10 @@ class Boru:
                         f"{hedef.name}: icerigi daha once okunan bir dosyayla/ekle "
                         "birebir ayni; cift sayim olmasin diye atlandi."
                     )
+                    self.envanter.append(DosyaKaydi(
+                        ad=hedef.name, tur=hedef.suffix.lower().lstrip("."), durum=AYNI_ICERIK,
+                        sebep="icerigi daha once okunan bir dosyayla/ekle birebir ayni; atlandi",
+                        boyut=_boyut(hedef), ozet=ozet))
                     continue
                 gorulen_ozetler.add(ozet)
             if _parola_korumali_mi(hedef):
@@ -370,13 +379,17 @@ class Boru:
                     "Excel'de acip parolayi girin, 'Farkli Kaydet' ile parolasiz "
                     "kaydedin ve tekrar deneyin."
                 )
+                self.envanter.append(DosyaKaydi(
+                    ad=hedef.name, tur=hedef.suffix.lower().lstrip("."), durum=OKUNAMADI,
+                    sebep="parola korumali; parolasiz kaydedip tekrar deneyin", boyut=_boyut(hedef)))
                 continue
             try:
                 tip = dosya_tipini_bul(hedef)
                 # kesif.oku Outlook mesajlarini, referans listelerini ve
                 # ozel parser bos donerse genel parser'a dusmeyi kendi ele alir.
                 dosya_satirlari = kesif_oku(hedef, gorulen_ozetler=gorulen_ozetler,
-                                            atlanan_ekler=self.atlanan_ekler)
+                                            atlanan_ekler=self.atlanan_ekler,
+                                            envanter=self.envanter)
                 if not dosya_satirlari:
                     self.hatalar.append(
                         f"{hedef.name}: dosyadan hic gider satiri cikarilamadi "
@@ -387,6 +400,9 @@ class Boru:
                 satirlar.extend(dosya_satirlari)
             except Exception as hata:  # noqa: BLE001 - kullaniciya gosterilecek
                 self.hatalar.append(f"{hedef.name}: {_hata_metni(hata)}")
+                self.envanter.append(DosyaKaydi(
+                    ad=hedef.name, tur=hedef.suffix.lower().lstrip("."), durum=OKUNAMADI,
+                    sebep=_hata_metni(hata), boyut=_boyut(hedef)))
         return satirlar
 
     def _ayni_adli_dosyayi_ele(
@@ -426,6 +442,13 @@ class Boru:
                     f"'{ad}' iki kez verildi ({onceki[2]} ve {tam_yol}); satir sayisi "
                     f"ve toplam ayni. Ikincisi cift sayim olmasin diye atlandi."
                 )
+                # Envanterde bu dosyanin son kaydini 'ayni icerik' yap.
+                from masraf.envanter import AYNI_ICERIK, OKUNDU
+                for k in reversed(self.envanter):
+                    if k.ad == ad and k.durum == OKUNDU:
+                        k.durum = AYNI_ICERIK
+                        k.sebep = f"ayni adli ve ayni icerikli dosya daha once okundu ({onceki[2]}); atlandi"
+                        break
                 continue
             etiket = tam_yol if "> " in tam_yol else f"kopya-{sum(1 for k in gorulen_adlar if k == ad) + 1} > {ad}"
             for s in grup:
@@ -449,6 +472,7 @@ class Boru:
         """Dosyalari uctan uca isler ve sonuc listesini dondurur."""
         self.hatalar = []
         self.atlanan_ekler = []
+        self.envanter = []
         _bildir(ilerleme, 1, "Personel verisi yukleniyor")
         self.hazirla()
         # Calistiricinin (ornegin 'bu dosya daha once islendi') onceden verdigi
@@ -691,7 +715,9 @@ class Boru:
             "personel_dosyasi": str(self.ayarlar.personel_yolu),
             "yardimci_dosyasi": str(self.ayarlar.yardimci_personel_yolu or ""),
             "harita_dosyasi": str(getattr(self.harita, "kaynak", "") or ""),
-            "atlanan_ekler": list(getattr(self, "atlanan_ekler", []) or []),
+            "atlanan_ekler": [str(a) for a in (getattr(self, "atlanan_ekler", []) or [])
+                              if not getattr(a, "tekrar", False)],
+            "dosya_envanteri": [k.sozluk() for k in (getattr(self, "envanter", []) or [])],
             "son_donem": self._son_donem,
         }
 

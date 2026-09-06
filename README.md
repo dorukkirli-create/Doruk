@@ -82,7 +82,7 @@ Akış:
   [6] Mahsuplaşma: yineleme eleme, paylaşım, kuruşuna kadar mutabakat
             |
             v
-  [7] Excel çıktısı (8 sayfa): Ozet | Mahsuplasma | Kontrol | Sirket Kirilimi
+  [7] Excel çıktısı (9 sayfa): Ozet | Mahsuplasma | Kontrol | Dosyalar | Sirket Kirilimi
                                | Harita Onerileri | Sonuc | Incele | Eslesmedi
 ```
 
@@ -154,10 +154,11 @@ Gereken: Python 3.11, `pandas`, `openpyxl`, `xlrd`, `rapidfuzz`, `streamlit`,
 5. **İnceleyin.** *İnceleme* sekmesinde düşük güvenli satırlar tek tek gelir.
    Her satırın yanında sistemin **neden** o sonuca vardığı Türkçe yazar ve
    adaylar listelenir. Doğru kişiyi seçtiğinizde sistem bunu öğrenir.
-6. **Excel'i indirin.** Sekiz sayfalı çıktı, RHI kurumsal kimliğinde:
+6. **Excel'i indirin.** Dokuz sayfalı çıktı, RHI kurumsal kimliğinde:
    `Ozet` (kapak: tutarlar, mutabakat durumu, şirket kırılımı, dikkat notları),
    `Mahsuplasma` (muhasebeye giden dağıtım tablosu), `Kontrol` (fatura bazında
-   mutabakat), `Sirket Kirilimi` (tüzel kişi üstte, projeleri altında),
+   mutabakat), `Dosyalar` (dosya envanteri: hangi dosya ve ek okundu, hangisi
+   atlandı, neden; satır ve tutar), `Sirket Kirilimi` (tüzel kişi üstte, projeleri altında),
    `Harita Onerileri` (tanımsız görev yerleri için hazır satırlar), `Sonuc`
    (tüm satırlar, evrak numarasıyla), `Incele` (elle bakılacaklar), `Eslesmedi`
    (kişi bulunamayanlar).

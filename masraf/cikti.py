@@ -11,6 +11,10 @@ IS AKISI SIRASINDADIR: once muhasebeye gidecek olan, sonra kaniti.
                   dagitilamayan tutar. 'Fark' sutunu sifir olmak zorundadir.
                   Altinda: fatura detay listeleri capraz kontrolu, okunmayan
                   ekler, isaret celiskileri, dagilima girmeyen satirlar.
+    Dosyalar    - Dosya envanteri. Ust duzey dosyalar ve mail eklerinin her
+                  biri: okundu / kutuk / detay listesi / atlandi (PDF) / ayni
+                  icerik / okunamadi, satir sayisi ve okunan tutar. Elle
+                  kontrol icin 'hangi dosyadan ne cikti' listesi.
     Sirket Kirilimi - tuzel kisi ustte, projeleri altinda (1C 'Firm 2').
     Harita Onerileri - haritada tanimsiz gorev yerleri, hazir CSV satiri
                   (yalnizca oneri varsa yazilir).
@@ -100,6 +104,93 @@ MAHSUP_KOLONLARI: tuple[tuple[str, str, int], ...] = (
 )
 
 #: Kontrol (mutabakat) sayfasi kolonlari.
+#: 'Dosyalar' sayfasi: dosya envanteri.
+DOSYA_KOLONLARI: tuple[tuple[str, str, int], ...] = (
+    ("Sira", "tamsayi", 6),
+    ("Dosya", "metin", 46),
+    ("Nereden Geldi", "metin", 48),
+    ("Tur", "metin", 22),
+    ("Durum", "metin", 15),
+    ("Satir", "tamsayi", 8),
+    ("Tutarli Satir", "tamsayi", 12),
+    ("Okunan Tutar", "sayi", 14),
+    ("Para", "metin", 6),
+    ("Boyut (KB)", "sayi", 11),
+    ("Not / Sebep", "metin", 80),
+)
+
+#: Envanter durumu -> satir rengi.
+_ENVANTER_RENKLERI = {
+    "OKUNDU": "tamam", "KUTUK": "", "DETAY LISTESI": "", "MAIL": "baslik",
+    "ATLANDI": "uyari", "SATIR YOK": "uyari", "AYNI ICERIK": "uyari",
+    "OKUNAMADI": "engel", "PERSONEL": "uyari",
+}
+
+
+def dosya_satir_degerleri(sira: int, k: dict) -> list[Any]:
+    """Bir envanter kaydini DOSYA_KOLONLARI sirasina cevirir."""
+    boyut = k.get("boyut")
+    return [
+        sira,
+        _metin(k.get("ad")),
+        _metin(k.get("kaynak")),
+        _metin(k.get("tur")),
+        _metin(k.get("durum")),
+        int(k.get("satir") or 0),
+        int(k.get("tutarli_satir") or 0),
+        k.get("tutar"),
+        _metin(k.get("para_birimi")),
+        round(boyut / 1024, 1) if isinstance(boyut, (int, float)) else None,
+        _metin(k.get("sebep")),
+    ]
+
+
+#: Envanter gosterim sirasi: once dagilima girenler, sonra karar gerektirenler,
+#: en sonda bilgi amacli olanlar (PDF'ler, tekrarlar).
+_ENVANTER_SIRASI = {
+    "OKUNDU": 0, "KUTUK": 1, "DETAY LISTESI": 2, "SATIR YOK": 3, "OKUNAMADI": 4,
+    "PERSONEL": 5, "AYNI ICERIK": 6, "ATLANDI": 7, "MAIL": 8,
+}
+
+
+def envanteri_sirala(envanter: Sequence[dict]) -> list[dict]:
+    """Duruma, sonra kaynak zincirine ve ada gore siralar (kararli)."""
+    return sorted(
+        envanter,
+        key=lambda k: (_ENVANTER_SIRASI.get(str(k.get("durum")), 9),
+                       str(k.get("kaynak") or ""), str(k.get("ad") or "").lower()),
+    )
+
+
+def _dosyalar_yaz(calisma: Any, envanter: Sequence[dict], bicimler: "_Bicimler") -> None:
+    """'Dosyalar' sayfasi: her dosya ve ek icin okundu / atlandi / neden."""
+    envanter = envanteri_sirala(envanter)
+    degerler = [dosya_satir_degerleri(i, k) for i, k in enumerate(envanter, 1)]
+    renkler = [_ENVANTER_RENKLERI.get(str(k.get("durum")), "") for k in envanter]
+    sayfa = _tablo_yaz(
+        calisma, "Dosyalar", DOSYA_KOLONLARI, degerler, renkler, bicimler,
+        bos_mesaj="(Dosya envanteri yok)", toplam_sutunlari=(5, 6, 7),
+    )
+    satir = len(degerler) + 3
+    sayfa.write_string(satir, 0, "Nasil okunur", bicimler.bolum)
+    satir += 1
+    for metin in (
+        "OKUNDU = gider satiri uretti, dagilima girdi. 'Okunan Tutar' o dosyadan okunan tutarlarin "
+        "toplamidir; dosyayi acip kendi toplamiyla karsilastirabilirsiniz.",
+        "KUTUK = kisi listesi (katilimci, saglik, sigorta). Defter beslemesinde kullanildi, dagilima girmedi.",
+        "DETAY LISTESI = tutar kolonu olmayan fatura detay listesi; kisileri yansitma dosyasiyla capraz kontrol edildi.",
+        "ATLANDI = tablo olmayan ek (PDF, docx). Acilmadi. Tutari yalnizca burada olan bir fatura varsa "
+        "bu tabloda YOKTUR; elle eklenmeli.",
+        "AYNI ICERIK = daha once okunan bir dosyayla birebir ayni; cift sayim olmasin diye atlandi.",
+        "SATIR YOK = acildi ama gider satiri cikmadi; kolon adlari taninmamis olabilir "
+        "(veri/kolon_esanlamlilari.csv).",
+        "OKUNAMADI = acilamadi (bozuk, parola korumali, bos). Dosya 1_FATURALAR'da birakilir.",
+        "MAIL = Outlook mesaji; ekleri ayri satirlardadir.",
+    ):
+        sayfa.write_string(satir, 0, metin, bicimler.ozet_metin)
+        satir += 1
+
+
 KONTROL_KOLONLARI: tuple[tuple[str, str, int], ...] = (
     ("Fatura / Kaynak Dosya", "metin", 34),
     ("Para Birimi", "metin", 10),
@@ -577,7 +668,7 @@ def _ozet_yaz(
     if oneriler:
         dikkat.append(f"{len(oneriler)} görev yeri masraf merkezi haritasında tanımlı değil. "
                       "'Harita Onerileri' sayfasında hazır satırlar var.")
-    atlanan_ekler = list(ozet.get("atlanan_ekler") or [])
+    atlanan_ekler = [a for a in (ozet.get("atlanan_ekler") or []) if not getattr(a, "tekrar", False)]
     if atlanan_ekler:
         # PDF faturalar ve diger tablo olmayan ekler okunmaz; sessiz atlanmaz.
         pdf_sayisi = sum(1 for a in atlanan_ekler if str(a).lower().split("  [")[0].endswith(".pdf"))
@@ -604,14 +695,46 @@ def _ozet_yaz(
                               bicimler.not_metni)
             satir += 1
 
-    # --- Islenen dosyalar ------------------------------------------------
-    dosyalar = ozet.get("dosyalar") or []
-    if dosyalar:
-        bolum("İşlenen dosyalar")
-        for i, yol in enumerate(dosyalar):
+    # --- Dosya envanteri -------------------------------------------------
+    envanter = list(ozet.get("dosya_envanteri") or [])
+    if envanter:
+        from collections import Counter
+        sayim = Counter(str(k.get("durum")) for k in envanter)
+        bolum("Dosyalar   (hangisi okundu, hangisi atlandı)")
+        sayfa.merge_range(
+            satir, 1, satir, 7,
+            "   ".join(f"{d}: {n}" for d, n in sayim.most_common())
+            + "   |   tam liste ve sebepler 'Dosyalar' sayfasında",
+            bicimler.ozet_metin)
+        satir += 1
+        tablo_basligi(("Dosya", "Nereden geldi", "Durum", "Satır", "Okunan tutar", "Para", "Not"))
+        gosterilecek = [k for k in envanteri_sirala(envanter) if str(k.get("durum")) != "MAIL"][:30]
+        for i, k in enumerate(gosterilecek):
             zebra = i % 2 == 1
-            sayfa.merge_range(satir, 1, satir, 7, Path(str(yol)).name, bicimler.mahsup("metin", "", zebra))
+            renk = _ENVANTER_RENKLERI.get(str(k.get("durum")), "")
+            sayfa.write_string(satir, 1, _metin(k.get("ad")), bicimler.mahsup("metin", renk, zebra))
+            sayfa.write_string(satir, 2, _metin(k.get("kaynak")), bicimler.mahsup("metin", renk, zebra))
+            sayfa.write_string(satir, 3, _metin(k.get("durum")), bicimler.mahsup("metin", renk, zebra))
+            sayfa.write_number(satir, 4, int(k.get("satir") or 0), bicimler.mahsup("tamsayi", renk, zebra))
+            if isinstance(k.get("tutar"), (int, float)):
+                sayfa.write_number(satir, 5, float(k["tutar"]), bicimler.mahsup("sayi", renk, zebra))
+            else:
+                sayfa.write_string(satir, 5, "", bicimler.mahsup("metin", renk, zebra))
+            sayfa.write_string(satir, 6, _metin(k.get("para_birimi")), bicimler.mahsup("metin", renk, zebra))
+            sayfa.write_string(satir, 7, _metin(k.get("sebep"))[:120], bicimler.mahsup("metin", renk, zebra))
             satir += 1
+        if len(envanter) - sum(1 for k in envanter if str(k.get("durum")) == "MAIL") > 30:
+            sayfa.merge_range(satir, 1, satir, 7, "... devamı 'Dosyalar' sayfasında.", bicimler.not_metni)
+            satir += 1
+        satir += 1
+    else:
+        dosyalar = ozet.get("dosyalar") or []
+        if dosyalar:
+            bolum("İşlenen dosyalar")
+            for i, yol in enumerate(dosyalar):
+                zebra = i % 2 == 1
+                sayfa.merge_range(satir, 1, satir, 7, Path(str(yol)).name, bicimler.mahsup("metin", "", zebra))
+                satir += 1
     bolum("Kaynak veri")
     for ad, deger in (
         ("Personel ana verisi", Path(str(ozet.get("personel_dosyasi") or "")).name or "-"),
@@ -630,6 +753,7 @@ def _ozet_yaz(
         ("Mahsuplasma", "MUHASEBEYE GİDEN TABLO. Her fatura için şirkete ve projeye ne kadar yazılacağı."),
         ("Sirket Kirilimi", "Tüzel kişi üstte, projeleri altında."),
         ("Kontrol", "Mutabakat. Fark sütunu sıfır olmak zorunda."),
+        ("Dosyalar", "Dosya envanteri: hangi dosya ve ek okundu, hangisi atlandı, neden; satır ve tutar."),
         ("Harita Onerileri", "Tanımsız görev yerleri ve haritaya yapıştırmaya hazır satırlar."),
         ("Sonuc", "Bütün satırlar: kişinin nasıl bulunduğu, güven, gerekçe, evrak no, mail konusu."),
         ("Incele", "Elle bakılacak satırlar."),
@@ -638,6 +762,8 @@ def _ozet_yaz(
     if oneriler is None:
         # Sayfa yazilmadiysa rehberde kirik baglanti olmasin.
         rehber = tuple(r for r in rehber if r[0] != "Harita Onerileri")
+    if not ozet.get("dosya_envanteri"):
+        rehber = tuple(r for r in rehber if r[0] != "Dosyalar")
     for i, (ad, aciklama) in enumerate(rehber):
         zebra = i % 2 == 1
         sayfa.write_url(satir, 1, f"internal:'{ad}'!A1", bicimler.mahsup("metin", "", zebra), ad)
@@ -1027,6 +1153,10 @@ def excel_yaz(
             except Exception:  # noqa: BLE001 - salt okunur nesne olabilir
                 pass
             _mahsuplasma_yaz(calisma, mahsup, bicimler)
+        envanter = list((ozet or {}).get("dosya_envanteri") or [])
+        if envanter:
+            _dosyalar_yaz(calisma, envanter, bicimler)
+        if mahsup is not None:
             _sirket_ozeti_yaz(calisma, mahsup, bicimler)
         if harita_onerileri is not None:
             _harita_onerisi_yaz(calisma, harita_onerileri, bicimler)

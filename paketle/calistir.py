@@ -345,7 +345,8 @@ def calistirma_kaydi_yaz(kok: Path, damga: str, faturalar: list[Path], ana: Path
                          yardimci: Path | None, sonuclar, mahsup, excel_yolu: str,
                          tasinan: list[Path], okunamayanlar: list[str] | None = None,
                          uyarilar: list[str] | None = None,
-                         ozetler: dict[str, str | None] | None = None) -> Path | None:
+                         ozetler: dict[str, str | None] | None = None,
+                         envanter: list[dict] | None = None) -> Path | None:
     """Her calistirma icin kisa bir denetim kaydi birakir.
 
     Finans 'bu Excel hangi dosyalardan, hangi personel verisiyle uretildi'
@@ -383,6 +384,15 @@ def calistirma_kaydi_yaz(kok: Path, damga: str, faturalar: list[Path], ana: Path
         y = veri / ad
         if y.is_file():
             satirlar.append(f"Veri dosyasi   : {ad}  ({_boyut(y)}, sha256={dosya_ozeti(y) or '?'})")
+    if envanter:
+        satirlar.append("Dosya envanteri: (durum | satir | okunan tutar | dosya  [nereden]  sebep)")
+        for k in envanter:
+            tutar = k.get("tutar")
+            tutar_m = f"{tutar:,.2f} {k.get('para_birimi') or ''}".strip() if isinstance(tutar, (int, float)) else "-"
+            satirlar.append(
+                f"    {str(k.get('durum')):13} {int(k.get('satir') or 0):5d}  {tutar_m:>16}  "
+                f"{k.get('ad')}  [{k.get('kaynak') or 'dogrudan'}]  {k.get('sebep') or ''}".rstrip()
+            )
     tarihler = [s.satir.belge_tarihi for s in sonuclar
                 if getattr(getattr(s, "satir", None), "belge_tarihi", None)]
     if tarihler:
@@ -537,6 +547,20 @@ def calistir() -> int:
 
     ozet_bas(sonuclar, sonuc.get("mahsup"), list(boru.uyarilar or []))
 
+    envanter = list((sonuc.get("ozet") or {}).get("dosya_envanteri") or [])
+    if envanter:
+        from collections import Counter
+        sayim = Counter(str(k.get("durum")) for k in envanter)
+        yaz()
+        yaz("  DOSYA ENVANTERI  (tam liste Excel'in 'Dosyalar' sayfasinda)")
+        yaz("    " + "   ".join(f"{d}: {n}" for d, n in sayim.most_common()))
+        for k in envanter:
+            if str(k.get("durum")) in ("OKUNAMADI", "SATIR YOK", "AYNI ICERIK"):
+                yaz(f"    - {k.get('durum'):12} {k.get('ad')}  ({str(k.get('sebep'))[:90]})")
+        atlanan = [k for k in envanter if str(k.get("durum")) == "ATLANDI"]
+        if atlanan:
+            yaz(f"    - ATLANDI      {len(atlanan)} ek tablo degil (PDF vb.), acilmadi; adlari Excel'de")
+
     if boru.hatalar:
         yaz()
         yaz("  HATALAR (bu dosyalar okunamadi)")
@@ -588,7 +612,8 @@ def calistir() -> int:
         kayit = calistirma_kaydi_yaz(kok, damga, faturalar, ana, yardimci,
                                      sonuclar, mahsup, excel_yolu, tasinan,
                                      okunamayanlar=sorted(okunamayanlar),
-                                     uyarilar=list(boru.uyarilar), ozetler=ozetler)
+                                     uyarilar=list(boru.uyarilar), ozetler=ozetler,
+                                     envanter=envanter)
         if kayit:
             yaz(f"  Calistirma kaydi: {kayit.name}")
         excel_ac(Path(excel_yolu))

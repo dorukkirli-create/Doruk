@@ -196,7 +196,7 @@ class PostaAtlananEklerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             kesif.oku(mesaj, cikarma_dizini=d, atlanan_ekler=atlananlar)
         self.assertTrue(atlananlar)
-        self.assertTrue(any(a.lower().split("  [")[0].endswith(".pdf") for a in atlananlar))
+        self.assertTrue(any(str(a).lower().split("  [")[0].endswith(".pdf") for a in atlananlar))
 
 
 if __name__ == "__main__":

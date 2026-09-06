@@ -162,7 +162,8 @@ def _msg_oku(
     yol: Path,
     cikarma_dizini: str | Path | None = None,
     gorulen_ozetler: set | None = None,
-    atlanan_ekler: list[str] | None = None,
+    atlanan_ekler: list | None = None,
+    envanter: list | None = None,
 ) -> list[GiderSatiri]:
     """Outlook mesajindaki tum tablo eklerini cikarir ve tek tek okur.
 
@@ -184,7 +185,7 @@ def _msg_oku(
     bizim_dizin = cikarma_dizini is None
     hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="mm_"))
     try:
-        return _msg_oku_icerik(yol, hedef, gorulen_ozetler, atlanan_ekler)
+        return _msg_oku_icerik(yol, hedef, gorulen_ozetler, atlanan_ekler, envanter)
     finally:
         if bizim_dizin:
             shutil.rmtree(hedef, ignore_errors=True)
@@ -201,12 +202,40 @@ def _dosya_ozeti(yol: Path) -> str:
 
 
 def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
-                    atlanan_ekler: list[str] | None = None) -> list[GiderSatiri]:
-    """``_msg_oku``'nun govdesi; gecici dizin yonetimi disarida tutulur."""
+                    atlanan_ekler: list | None = None,
+                    envanter: list | None = None) -> list[GiderSatiri]:
+    """``_msg_oku``'nun govdesi; gecici dizin yonetimi disarida tutulur.
+
+    ``envanter`` verilirse her ek icin bir ``DosyaKaydi`` eklenir: okunan,
+    kutuk sayilan, bos donen, hata veren, ayni icerik oldugu icin atlanan ve
+    tablo olmayan (PDF) ekler. Sessiz atlama yoktur.
+    """
+    from masraf.envanter import (
+        ATLANDI, AYNI_ICERIK, MAIL, OKUNAMADI, DosyaKaydi, _boyut, satirlardan_kayit,
+    )
     from masraf.okuyucular.posta import msg_aciklarini_cikar
 
+    def _kaydet(k: DosyaKaydi) -> None:
+        if envanter is not None:
+            envanter.append(k)
+
     satirlar: list[GiderSatiri] = []
-    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlanan_ekler)
+    atlananlar_yerel: list = atlanan_ekler if atlanan_ekler is not None else []
+    onceki_atlanan = len(atlananlar_yerel)
+    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlananlar_yerel)
+    for a in atlananlar_yerel[onceki_atlanan:]:
+        _kaydet(DosyaKaydi(
+            ad=getattr(a, "ad", str(a)), kaynak=f"{yol.name} > {getattr(a, 'kaynak_aciklamasi', '')}".rstrip(" >"),
+            tur=Path(getattr(a, "ad", str(a))).suffix.lower().lstrip(".") or "?",
+            durum=AYNI_ICERIK if getattr(a, "tekrar", False) else ATLANDI,
+            sebep=getattr(a, "sebep", "tablo degil; acilmadi"),
+            boyut=getattr(a, "boyut", None)))
+    yeni_atlananlar = atlananlar_yerel[onceki_atlanan:]
+    tekrar_sayisi = sum(1 for a in yeni_atlananlar if getattr(a, "tekrar", False))
+    _kaydet(DosyaKaydi(ad=yol.name, kaynak="", tur="outlook_msg", durum=MAIL,
+                       sebep=(f"{len(ekler)} tablo eki, {len(yeni_atlananlar) - tekrar_sayisi} okunmayan ek"
+                              + (f", {tekrar_sayisi} tekrar eden ek" if tekrar_sayisi else "")),
+                       boyut=_boyut(yol)))
 
     # Ayni ek iki farkli mailde (iletilmis, tekrar gonderilmis) gelirse
     # icerigi birebir aynidir. Ikisini de okumak parayi cift sayar; yineleme
@@ -221,6 +250,11 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
                 kalan.append(ek); continue
             if ozet in gorulen_ozetler:
                 _log.warning("Ayni ek daha once okundu, atlandi: %s (%s)", ek.ad, yol.name)
+                _kaydet(DosyaKaydi(
+                    ad=ek.ad, kaynak=f"{yol.name} > {ek.kaynak_aciklamasi}".replace(f" > {ek.ad}", ""),
+                    tur=Path(ek.ad).suffix.lower().lstrip("."), durum=AYNI_ICERIK,
+                    sebep="icerigi daha once okunan bir ekle birebir ayni; cift sayim olmasin diye atlandi",
+                    boyut=_boyut(ek.yol), ozet=ozet))
                 continue
             gorulen_ozetler.add(ozet)
             kalan.append(ek)
@@ -244,11 +278,19 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
     bos_kalanlar: list[str] = []
     hatalilar: list[str] = []
     for ek in ekler:
+        ek_kaynak = f"{yol.name} > {ek.kaynak_aciklamasi}".replace(f" > {ek.ad}", "")
+        try:
+            ek_tip = dosya_tipini_bul(ek.yol)
+        except Exception:  # noqa: BLE001
+            ek_tip = ""
         try:
             ic_satirlar = oku(ek.yol)
         except Exception as hata:  # noqa: BLE001 - kullaniciya gosterilecek
             hatalilar.append(f"{ek.ad}: {hata.__class__.__name__}: {hata}")
+            _kaydet(DosyaKaydi(ad=ek.ad, kaynak=ek_kaynak, tur=ek_tip, durum=OKUNAMADI,
+                               sebep=f"{hata.__class__.__name__}: {hata}", boyut=_boyut(ek.yol)))
             continue
+        _kaydet(satirlardan_kayit(ek.ad, ek_kaynak, ek_tip, ic_satirlar, boyut=_boyut(ek.yol)))
         if not ic_satirlar:
             bos_kalanlar.append(ek.ad)
             continue
@@ -283,7 +325,8 @@ def oku(
     yol: str | Path,
     cikarma_dizini: str | Path | None = None,
     gorulen_ozetler: set | None = None,
-    atlanan_ekler: list[str] | None = None,
+    atlanan_ekler: list | None = None,
+    envanter: list | None = None,
 ) -> list[GiderSatiri]:
     """Dosya tipini bulur ve dogru parser'i calistirir.
 
@@ -296,7 +339,7 @@ def oku(
     p = Path(yol)
     tip = dosya_tipini_bul(p)
     if tip == "outlook_msg":
-        return _msg_oku(p, cikarma_dizini, gorulen_ozetler, atlanan_ekler)
+        return _msg_oku(p, cikarma_dizini, gorulen_ozetler, atlanan_ekler, envanter)
     satirlar = oku_tip(p, tip)
     if not satirlar and tip != "genel":
         satirlar = genel_oku(p)
@@ -312,4 +355,7 @@ def oku(
             s.kaynak_tip = "referans_liste"
             if isinstance(s.ek, dict):
                 s.ek["referans_liste"] = True
+    if envanter is not None:
+        from masraf.envanter import _boyut, satirlardan_kayit
+        envanter.append(satirlardan_kayit(p.name, "", tip, satirlar, boyut=_boyut(p)))
     return satirlar

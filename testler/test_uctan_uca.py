@@ -50,7 +50,7 @@ CIKTI_ADI = "TEST_uctan_uca.xlsx"
 #: Excel ciktisinda bulunmasi zorunlu sayfalar, gosterildikleri sirada.
 #: Mahsuplasma en basta: muhasebeye giden tablo odur, digerleri onun dayanagi.
 #: Ozet kapaktir ve EN BASTA durur; dosya acilinca ilk gorulen sayfa odur.
-BEKLENEN_SAYFALAR = ["Ozet", "Mahsuplasma", "Kontrol", "Sirket Kirilimi",
+BEKLENEN_SAYFALAR = ["Ozet", "Mahsuplasma", "Kontrol", "Dosyalar", "Sirket Kirilimi",
                      "Harita Onerileri", "Sonuc", "Incele", "Eslesmedi"]
 
 #: 'Sonuc' sayfasinda bulunmasi zorunlu kolonlar.
