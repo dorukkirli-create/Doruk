@@ -104,13 +104,17 @@
 
 <section>
   <h2>Çıktı nasıl okunur</h2>
-  <p>Excel dosyasının ilk sayfası bir kapak. Tek satırlık bir durum var, üç renkten biri:</p>
+  <p>Excel dosyasının ilk sayfası bir kapak. Tek satırlık bir durum var, dört seviyeden biri:</p>
   <div class="status">
-    <div class="st ok"><div class="t">YEŞİL &middot; KAPALI</div>Para kaybolmadı, bekleyen karar yok. Muhasebeye gidebilir.</div>
-    <div class="st warn"><div class="t">SARI &middot; KAPALI, TASLAK</div>Para kaybolmadı ama "incele" satırları var. Önce onlar görülmeli.</div>
-    <div class="st bad"><div class="t">KIRMIZI &middot; AÇIK</div>Bir fatura kapanmadı. Gönderilmemeli; sebebi Kontrol sayfasında.</div>
+    <div class="st ok"><div class="t">YEŞİL &middot; KAPALI</div>Para kaybolmadı, bekleyen karar yok. Tablo onaya hazır.</div>
+    <div class="st warn"><div class="t">SARI &middot; KAPALI, DİKKAT</div>Bekleyen karar yok ama onaydan önce bakılacak bir şey var: yineleme şüphesi, okunmayan ek, tarihsiz satır gibi.</div>
+    <div class="st warn"><div class="t">SARI &middot; KAPALI, TASLAK</div>Para kaybolmadı ama "incele" ve "bulunamadı" satırları var. Önce onlar görülmeli.</div>
+    <div class="st bad"><div class="t">KIRMIZI &middot; AÇIK</div>Bir fatura kapanmadı ya da bir dosya okunamadı. Gönderilmemeli; sebebi kapakta ve Kontrol sayfasında yazılı.</div>
   </div>
-  <p style="margin-top:var(--s3)">Sonraki sayfalar sırayla: muhasebeye gidecek tablo, şirket kırılımı, kontrol (kanıt),
+  <p style="margin-top:var(--s3)">Kapağın altında üç satır var: Hazırlayan (otomasyon), Kontrol eden, Onaylayan.
+  İkisi elle doldurulur; onay akışı programın işi değildir.</p>
+  <p style="margin-top:var(--s3)">Sonraki sayfalar sırayla: muhasebeye gidecek tablo (Mahsuplasma), kontrol (kanıt),
+  dosya envanteri (hangi dosya okundu, hangisi atlandı, neden), şirket kırılımı, harita önerileri,
   bütün satırlar (her satırda "neden bu proje" açıklaması ve fatura numarası), incelenecekler, bulunamayanlar.</p>
 </section>
 
@@ -181,6 +185,6 @@
   </table></div>
 </section>
 
-<div class="foot">Sayılar: Temmuz 2026 dönemi, iki Outlook maili, 405 satır, 6 Eylül 2026 sürümü. Sayfadaki
-bütün değerler programın kendi çıktısından alınmıştır.</div>
+<div class="foot">Sayılar: Temmuz 2026 dönemi, iki Outlook maili, 405 satır (299 gider + 106 kişi listesi),
+6 Eylül 2026 sürümü. Sayfadaki bütün değerler programın kendi çıktısından alınmıştır.</div>
 </div>
