@@ -1,0 +1,185 @@
+<title>Pazartesi Anlatımı</title>
+<style>
+  :root{
+    --navy:#051C2C; --white:#FFFFFF; --blue:#1F40E6; --cyan:#00A9F4; --ice:#AAE6F0;
+    --ink:#4D4D4D; --mid:#7F7F7F; --soft:#B3B3B3; --line:#D0D0D0; --zebra:#F2F4F6;
+    --good:#2E7D32; --warn:#BF9000; --bad:#C62828;
+    --s1:4px; --s2:8px; --s3:12px; --s4:20px; --s5:32px; --s6:52px;
+  }
+  html{color-scheme:light}
+  body{margin:0;background:var(--white);color:var(--ink);font:15px/1.6 Arial,Helvetica,sans-serif}
+  h1,h2,h3{font-family:Georgia,"Times New Roman",serif;color:var(--navy);margin:0;text-wrap:balance}
+  h1{font-size:34px;line-height:1.15;font-weight:700}
+  h2{font-size:22px;margin-bottom:var(--s3)}
+  h3{font-size:16px;font-family:Arial,Helvetica,sans-serif;font-weight:700;color:var(--navy)}
+  p{margin:0 0 var(--s3)}
+  .band{background:var(--navy);color:var(--white);padding:var(--s6) 0 var(--s5)}
+  .band h1{color:var(--white)}
+  .band p{color:var(--ice);max-width:62ch;font-size:16px}
+  .tag{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:var(--s3)}
+  .wrap{max-width:900px;margin:0 auto;padding:0 var(--s5)}
+  section{padding:var(--s5) 0;border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:0}
+  .lead{font-size:17px;color:var(--navy);max-width:66ch}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s4);margin-top:var(--s4)}
+  .step{border-top:3px solid var(--blue);padding-top:var(--s3)}
+  .step b{display:block;font-family:Georgia,serif;font-size:28px;color:var(--blue);line-height:1;margin-bottom:var(--s2)}
+  .step h3{margin-bottom:var(--s1)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s4);margin:var(--s4) 0}
+  .kpi{background:var(--zebra);padding:var(--s3) var(--s4);border-left:3px solid var(--navy)}
+  .kpi .n{font-family:Georgia,serif;font-size:26px;color:var(--navy);font-variant-numeric:tabular-nums;line-height:1.1}
+  .kpi .l{font-size:12px;color:var(--mid);margin-top:var(--s1)}
+  .talk{background:var(--zebra);border-left:4px solid var(--cyan);padding:var(--s4);margin-top:var(--s4)}
+  .talk p{max-width:70ch}
+  .talk .mark{color:var(--mid);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:var(--s2)}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th{background:var(--navy);color:var(--white);text-align:left;padding:var(--s2) var(--s3);font-weight:700}
+  td{padding:var(--s2) var(--s3);border-bottom:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:var(--zebra)}
+  .tw{overflow-x:auto}
+  .status{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s3);margin-top:var(--s3)}
+  .st{padding:var(--s3);border:1px solid var(--line)}
+  .st .t{font-weight:700;font-size:13px;letter-spacing:.06em}
+  .st.ok .t{color:var(--good)} .st.warn .t{color:var(--warn)} .st.bad .t{color:var(--bad)}
+  .honest{border:1px solid var(--navy);padding:var(--s4);margin-top:var(--s4)}
+  .honest h3{margin-bottom:var(--s2)}
+  ul{margin:0 0 var(--s3);padding-left:1.2em}
+  li{margin-bottom:var(--s2)}
+  .q{font-weight:700;color:var(--navy)}
+  .foot{color:var(--soft);font-size:12px;padding:var(--s4) 0 var(--s5)}
+  @media print{.band{padding:var(--s4) 0}section{page-break-inside:avoid}}
+</style>
+
+<div class="band"><div class="wrap">
+  <div class="tag">Rencons Heavy Industries &middot; Finans &middot; Eylül 2026</div>
+  <h1>Fatura dağıtımını elle yapmayı bıraktık</h1>
+  <p>Tedarikçi faturalarındaki her kalemin hangi projeye ait olduğunu artık bir program buluyor.
+  Bu sayfa, konuyu teknik olmayan bir dinleyiciye beş dakikada anlatmak için hazırlandı.</p>
+</div></div>
+
+<div class="wrap">
+
+<section>
+  <h2>Sorun neydi</h2>
+  <p class="lead">Seyahat acentesi, eğitim ve arabuluculuk tedarikçileri her ay yüzlerce satırlık
+  fatura gönderiyor. Her satırda bir kişi adı var; hangi projede çalıştığı yok. Finans, her ismi
+  personel listesinde arayıp masrafı doğru projeye yazmak zorundaydı. Bu iş saatler sürüyor,
+  yorucu ve hataya açık. Bir isim yanlış projeye yazılırsa proje maliyeti yanlış çıkıyor.</p>
+</section>
+
+<section>
+  <h2>Program ne yapıyor</h2>
+  <p>Beş adım. Hiçbiri sihir değil; hepsi insanın yaptığının aynısı, ama saniyeler içinde ve her
+  kararın nedenini yazarak.</p>
+  <div class="steps">
+    <div class="step"><b>1</b><h3>Maili açar</h3><p>Outlook mailini, içindeki zip dosyalarını ve zip içindeki
+      mailleri kendi açar. Excel tablolarını bulur. PDF'leri okumaz; hangilerini okumadığını listeler.</p></div>
+    <div class="step"><b>2</b><h3>Satırları okur</h3><p>Her satırdan kişi adını, tarihi ve tutarı çıkarır.
+      "SOYAD/ADAD" gibi havayolu yazımlarını çözer, otel adlarını ve bilet numaralarını ayıklar.</p></div>
+    <div class="step"><b>3</b><h3>Kişiyi bulur</h3><p>Adı personel listesinde arar. Kesin bulursa kabul eder;
+      emin değilse "incele" der ve neden emin olmadığını Türkçe yazar. Asla tahmin yürütüp sessizce yazmaz.</p></div>
+    <div class="step"><b>4</b><h3>Doğru ayı seçer</h3><p>Masraf hangi ayda yapıldıysa kişinin o aydaki projesini alır.
+      Bugünkü projesini değil. Kişi o ay işten ayrılmışsa bunu da söyler.</p></div>
+    <div class="step"><b>5</b><h3>Tabloyu kurar</h3><p>Her fatura için "şu projeye şu kadar" tablosunu üretir ve
+      paranın hepsinin yerine gittiğini kuruşuna kadar kontrol eder. Bir kuruş bile açıkta kalırsa kırmızı yazar.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Temmuz 2026'da ne oldu</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="n">405</div><div class="l">satır okundu (2 mail, 12 tablo)</div></div>
+    <div class="kpi"><div class="n">%56</div><div class="l">kendiliğinden doğru projeye yazıldı</div></div>
+    <div class="kpi"><div class="n">%41</div><div class="l">bulundu ama insan onayına bırakıldı</div></div>
+    <div class="kpi"><div class="n">14</div><div class="l">satırda kişi bulunamadı; tutar görünür bekliyor</div></div>
+    <div class="kpi"><div class="n">4 / 4</div><div class="l">fatura kuruşuna kadar kapandı</div></div>
+    <div class="kpi"><div class="n">33</div><div class="l">satırlık muhasebe tablosu çıktı</div></div>
+  </div>
+  <p>İki dosyanın aynı 134 işlemi taşıdığını da yakaladı; para iki kez sayılmadı. Bir kalemin iki dosyada
+  zıt işaretle yazıldığını buldu ve not düştü. Bunlar elle bakarken kolay kaçan şeyler.</p>
+  <p>"İnsan onayına bırakılan" oranın yüksek olması bilinçli bir seçim. Program emin olmadığında
+  karar vermiyor; kararı, gerekçesiyle birlikte finansa bırakıyor. Her onay bir sonraki ay hatırlanıyor,
+  bu yüzden kuyruk her ay kısalacak.</p>
+</section>
+
+<section>
+  <h2>Çıktı nasıl okunur</h2>
+  <p>Excel dosyasının ilk sayfası bir kapak. Tek satırlık bir durum var, üç renkten biri:</p>
+  <div class="status">
+    <div class="st ok"><div class="t">YEŞİL &middot; KAPALI</div>Para kaybolmadı, bekleyen karar yok. Muhasebeye gidebilir.</div>
+    <div class="st warn"><div class="t">SARI &middot; KAPALI, TASLAK</div>Para kaybolmadı ama "incele" satırları var. Önce onlar görülmeli.</div>
+    <div class="st bad"><div class="t">KIRMIZI &middot; AÇIK</div>Bir fatura kapanmadı. Gönderilmemeli; sebebi Kontrol sayfasında.</div>
+  </div>
+  <p style="margin-top:var(--s3)">Sonraki sayfalar sırayla: muhasebeye gidecek tablo, şirket kırılımı, kontrol (kanıt),
+  bütün satırlar (her satırda "neden bu proje" açıklaması ve fatura numarası), incelenecekler, bulunamayanlar.</p>
+</section>
+
+<section>
+  <h2>Veri nerede duruyor</h2>
+  <p class="lead">Program bilgisayarın dışına hiçbir şey göndermez. İnternete ihtiyacı yok. Personel
+  listesi, faturalar ve çıktılar masaüstündeki tek bir klasörün içinde kalır.</p>
+  <ul>
+    <li>Kurulum gerektirmez; klasörü kopyalamak yeterli. Bilgisayar değişirse klasör taşınır.</li>
+    <li>Her çalıştırmanın kaydı tutulur: hangi dosyalar, hangi personel listesi, hangi tarihte, hangi sonuç.
+      Aynı fatura yanlışlıkla ikinci kez işlenirse program bunu söyler.</li>
+    <li>Ürettiği Excel kişi adı ve sicil içerir; paylaşırken buna dikkat etmek finans ekibinin işi.
+      TC kimlik numarası hiçbir çıktıya yazılmaz.</li>
+  </ul>
+  <div class="honest">
+    <h3>Doğru anlatım şöyle</h3>
+    <p>"Hiç veri dışarı çıkmadı" demek yerine şu üç cümle hem doğru hem savunulabilir:</p>
+    <ul>
+      <li>Program çevrimdışı çalışır; kullanımda hiçbir veri bilgisayardan çıkmaz.</li>
+      <li>Geliştirme sırasında örnek dosyalar kullanıldı; bunlar kod deposuna girmez ve depo kişisel veriden
+        arındırıldı. Belgelerde ve testlerde gerçek isim yok, uydurma adlar var.</li>
+      <li>Kod deposu şirket içi ve erişimi sınırlı. Eski sürüm geçmişindeki bir dosya için ayrıca
+        temizlik yapılıyor.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>Ne yapmıyor</h2>
+  <ul>
+    <li>PDF faturaları okumaz. PDF'ler toplam tutar taşır, kişi kırılımı taşımaz; kırılım yanlarındaki Excel'dedir.
+      Okunmayan her PDF listelenir.</li>
+    <li>Kişiyi bulamadığında tahminde bulunmaz. Tutar "bulunamadı" satırında görünür şekilde bekler; kararı insan verir.</li>
+    <li>Kur çevirmez. Her para birimi kendi içinde toplanır.</li>
+    <li>Grup şirketi personelini (Renservis, RC, One Tower gibi) ancak 1C listesi verildiyse bulur;
+      o listede ay bilgisi olmadığı için bu satırlar her zaman onaya düşer.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>İki dakikalık anlatım</h2>
+  <div class="talk">
+    <div class="mark">Konuşma metni</div>
+    <p>Her ay tedarikçilerden yüzlerce satırlık fatura geliyor ve her satırı hangi projeye yazacağımızı
+    elle buluyorduk. Şimdi bir program var: maili açıyor, satırları okuyor, kişiyi personel listesinde
+    buluyor, masrafın yapıldığı aydaki projesini alıyor ve muhasebe tablosunu kuruyor.</p>
+    <p>Temmuz'da 405 satırın yarısından fazlasını kendi başına doğru yere yazdı. Kalanı için "buldum ama
+    emin değilim, sebebi şu" dedi ve bize bıraktı. Hiçbir satırda tahmin yürütmedi. Paranın tamamının
+    yerine gittiğini kuruşuna kadar kontrol etti; dört faturanın dördü kapandı.</p>
+    <p>Program bilgisayarın dışına veri göndermiyor, internete ihtiyacı yok. Her çalıştırmanın kaydı tutuluyor.
+    Onayladığımız her kararı öğreniyor; yani her ay biraz daha az iş kalıyor.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Gelebilecek sorular</h2>
+  <div class="tw"><table>
+    <thead><tr><th style="width:38%">Soru</th><th>Kısa cevap</th></tr></thead>
+    <tbody>
+      <tr><td class="q">Yanlış projeye yazarsa ne olur?</td><td>Emin olmadığı hiçbir satırı kendisi yazmaz; onaya bırakır. Yazdığı her satırda nedenini görürsünüz. Temmuz ölçümünde bulunan iki hata da program tarafından "incele" diye işaretlenmişti.</td></tr>
+      <tr><td class="q">Para kaybolabilir mi?</td><td>Hayır. Okunan tutar = dağıtılan + bekleyen + iki kez sayılmaması için düşülen. Bu eşitlik her fatura için kuruşuna kadar tutmak zorunda; tutmazsa kapak kırmızı olur.</td></tr>
+      <tr><td class="q">Personel verisi dışarı çıkıyor mu?</td><td>Hayır. Program çevrimdışı çalışır; her şey masaüstündeki klasörde kalır.</td></tr>
+      <tr><td class="q">Yeni bir tedarikçi gelirse?</td><td>Tanınmayan tabloları genel okuyucu dener. Kolon adı farklıysa bir sözlük dosyasına bir satır eklenir; kod değişmez.</td></tr>
+      <tr><td class="q">Yeni proje açılırsa?</td><td>Excel'in "Harita Önerileri" sayfası hazır satır verir; finans kodunu yazıp kaydeder.</td></tr>
+      <tr><td class="q">Ne kadar zaman kazandırıyor?</td><td>Çalıştırma bir dakikadan kısa. Elle bakılacak satır sayısı ilk ay %41; onaylar öğrenildikçe düşer.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<div class="foot">Sayılar: Temmuz 2026 dönemi, iki Outlook maili, 405 satır, 6 Eylül 2026 sürümü. Sayfadaki
+bütün değerler programın kendi çıktısından alınmıştır.</div>
+</div>
