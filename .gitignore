@@ -1,5 +1,7 @@
 # Gercek personel ve fatura verisi asla repoya girmez
 ornek_veri/
+# Ayni ad bir sembolik bag olarak da olusabilir (calisma agaci kopyalari).
+ornek_veri
 cikti/
 *.pkl
 *.onbellek.pkl

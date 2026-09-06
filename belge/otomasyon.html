@@ -165,9 +165,9 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
     </div>
     <div class="hero__r">
       <div class="stat">
-        <span class="stat__n">405</span>
-        <span class="stat__l">satır okundu</span>
-        <span class="stat__s">2 Outlook maili, 12 ek dosya</span>
+        <span class="stat__n">299 + 106</span>
+        <span class="stat__l">gider satırı + kütük satırı okundu</span>
+        <span class="stat__s">2 Outlook maili, 12 tablo eki; kütük satırları para taşımaz</span>
       </div>
       <div class="stat">
         <span class="stat__n">33</span>
@@ -176,8 +176,8 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
       </div>
       <div class="stat">
         <span class="stat__n">~6 sn</span>
-        <span class="stat__l">iki mail için süre</span>
-        <span class="stat__s">ilk çalıştırmada +30 sn personel yüklemesi; elle yarım gün</span>
+        <span class="stat__l">iki mail için işleme süresi</span>
+        <span class="stat__s">önbellekli personel yüklemesi ~3 sn; ilk çalıştırmada 1-2 dakika; elle yarım gün</span>
       </div>
     </div>
   </div>
@@ -195,7 +195,11 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
       <div class="step"><div class="step__n">1</div><div class="step__b">
         <h3>Mailleri açar</h3>
         <p>Outlook <span class="mono">.msg</span> dosyasının içine girer, ekleri çıkarır,
-        içinde başka mail veya zip varsa onları da açar. Temmuz mailinden 12 dosya çıktı.</p>
+        içinde başka mail veya zip varsa onları da açar (en çok 6 seviye). Ekler adına değil
+        içeriğine (sha256) göre tekilleştirilir. Temmuz mailinden 12 tablo dosyası çıktı;
+        4 tablo eki daha aynı içerikli kopya olduğu için atlandı. Şifreli zip girdisi, bulut
+        bağlantısı olarak gelen ek ve bozuk ek okunmaz ama tek tek listelenir; böyle bir eki
+        olan mail arşive taşınmaz ve kapak MUTABAKAT AÇIK olur.</p>
       </div></div>
       <div class="step"><div class="step__n">2</div><div class="step__b">
         <h3>Satırları çıkarır</h3>
@@ -230,27 +234,33 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
     <div class="sec-head">
       <h2>Kişiyi bulma: kademeli merdiven</h2>
       <p>Tek bir yöntem yok. Sicil veya TC kimlik varsa iş kolaydır, ama seyahat
-      faturasında ikisi de yoktur; sadece serbest metinde isim geçer. Aşağıdaki tablo
-      Temmuz 2026 faturasında hangi kademenin kaç satır çözdüğünü gösteriyor.</p>
+      faturasında ikisi de yoktur; sadece serbest metinde isim geçer. Kademeler
+      sırayla denenir: sicil, TC kimlik, öğrenilmiş yazım (alias), harici kişi, tam isim,
+      1C listesi, alt küme, bitişik ad, transliterasyon, kesik önek, ek kişi defteri,
+      bulanık benzerlik (tavan 0,89), aile. Güven 0,90 ve üstü (uyarı yoksa) otomatik,
+      0,50 altı eşleşmedi, arası incele. Aşağıdaki tablo Temmuz 2026'nın 299 gider
+      satırında hangi kademenin kaç satır çözdüğünü gösteriyor; sicil ve TC kimlik
+      kademeleri bu ay yalnızca kütük listelerinde (Koç katılımcı, sağlık kontrol)
+      çalıştı, o satırlar para taşımadığı için tabloda yok.</p>
     </div>
     <div class="tw">
       <table>
-        <caption>Temmuz 2026, 405 satır. Kademeler yukarıdan aşağıya denenir.</caption>
+        <caption>Temmuz 2026, 299 gider satırı. Kademeler yukarıdan aşağıya denenir.</caption>
         <thead><tr>
           <th>Kademe</th><th>Ne yapar</th><th class="num">Satır</th><th style="width:26%">Pay</th>
         </tr></thead>
         <tbody>
-          <tr><td><strong>Sicil</strong></td><td>Dosyada sicil numarası var</td><td class="num">50</td><td><span class="bar" style="width:27%"></span></td></tr>
-          <tr><td><strong>TC kimlik</strong></td><td>Dosyada TC kimlik var</td><td class="num">27</td><td><span class="bar" style="width:15%"></span></td></tr>
-          <tr><td><strong>Tam isim</strong></td><td>İsim personel verisinde birebir bulundu</td><td class="num">184</td><td><span class="bar" style="width:100%"></span></td></tr>
-          <tr><td><strong>Öğrenilmiş yazım</strong></td><td>Daha önce doğrulanmış isim varyantı (aliases.csv)</td><td class="num">17</td><td><span class="bar" style="width:9%"></span></td></tr>
-          <tr><td><strong>Alt küme / kesik / bulanık</strong></td><td>İsmin bir parçası, kesilmiş yazım, yakın yazım</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
-          <tr><td><strong>1C listesi</strong></td><td>Grup şirketi personeli (Renservis, RC, One Tower…)</td><td class="num">56</td><td><span class="bar" style="width:30%"></span></td></tr>
-          <tr><td><strong>Ek kişi defteri</strong></td><td>Yardımcı listelerden öğrenilmiş, sicilsiz kişi</td><td class="num">11</td><td><span class="bar bar--dim" style="width:6%"></span></td></tr>
-          <tr><td><strong>Transliterasyon</strong></td><td>Rusça yazım farkı (<span class="mono">NATALIIA / NATALIA</span>)</td><td class="num">9</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
-          <tr><td><strong>Harici kişiler</strong></td><td>Çalışan değil; elle tutulan defterde kayıtlı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
-          <tr><td><strong>Aile</strong></td><td>Aynı soyadlı çalışan var, aile bileti olabilir</td><td class="num">27</td><td><span class="bar bar--dim" style="width:15%"></span></td></tr>
-          <tr><td><strong>Bulunamadı</strong></td><td>Hiçbir kademe tutmadı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+          <tr><td><strong>Öğrenilmiş yazım</strong></td><td>Daha önce doğrulanmış isim varyantı (aliases.csv)</td><td class="num">14</td><td><span class="bar" style="width:8%"></span></td></tr>
+          <tr><td><strong>Harici kişiler</strong></td><td>Çalışan değil; elle tutulan defterde kayıtlı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:5%"></span></td></tr>
+          <tr><td><strong>Tam isim</strong></td><td>İsim personel verisinde birebir bulundu (bitişik ad açılımı dahil)</td><td class="num">176</td><td><span class="bar" style="width:100%"></span></td></tr>
+          <tr><td><strong>1C listesi</strong></td><td>Grup şirketi personeli (Renservis, RC, One Tower…); dönem doğrulanamaz, hep incele</td><td class="num">43</td><td><span class="bar" style="width:24%"></span></td></tr>
+          <tr><td><strong>Alt küme</strong></td><td>Fatura ismi personel isminin parçası (ikinci ad eksik)</td><td class="num">4</td><td><span class="bar bar--dim" style="width:2%"></span></td></tr>
+          <tr><td><strong>Transliterasyon</strong></td><td>Rusça yazım farkı (<span class="mono">GEKHAN / GOKHAN</span>)</td><td class="num">8</td><td><span class="bar bar--dim" style="width:5%"></span></td></tr>
+          <tr><td><strong>Kesik önek</strong></td><td>Bilet sisteminde kesilmiş isim</td><td class="num">2</td><td><span class="bar bar--dim" style="width:1%"></span></td></tr>
+          <tr><td><strong>Ek kişi defteri</strong></td><td>Yardımcı listelerden öğrenilmiş, sicilsiz kişi</td><td class="num">7</td><td><span class="bar bar--dim" style="width:4%"></span></td></tr>
+          <tr><td><strong>Bulanık</strong></td><td>Yazım hatası toleranslı benzerlik; asla otomatik değil</td><td class="num">3</td><td><span class="bar bar--dim" style="width:2%"></span></td></tr>
+          <tr><td><strong>Aile</strong></td><td>Aynı soyadlı çalışan var, aile bileti olabilir</td><td class="num">26</td><td><span class="bar bar--dim" style="width:15%"></span></td></tr>
+          <tr><td><strong>Bulunamadı</strong></td><td>Hiçbir kademe tutmadı</td><td class="num">8</td><td><span class="bar bar--dim" style="width:5%"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -268,7 +278,7 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
       yanlış mahsuplaşma tam olarak o kişilerde oluşur.</p>
     </div>
     <div class="case">
-      <h4>Gerçek vaka — Temmuz 2026 faturası</h4>
+      <h4>Gerçek vaka: Temmuz 2026 faturası</h4>
       <pre>belge tarihi : 28.07.2026
 kullanılan dönem : 01.11.2025          <-- Temmuz değil, Kasım
 görev yeri   : Udokan (GMK)
@@ -287,38 +297,40 @@ uyarı : Kişi belge tarihinden önce işten ayrılmış (çıkış: 27.11.2025)
   <section>
     <div class="sec-head">
       <h2>Üç sonuç</h2>
-      <p>Her satır üç kutudan birine girer. Kural iki eşiktir: güven <strong>0,90 üstü ve
+      <p>Her satır üç kutudan birine girer. Kural iki eşiktir: güven <strong>0,90 ve üstü,
       hiç uyarı yoksa</strong> otomatik; güven <strong>0,50 altı veya masraf merkezi
       yoksa</strong> eşleşmedi; arada kalan her şey incelemeye düşer. Tek bir uyarı bile
-      satırı incelemeye alır, güven 1,00 olsa dahi.</p>
+      satırı incelemeye alır, güven 1,00 olsa dahi. Sayılar Temmuz 2026'nın 299 gider
+      satırıdır; 106 kütük satırı (katılımcı, sağlık, fatura detay listeleri) para
+      taşımaz, ayrı sayılır ve 42'si kimlik kararı bekler.</p>
     </div>
     <div class="verdicts">
       <div class="v v--ok">
         <span class="v__t">OTOMATİK</span>
-        <span class="v__n">225</span>
-        <span class="v__r">Kimlik kesin, uyarı yok. Olduğu gibi kaydedilebilir.</span>
+        <span class="v__n">160</span>
+        <span class="v__r">%53,5. Kimlik kesin, uyarı yok. Olduğu gibi kaydedilebilir.</span>
       </div>
       <div class="v v--warn">
         <span class="v__t">İNCELE</span>
-        <span class="v__n">166</span>
-        <span class="v__r">Sistem bir sonuç buldu ama emin değil. Gerekçesi her satırda
+        <span class="v__n">123</span>
+        <span class="v__r">%41,1. Sistem bir sonuç buldu ama emin değil. Gerekçesi her satırda
         Türkçe yazılı; onaylayın ya da düzeltin.</span>
       </div>
       <div class="v v--stop">
         <span class="v__t">EŞLEŞMEDİ</span>
-        <span class="v__n">14</span>
-        <span class="v__r">Kişi hiç bulunamadı. Tutar kaybolmaz, tabloda
+        <span class="v__n">16</span>
+        <span class="v__r">%5,4. Kişi hiç bulunamadı. Tutar kaybolmaz, tabloda
         <span class="mono">(DAGITILAMAYAN)</span> satırı olarak durur.</span>
       </div>
     </div>
     <div class="rule"></div>
     <div class="case" style="border-left-color:var(--warn-line)">
-      <h4>“İncele” ne demek — örnek</h4>
-      <pre>çıkarılan ad : SIMSEK ZEYNEP
-gerekçe : 'SIMSEK' soyadlı çalışan Simsek Mesut / 641976 aynı dosyada
+      <h4>“İncele” ne demek: örnek</h4>
+      <pre>çıkarılan ad : VELI AYSE
+gerekçe : 'VELI' soyadlı çalışan Veli Ali / 234567 aynı dosyada
           kesin eşleşti; bu satır onun ailesi olabilir
 güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
-      <p class="why">Zeynep Şimşek personel verisinde yok, ama Mesut Şimşek aynı faturada
+      <p class="why">Ayşe Veli personel verisinde yok, ama Ali Veli aynı faturada
       kesin eşleşmiş. Muhtemelen aile bileti. Sistem tahmin ediyor fakat
       <strong>asla otomatik kabul etmiyor</strong>. Tasarım ilkesi bu: emin olmadığında
       tahmin etmez, gerekçesini yazıp insana sorar.</p>
@@ -355,11 +367,18 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
           <tr><td><strong>Okunan</strong></td><td class="num">106.374,56</td><td>Dosyalarda görülen her şeyin toplamı</td></tr>
           <tr><td>Yinelenen</td><td class="num">−48.978,59</td><td>Aynı işlem diğer dosyada zaten sayıldı</td></tr>
           <tr><td><strong>Net</strong></td><td class="num">57.395,97</td><td>Gerçekten dağıtılacak tutar</td></tr>
-          <tr><td>Dağıtılan</td><td class="num">53.981,84</td><td>Projelere yazıldı (%94,1)</td></tr>
-          <tr><td>Dağıtılamayan</td><td class="num">3.414,13</td><td>Kişi bulunamadı; görünür biçimde bekler</td></tr>
+          <tr><td>Dağıtılan</td><td class="num">53.550,76</td><td>Projelere yazıldı (%93,3)</td></tr>
+          <tr><td>Dağıtılamayan</td><td class="num">3.845,21</td><td>Kişi bulunamadı (%6,7); görünür biçimde bekler</td></tr>
         </tbody>
       </table>
     </div>
+    <p class="note" style="margin-top:var(--s3)">Dört faturanın dördü KAPANDI.
+    <span class="mono">YUZYIL TEMMUZ.xlsx</span> satırının tamamı yinelenen olduğu için net
+    tutarı sıfır, dağıtım oranı boştur; bir kalemde yineleme şüphesi taşıdığından Kontrol
+    sayfasında “KAPANDI, DIKKAT” yazar. Kaynak dosyadaki şirket etiketi ile tablonun
+    şirketi 63 satırda (25.942,89 USD) farklıdır, en büyüğü RHI -&gt; UST LUGA (56 satır,
+    23.972,24 USD); bu hata değil yansıtma bilgisidir, Kontrol sayfasında çift bazında
+    listelenir.</p>
     <div class="rule"></div>
     <div class="tw">
       <table>
@@ -367,23 +386,25 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         1C personel listesinin “Firm 2” kolonundan gelir.</caption>
         <thead><tr><th>Şirket / Proje</th><th class="num">Tutar</th><th class="num">Pay</th><th class="num">Kişi</th></tr></thead>
         <tbody>
-          <tr><td><strong>UST LUGA</strong></td><td class="num"><strong>29.310,44</strong></td><td class="num"><strong>51,1%</strong></td><td class="num"><strong>74</strong></td></tr>
-          <tr><td style="padding-left:2em">GPP Project</td><td class="num">29.155,00</td><td class="num">99,5%</td><td class="num">72</td></tr>
+          <tr><td><strong>UST LUGA</strong></td><td class="num"><strong>28.879,36</strong></td><td class="num"><strong>50,3%</strong></td><td class="num"><strong>73</strong></td></tr>
+          <tr><td style="padding-left:2em">GPP Project</td><td class="num">28.723,92</td><td class="num">99,5%</td><td class="num">71</td></tr>
           <tr><td style="padding-left:2em">Ust-Luga - Reshetnikova</td><td class="num">155,44</td><td class="num">0,5%</td><td class="num">2</td></tr>
           <tr><td><strong>RHI</strong></td><td class="num"><strong>19.760,84</strong></td><td class="num"><strong>34,4%</strong></td><td class="num"><strong>35</strong></td></tr>
           <tr><td style="padding-left:2em">RHI Russia - Headquarter</td><td class="num">6.905,24</td><td class="num">34,9%</td><td class="num">7</td></tr>
           <tr><td style="padding-left:2em">Ust Luga Fabrication</td><td class="num">4.231,83</td><td class="num">21,4%</td><td class="num">10</td></tr>
           <tr><td style="padding-left:2em">Regional Management</td><td class="num">3.821,34</td><td class="num">19,3%</td><td class="num">4</td></tr>
-          <tr><td><strong>RSS</strong> <span style="color:var(--deep-teal)">(Renservis / Renstroydetal)</span></td><td class="num"><strong>3.075,96</strong></td><td class="num"><strong>5,4%</strong></td><td class="num"><strong>6</strong></td></tr>
+          <tr><td><strong>RSS</strong> <span style="color:var(--deep-teal)">(Renservis + Renstroydetal, tek tüzel kişi)</span></td><td class="num"><strong>3.210,24</strong></td><td class="num"><strong>5,6%</strong></td><td class="num"><strong>7</strong></td></tr>
           <tr><td><strong>RC</strong> <span style="color:var(--deep-teal)">(One Tower / Top Tower / Icity)</span></td><td class="num"><strong>1.441,09</strong></td><td class="num"><strong>2,5%</strong></td><td class="num"><strong>6</strong></td></tr>
           <tr><td><strong>BSK</strong></td><td class="num"><strong>259,23</strong></td><td class="num"><strong>0,5%</strong></td><td class="num"><strong>1</strong></td></tr>
-          <tr><td>(dağıtılamayan)</td><td class="num">3.414,13</td><td class="num">5,9%</td><td class="num">&mdash;</td></tr>
+          <tr><td>(dağıtılamayan)</td><td class="num">3.845,21</td><td class="num">6,7%</td><td class="num">5</td></tr>
         </tbody>
       </table>
     </div>
     <p class="note" style="margin-top:var(--s3)">RSS, RC ve BSK grup şirketleridir ve
     projeleri daha önce “haritada tanımlı değil” diyordu. Dokuzunun da tüzel kişisi
-    1C listesinden bulunup haritaya eklendi; artık tanımsız görev yeri kalmadı. Yeni
+    1C listesinden bulunup haritaya eklendi; artık tanımsız görev yeri kalmadı. Kaynak
+    dosyadaki <span class="mono">RENSTROYDETAL</span> gibi etiketler kanonik sözlükle
+    haritanın şirket koduna (RSS) çevrilir, ayrı şirket olarak çıkmaz. Yeni
     bir proje çıkarsa Excel’e <strong>Harita Onerileri</strong> sayfası gelir:
     şirketi bulunmuş, kodu önerilmiş, yapıştırmaya hazır.</p>
   </section>
@@ -398,15 +419,15 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
       <table>
         <thead><tr><th style="width:22%">Sayfa</th><th>İçeriği</th></tr></thead>
         <tbody>
-          <tr><td><strong>Ozet</strong></td><td><strong>Kapak.</strong> Tutarlar, mutabakat durumu (yeşil = para kaybolmadı), şirket kırılımı, en büyük merkezler, dikkat notları ve tıklanabilir sayfa rehberi.</td></tr>
-          <tr><td><strong>Mahsuplasma</strong></td><td><strong>Muhasebeye giden tablo budur.</strong> Her fatura için hangi şirkete ve projeye ne kadar yazılacağı.</td></tr>
-          <tr><td><strong>Kontrol</strong></td><td>Mutabakat. <em>Fark</em> sütunu sıfır olmak zorunda.</td></tr>
-          <tr><td><strong>Dosyalar</strong></td><td>Dosya envanteri. Verilen her dosya ve mailin içindeki her ek: okundu, kütük, atlandı (PDF), aynı içerik, okunamadı; satır sayısı ve okunan tutar. Elle kontrol için "hangi dosyadan ne çıktı" listesi.</td></tr>
+          <tr><td><strong>Ozet</strong></td><td><strong>Kapak.</strong> Tutarlar, mutabakat durumu, satır durumu (gider ve kütük satırları ayrı), şirket kırılımı, en büyük merkezler, dikkat notları ve tıklanabilir sayfa rehberi. Durum dört seviyedir: <strong>MUTABAKAT KAPALI</strong> (onaya hazır), <strong>KAPALI, DİKKAT</strong> (bekleyen yok, onaydan önce bakılacak not var), <strong>KAPALI, TASLAK</strong> (Incele / Eslesmedi sayfalarında karar bekleyen satır var), <strong>AÇIK</strong> (bir fatura kapanmadı ya da bir ek okunamadı; gönderilmemeli). Altında Hazırlayan: otomasyon, Kontrol eden, Onaylayan satırları elle doldurulur.</td></tr>
+          <tr><td><strong>Mahsuplasma</strong></td><td><strong>Muhasebeye giden tablo budur.</strong> Her fatura için hangi şirkete ve projeye ne kadar yazılacağı. Kolonlar sırayla: Fatura / Kaynak Dosya, Sirket, Masraf Merkezi Kodu, Masraf Merkezi Adi, Gider Tipi, Paylasim, Tutar, Para Birimi, Fatura Payi, Satir, Kisi, Otomatik, Incele, Eslesmedi, Gider Donemi, Elle Dagitim Etiketi, Evrak / Fatura No, Durum. TOPLAM satırı para birimi bazındadır; Kisi toplanmaz.</td></tr>
+          <tr><td><strong>Kontrol</strong></td><td>Mutabakat. <em>Fark</em> sütunu sıfır olmak zorunda. Altında: fatura detay listeleri çapraz kontrolü, “Yineleme suphesi (insan bakmali)”, “Kaynak dosyadaki sirket etiketi ile tablo sirketi farkli olan satirlar” (çift bazında), işaret çelişkileri, okunmayan ekler, dağılıma girmeyen satırlar.</td></tr>
+          <tr><td><strong>Dosyalar</strong></td><td>Dosya envanteri. Verilen her dosya ve mailin içindeki her ek: OKUNDU, KUTUK, DETAY LISTESI, SATIR YOK, OKUNAMADI, AYNI ICERIK, ATLANDI (PDF), MAIL, ARSIV, PERSONEL; satır sayısı ve okunan tutar. Ekler içerik özetine (sha256) göre tekilleştirilir. Elle kontrol için "hangi dosyadan ne çıktı" listesi.</td></tr>
           <tr><td><strong>Sirket Kirilimi</strong></td><td>Tüzel kişi üstte, projeleri altında. Muhasebenin okuma sırası.</td></tr>
           <tr><td>Harita Onerileri</td><td>Haritada tanımlı olmayan görev yerleri, şirketi 1C’den bulunmuş ve CSV satırı hazır. Boşsa yapılacak bir şey yok.</td></tr>
-          <tr><td>Sonuc</td><td>Bütün satırlar, 28 kolon. Kişinin nasıl bulunduğu, güven skoru, Türkçe gerekçe, ayrıca <strong>Evrak / Fatura No</strong> ve <strong>Mail Konusu</strong>. Detay isteyen buradan izler.</td></tr>
-          <tr><td>Incele</td><td>Elle bakılacak satırlar.</td></tr>
-          <tr><td>Eslesmedi</td><td>Kişi bulunamayanlar.</td></tr>
+          <tr><td>Sonuc</td><td>Bütün satırlar, 28 kolon. Kişinin nasıl bulunduğu, güven skoru, Türkçe gerekçe, ayrıca <strong>Evrak / Fatura No</strong> ve <strong>Mail Konusu</strong>. Kaynak Dosya adı Mahsuplasma ve Kontrol ile aynıdır; tutarlar yuvarlanmaz. Detay isteyen buradan izler.</td></tr>
+          <tr><td>Incele</td><td>Elle bakılacak satırlar. Kütük satırları sayfanın sonundadır.</td></tr>
+          <tr><td>Eslesmedi</td><td>Kişi bulunamayanlar. Masraf merkezi <span class="mono">(DAGITILAMAYAN)</span>; zayıf öneri varsa Uyarilar kolonunda. Kütük satırları sonda.</td></tr>
         </tbody>
       </table>
     </div>
@@ -429,10 +450,13 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
       </div>
       <div class="doer">
         <span class="doer__k">3 &middot; Kontrol edin</span>
-        <p>İşlenen faturalar kendiliğinden <span class="mono">3_ISLENENLER</span>
-        altına taşınır, çalıştırma <span class="mono">CALISTIRMA_GECMISI.txt</span>
-        dosyasına kaydedilir. Sizin yapacağınız tek şey Excel’in kapağındaki mutabakat
-        satırının yeşil olduğunu görmek.</p>
+        <p>Mutabakat kapandıysa işlenen faturalar kendiliğinden
+        <span class="mono">3_ISLENENLER</span> altına taşınır, çalıştırma
+        <span class="mono">CALISTIRMA_GECMISI.txt</span> dosyasına kaydedilir. Konsol da
+        kapakla aynı dili konuşur: [TAMAM] yalnızca inceleme bekleyen satır yoksa,
+        [TASLAK] inceleme / eşleşmedi varsa, [DIKKAT] mutabakat açıksa (sebebi yazılır).
+        Kapak TASLAK diyorsa <span class="mono">Incele</span> ve
+        <span class="mono">Eslesmedi</span> sayfaları görülmeden tablo onaya sunulmaz.</p>
       </div>
     </div>
   </section>
@@ -451,13 +475,13 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         yoktur ve hiçbir zaman otomatik eşleşmez. Doğru davranış onu
         <span class="mono">harici_kisiler.csv</span> dosyasına yazmaktır:</p>
         <div class="tw"><table><thead><tr><th>Kolon</th><th>Değer</th></tr></thead><tbody>
-          <tr><td class="mono">isim_norm</td><td>HALIT CAN KARADUMAN</td></tr>
-          <tr><td class="mono">ad_soyad</td><td>Halit Can Karaduman</td></tr>
+          <tr><td class="mono">isim_norm</td><td>ALI CAN VELI</td></tr>
+          <tr><td class="mono">ad_soyad</td><td>Ali Can Veli</td></tr>
           <tr><td class="mono">kurum</td><td>Dis konusmaci</td></tr>
           <tr><td class="mono">masraf_merkezi</td><td>RHI Russia - Headquarter (Moscow)</td></tr>
         </tbody></table></div>
         <p class="note" style="margin-top:var(--s3)">Tek satır yeter. Fatura metni
-        <span class="mono">KARADUMAN HALITCAN</span> yazsa bile bulunur; sistem ismi
+        <span class="mono">VELI ALICAN</span> yazsa bile bulunur; sistem ismi
         sıradan ve bitişiklikten bağımsız karşılaştırır.</p>
       </div>
       <div>
@@ -472,8 +496,10 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         dosyasına o kolon adını bir kez yazın, sonraki aylarda çalışır.</p>
         <h3 style="margin-top:var(--s5)">Öğrenme nasıl olur</h3>
         <p style="margin-top:var(--s3)">Masaüstü paketinde seçim ekranı yoktur; öğrenme
-        kendiliğindendir. Temmuz faturasında sistem sağlık ve katılımcı listelerinden
-        27 TC kimlik köprüsü ve doğum tarihiyle doğrulanmış 30 isim varyantı öğrendi.
+        kendiliğindendir. Temmuz faturasının ilk çalıştırmasında sistem sağlık ve
+        katılımcı listelerinden 27 TC kimlik köprüsü ve doğum tarihiyle doğrulanmış 30
+        isim varyantı öğrendi; defterin üstüne yazılmadan önce eski hali
+        <span class="mono">veri\gecmis</span> altına yedeklenir.
         <span class="mono">Incele</span> sayfasındaki bir satırı kalıcı çözmek için
         <span class="mono">veri\aliases.csv</span> (çalışan) ya da
         <span class="mono">veri\harici_kisiler.csv</span> (çalışan olmayan) dosyasına
@@ -484,10 +510,12 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
 
   <footer>
     <p><strong>Kaynak:</strong> Temmuz 2026 dönemi, iki Outlook maili (Yüzyıl Turizm bilet
-    ve vize alımları, Energo Taahhüt Mayıs–Haziran yansıtma), 12 ek dosya, 405 satır.
-    Bütün rakamlar bu veriden ölçülmüştür.</p>
-    <p style="margin-top:var(--s2)">Otomasyon çevrimdışı çalışır. Personel dosyaları ve
-    faturalar bilgisayardan dışarı çıkmaz. Öğrenilen eşleşmeler kişisel veri içerir;
-    <span class="mono">veri</span> klasörü paylaşılmamalıdır.</p>
+    ve vize alımları, Energo Taahhüt Mayıs-Haziran yansıtma), 12 tablo eki, 299 gider +
+    106 kütük satırı; 6 Eylül 2026 sürümü, 445 test geçiyor. Bütün rakamlar bu veriden
+    ölçülmüştür.</p>
+    <p style="margin-top:var(--s2)">Otomasyon çevrimdışı çalışır. Kullanımda personel
+    dosyaları ve faturalar bilgisayardan dışarı çıkmaz. Öğrenilen eşleşmeler kişisel veri
+    içerir; <span class="mono">veri</span> klasörü paylaşılmamalıdır. TC kimlik numaraları
+    konsolda ve uyarılarda maskelidir, Excel çıktısında TC kimlik kolonu yoktur.</p>
   </footer>
 </div>

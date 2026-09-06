@@ -5,7 +5,7 @@ incelenmesi sonucu ölçülen bulguları içerir. Buradaki her sayı gerçek ver
 tahmin değildir.
 
 İnceleme tarihi: Eylül 2026
-İnceleme kapsamı: Mustafa Demirel'in ilettiği iki örnek mail zinciri ve ekleri, 2025-2026 giriş çıkış dosyası.
+İnceleme kapsamı: finans ekibinin ilettiği iki örnek mail zinciri ve ekleri, 2025-2026 giriş çıkış dosyası.
 
 ---
 
@@ -143,8 +143,8 @@ projesine gitmeli.
 
 | Faturadaki isim | Bağlı olduğu çalışan | Sicil | Masraf merkezi |
 |---|---|---|---|
-| AKSOY D., AKSOY S., AKSOY Y. (eş ve iki çocuk) | Aksoy E. | (gizli) | RHI Russia Headquarter Moscow |
-| KARATAS A., KARATAS S. (eş ve çocuk) | Karatas O. | (gizli) | ALNG2-GBS Project |
+| ORNEKTAS D., ORNEKTAS S., ORNEKTAS Y. (eş ve iki çocuk) | Ornektas E. | (gizli) | RHI Russia Headquarter Moscow |
+| VELI A., VELI S. (eş ve çocuk) | Veli O. | (gizli) | ALNG2-GBS Project |
 | ORNEKSOY E. M. G. (eş) | Orneksoy A. | (gizli) | GPP Project |
 | iki farklı soyadlı OLGA | soyadı eşleşen çalışan | - | - |
 
@@ -157,8 +157,8 @@ o çalışandan devral, ama güven skorunu düşür ve incelemeye gönder. Otoma
 
 | Faturadaki yazım | Gerçek kişi | Sicil | Masraf merkezi |
 |---|---|---|---|
-| YRMAK MEKHMET VEISI | Irmak M. V. | (gizli) | Regional Management RHI |
-| IYLMAZ GEKHAN | Yilmaz G. | (gizli) | RHI Russia Headquarter Moscow |
+| ORNEKCHI MEKHMET VEISI | Ornekci M. V. | (gizli) | Regional Management RHI |
+| IYLMAZ GEKHAN | Ornektas G. | (gizli) | RHI Russia Headquarter Moscow |
 
 Bu iki satır elle dağıtılmış dosyada RENSERVIS ve RHI olarak işaretlenmiş. Personel verisine göre
 ilk kişi RHI Regional Management'ta. Yani elle yapılan dağıtımda bir hata var gibi
@@ -399,51 +399,56 @@ uydurma değil, çalıştırma çıktısıdır.
 
 ### Tek bir Outlook mesajından uçtan uca
 
-Mustafa Bey'in gönderdiği mesajın kendisi doğrudan uygulamaya verildi. Uygulama
+Finans ekibinin gönderdiği mesajın kendisi doğrudan uygulamaya verildi. Uygulama
 iç içe iki mail, beş zip arşivi ve içlerindeki Excel dosyalarını kendi açtı.
 
 | Ölçüm | Değer |
 |---|---|
-| Mesajdan çıkarılan tablo dosyası | 12 |
-| Ayıklanan gider satırı | 405 |
-| Kişi kütüğü olarak ayrılan satır | 20.920 |
-| Otomatik eşleşen | 225, yüzde 55,6 |
-| İncelemeye düşen | 166, yüzde 41,0 |
-| Eşleşmeyen | 14, yüzde 3,5 |
+| Mesajdan çıkarılan tablo dosyası | 12 (4 tablo eki daha aynı içerikli kopya olduğu için atlandı) |
+| Okunan satır | 405 = 299 gider satırı + 106 kütük satırı |
+| Kütük satırı (dağılıma girmez) | 106: katılımcı listesi 50, sağlık kontrol listesi 50, dört fatura detay listesi 6 |
+| Sigorta listesi (kişi kütüğü, satır üretmez) | 20.885 satır, 12.101 benzersiz kişi |
+| Otomatik eşleşen gider satırı | 160, yüzde 53,5 |
+| İncelemeye düşen gider satırı | 123, yüzde 41,1 |
+| Eşleşmeyen gider satırı | 16, yüzde 5,4 |
+| Defterdeki TC kimlik köprüsü | 27 |
+| Defterdeki alias | 30 |
 
-*Ölçüm: 6 Eylül 2026 sürümü, 1C listesi ve öğrenen defterler açık. İncelemeye
-düşen sayının yüksek olması kasıtlıdır: 1C listesinden gelen 56 satır ve dönemi
-örtüşmeyen satırlar sonuç bulsa da insana bırakılır.*
-| Öğrenilen TC kimlik köprüsü | 27 |
-| Öğrenilen alias | 30 |
+*Ölçüm: 6 Eylül 2026 sürümü, 1C listesi ve öğrenen defterler açık. Yüzdeler
+299 gider satırı üzerinden; 405'in tamamı sayılırsa OTOMATIK 224, INCELE 165,
+ESLESMEDI 16. İncelemeye düşen sayının yüksek olması kasıtlıdır: 1C listesinden
+gelen 43 gider satırı ve dönemi örtüşmeyen satırlar sonuç bulsa da insana
+bırakılır. Kütük satırlarının 42'si de kimlik kararı bekler; para taşımadıkları
+için kapakta ayrı sayılırlar.*
 
-Sigorta listesinin 20.920 satırı gider satırı sayılmadı. O dosya bir kişi
-kütüğü, fatura değil. Hiçbir satırında tutar yok. Bunları gider olarak işlemek
-binlerce sahte satır üretirdi.
+Sigorta listesinin 20.885 satırı gider satırı sayılmadı (iki pivot/özet
+sayfası dışarıda). O dosya bir kişi kütüğü, fatura değil. Hiçbir satırında
+tutar yok. Bunları gider olarak işlemek binlerce sahte satır üretirdi.
 
 ### Dosya bazında sicil bulma oranı
 
 | Kaynak | Satır | Sicil bulundu | Oran |
 |---|---|---|---|
-| Koç Üniversitesi katılımcı | 50 | 50 | yüzde 100 |
-| Arabuluculuk | 25 | 22 | yüzde 88 |
-| Assessment | 6 | 5 | yüzde 83 |
-| Antik ham cari döküm | 134 | 101 | yüzde 75 |
-| Sağlık kontrol listesi | 50 | 34 | yüzde 68 |
+| Koç Üniversitesi katılımcı (kütük) | 50 | 50 | yüzde 100 |
+| Assessment yansıtma | 6 | 6 | yüzde 100 |
+| Antik ham cari döküm | 134 | 123 | yüzde 92 |
+| Sağlık kontrol listesi (kütük) | 50 | 46 | yüzde 92 |
+| Arabuluculuk | 25 | 21 | yüzde 84 |
 
-### Çözülen masraf merkezleri
+*6 Eylül 2026 ölçümü, 1C listesi ve öğrenen defterler açık.*
 
-| Kod | Satır |
-|---|---|
-| GPP | 212 |
-| HQ-MOSCOW | 40 |
-| ULF-GPC-RHI | 30 |
-| AGPP | 26 |
-| RM-RHI | 20 |
-| ALNG2-GBS | 12 |
+### En büyük masraf merkezleri
 
-*(6 Eylül 2026 ölçümü: GPP 222, HQ-MOSCOW 48, AGPP 26, ULF-GPC-RHI 21, RM-RHI 20,
-ALNG2-GBS 12, RSD-UL-GPC 8.)*
+Yineleme elendikten sonra, net 57.395,97 USD üzerinden:
+
+| Kod | Tutar (USD) | Pay | Şirket |
+|---|---:|---:|---|
+| GPP | 28.925,34 | yüzde 50,4 | UST LUGA / RHI / RSS paylı |
+| HQ-MOSCOW | 6.905,24 | yüzde 12,0 | RHI |
+| ULF-GPC-RHI | 4.231,83 | yüzde 7,4 | RHI |
+| (DAGITILAMAYAN) | 3.845,21 | yüzde 6,7 | kişi bulunamadı |
+| RM-RHI | 3.821,34 | yüzde 6,7 | RHI |
+| ALNG2-GBS | 2.814,45 | yüzde 4,9 | RHI |
 
 ### Çıktı
 
@@ -456,14 +461,18 @@ faturaya ait" soruları her zaman cevaplanabiliyor.
 Biçim RHI kurumsal kimliğidir: Georgia başlıklar, Arial gövde, lacivert tablo
 başlıkları, gizli kılavuz çizgileri, `0,0%` yüzdeler. Kapak sayfası en baştadır;
 dosya açıldığında tutarlar, mutabakat durumu ve şirket kırılımı tek bakışta
-görünür.
+görünür. Kapaktaki durum dört seviyedir: MUTABAKAT KAPALI (onaya hazır);
+KAPALI, DİKKAT; KAPALI, TASLAK; AÇIK. Altında Hazırlayan / Kontrol eden /
+Onaylayan satırları elle doldurulur; kapak gider ve kütük satırlarını ayrı
+sayar. Mahsuplasma sayfasının TOPLAM satırları para birimi bazındadır ve
+`Kisi` kolonu toplanmaz.
 
 Sayfa sırası okuma sırasıdır: önce kapak, sonra muhasebeye gidecek olan, sonra kanıtı.
 Ayrıntı için [bölüm 13](#13-nihai-çıktı-mahsuplaşma-tablosu).
 
 ### Testler
 
-250 test yazıldı ve hepsi geçiyor. Yedi tanesi altın örnek: dördü doğum tarihi
+445 test yazıldı ve hepsi geçiyor (yaklaşık 75 saniye). Yedi tanesi altın örnek: dördü doğum tarihi
 kontrolü olmadan yanlış eşleşen vaka, üçü soyadı farklı yazıldığı için kaçırılan
 doğru vaka. Bu yedi vaka regresyona karşı sabitlendi.
 
@@ -482,12 +491,18 @@ Sistem her satırda bu ilişkiyi ayrı bir kolonda gösteriyor:
 
 | Durum | Satır | Oran | Anlamı |
 |---|---|---|---|
-| Aynı ay | 268 | yüzde 66,2 | normal durum, o ayın kaydı kullanıldı |
-| Personel kaydı yok | 83 | yüzde 20,5 | kişi hiç bulunamadı |
-| Önceki dönem | 36 | yüzde 8,9 | kişi o ay ayrılmış, çıkış ayının şantiyesi kullanıldı |
-| İşe girmeden önce | 18 | yüzde 4,4 | mobilizasyon veya aday seyahati |
+| Aynı ay | 197 | yüzde 65,9 | normal durum, o ayın kaydı kullanıldı |
+| 1C listesi (dönem yok) | 43 | yüzde 14,4 | kişi yalnızca tek tarihli 1C listesinde; gider ayı doğrulanamadı |
+| Önceki dönem | 31 | yüzde 10,4 | kişi o ay ayrılmış, çıkış ayının şantiyesi kullanıldı |
+| Personel kaydı yok | 27 | yüzde 9,0 | kişi bulunamadı, harici kişi ya da dönem bilgisi olmayan kaynaktan geldi |
+| İşe girmeden önce | 1 | yüzde 0,3 | mobilizasyon veya aday seyahati |
 
-Satırların yüzde 13,3'ünde gider ayı ile personel dönemi örtüşmüyor. Hiçbiri sessizce
+*6 Eylül 2026 ölçümü, 299 gider satırı. Kütük satırlarında (106) "işe girmeden
+önce" etiketli 17 satır daha var; bu listeler henüz işe başlamamış kişileri de
+taşır.*
+
+Gider satırlarının yüzde 10,7'sinde (32 satır) gider ayı ile personel dönemi
+örtüşmüyor; 43 satırda ise dönem hiç doğrulanamıyor. Hiçbiri sessizce
 geçmiyor, her biri etiketleniyor ve incelemeye düşüyor.
 
 ### Çıkış durumu neden ayrı önemli
@@ -546,7 +561,7 @@ Sebep basit: iki dosya aynı kişiyi farklı yazıyor.
 |---|---|---|
 | `ORNEKSOY AHMETCAN` | `AHMET CAN ORNEKSOY` | Sıra ters, ad bitişik |
 | `ORNEKSOY AHMETCA` | `AHMET CAN ORNEKSOY` | Kırpılmış (18 karakter) |
-| `KARATAS ANIL` | `ALI YALCINKAYA` | Ad yanlış yazılmış |
+| `VELI ANIL` | `ALI ORNEKTAS` | Ad yanlış yazılmış |
 | (boş) | (boş) | Kurumsal kalem, kişi yok |
 
 Çözüm iki katmanlı. Önce kaba bir kova: belge tarihi + mutlak tutar + para
@@ -564,16 +579,25 @@ hiçbir zaman elemiyor; sadece farklı dosyalar arasında 1:1 eşleştirme yapı
 
 İki dosya birbirini tamamlıyor: ham döküm **tutarı** doğru taşır, elle
 dağıtılmış hal insanın aldığı **kararı** taşır. Veride tam olarak bir satır
-`RHI 1/3 - RENSTROYDETAL 2/3` paylaşımı taşıyor (NEVZAT GULER, 201,42 USD) ve
+`RHI 1/3 - RENSTROYDETAL 2/3` paylaşımı taşıyor (ORNEK KISI, 201,42 USD) ve
 bu paylaşım yalnızca elle dağıtılmış dosyada var. Naif eleme onu kaybederdi.
 
 Kod, elenen kaydın dağıtım talimatını tutulan kayda aktarıyor. Sonuç: o satır
-iki mahsup satırı üretiyor, 67,14 ve 134,28 USD.
+iki mahsup satırı üretiyor, 67,14 (RHI) ve 134,28 USD (RSS), ikisi de GPP
+projesinde.
 
 Paylaşım etiketleri (`RHI`, `RENSTROYDETAL`) tüzel kişi adıdır, proje değil.
 Bu yüzden proje aynı kalıyor, tutar şirketler arasında bölünüyor. Etiket masraf
 merkezi haritasında gerçekten bir projeye karşılık gelirse o zaman proje de
-bölünüyor.
+bölünüyor. Etiket kanonik bir sözlükle haritanın şirket koduna çevriliyor:
+Renservis ve Renstroydetal tek tüzel kişi olduğu için ikisi de `RSS` oluyor;
+`RENSTROYDETAL` tabloda ayrı bir şirket olarak çıkmıyor.
+
+Kaynak dosyadaki şirket etiketi ile tablonun şirketi 63 satırda (25.942,89 USD)
+farklı; en büyüğü `RHI -> UST LUGA`, 56 satır, 23.972,24 USD. Bu bir hata değil,
+yansıtma bilgisidir: acente faturanın kesildiği tarafı yazıyor, tablo kişinin
+personel kaydındaki tüzel kişiyi kullanıyor. Kontrol sayfası çiftleri tek tek
+listeliyor, kapakta tek bir not var.
 
 ### Mutabakat tanım gereği kapanıyor
 
@@ -593,26 +617,39 @@ kırmızı uyarı veriyor ve tablo muhasebeye gönderilmemeli.
 
 ### Ölçülen sonuç
 
-Temmuz 2026, tek Outlook mesajı, 405 satır okundu:
+Temmuz 2026, tek Outlook mesajı, 405 satır okundu (299 gider + 106 kütük):
 
 | Ölçüm | Değer |
 |---|---|
 | Okunan toplam | 106.374,56 USD |
-| Yinelenen (düşülen) | 48.978,59 USD |
-| Net dağıtılacak | 57.319,19 USD |
-| Dağıtılan | 53.981,84 USD |
-| Dağıtılamayan | 3.414,13 USD |
-| Dağıtım oranı | %94,05 |
+| Yinelenen (düşülen) | 48.978,59 USD (YUZYIL TEMMUZ.xlsx'in 134 satırının tamamı) |
+| Net dağıtılacak | 57.395,97 USD |
+| Dağıtılan | 53.550,76 USD |
+| Dağıtılamayan | 3.845,21 USD |
+| Dağıtım oranı | %93,3 |
 | Mahsup satırı | 33 |
 | Kişi kütüğü (dağılıma girmeyen) | 106 satır (50 katılımcı + 50 sağlık + 6 fatura detay listesi) |
 | Tutarı okunamayan | 0 satır |
 | İşaret çelişkisi | 1 |
-| Okunmayan ek (PDF vb.) | 17 (12 farklı PDF; listesi Kontrol sayfasında) |
+| Yineleme şüphesi (insan bakmalı) | 1 kalem |
+| Şirket etiketi ile tablo şirketi farklı | 63 satır, 25.942,89 USD |
+| Okunmayan ek (PDF) | 13 farklı PDF (17 PDF ekinin 4'ü tekrar; listesi Kontrol sayfasında) |
 
-Bütün faturalar kapanıyor. 33 mahsup satırı, 405 satırlık ham dökümün yerine
-geçiyor; finans ekibinin muhasebeye vereceği tablo bu. Kapak, inceleme
-bekleyen satır varken "TASLAK" der; "gönderilebilir" yalnızca mutabakat kapalı
-ve inceleme kuyruğu boşken yazılır.
+Şirket kırılımı: UST LUGA 28.879,36 (%50,3); RHI 19.760,84 (%34,4); RSS
+3.210,24 (%5,6); RC 1.441,09 (%2,5); BSK 259,23 (%0,5); dağıtılamayan
+3.845,21 (%6,7). En büyük mahsup satırı: ENERGO TEMMUZ.xls | UST LUGA | GPP |
+Bilet | 21.464,57 USD | 59 satır | 52 kişi | 46 otomatik, 13 incele.
+(DAGITILAMAYAN) satırları: ENERGO Diger 2.237,78 (3 satır, 1 kişi) ve ENERGO
+Bilet 1.607,43 (5 satır, 4 kişi).
+
+Dört faturanın dördü KAPANDI. YUZYIL satırı tamamen yinelenen olduğu için net
+tutarı sıfır, dağıtım oranı boş; bir yineleme şüphesi taşıdığından Kontrol
+sayfasında "KAPANDI, DIKKAT" yazar. 33 mahsup satırı, 299 gider satırının
+yerine geçiyor; finans ekibinin muhasebeye vereceği tablo bu. Kapak
+"MUTABAKAT KAPALI, TASLAK" der: 123 gider satırı inceleme, 16 satır kişi
+bulunamadı bekliyor; kütük listelerinde ayrıca 42 satır kimlik kararı
+bekliyor. "Onaya hazır" yalnızca mutabakat kapalı ve inceleme kuyruğu boşken
+yazılır.
 
 ### Haritada olmayan masraf merkezleri işaretleniyor
 

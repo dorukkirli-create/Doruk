@@ -66,7 +66,7 @@ if errorlevel 1 (
 echo.
 
 echo --- 5. Gerekli kutuphaneler --------------------------------
-"program\python.exe" -c "import importlib.util,sys; [print(('   VAR   ' if importlib.util.find_spec(m) else '   EKSIK ') + m) for m in ('pandas','numpy','openpyxl','xlrd','rapidfuzz','xlsxwriter','extract_msg','olefile','tzlocal','tzdata','red_black_dict_mod')]"
+"program\python.exe" -c "import importlib.util,sys; [print(('   VAR   ' if importlib.util.find_spec(m) else '   EKSIK ') + m) for m in ('pandas','numpy','openpyxl','xlrd','rapidfuzz','xlsxwriter','extract_msg','olefile','oletools','bs4','RTFDE','compressed_rtf','ebcdic','dateutil','lark','tzlocal','tzdata','red_black_dict_mod')]"
 echo.
 
 echo --- 6. Saat dilimi verisi (tzdata) -------------------------
@@ -74,7 +74,7 @@ echo --- 6. Saat dilimi verisi (tzdata) -------------------------
 echo.
 
 echo --- 7. Uygulama modulu -------------------------------------
-"program\python.exe" -c "import sys; sys.path.insert(0,'program/kod'); import masraf.boru; print('   TAMAM: masraf.boru ice aktarildi')" 2>&1
+"program\python.exe" -c "import sys; sys.path.insert(0,'program/kod'); import masraf.boru, masraf.okuyucular.posta, extract_msg, RTFDE, lark; print('   TAMAM: masraf.boru ve .msg okuma zinciri ice aktarildi')" 2>&1
 echo.
 
 echo --- 8. Personel dosyalari ----------------------------------

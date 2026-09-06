@@ -18,13 +18,16 @@ Kullanicinin gordugu klasor:
 ```
 Otomasyon\
   CALISTIR.bat        <- cift tiklanan dosya
+  TESTET.bat          <- kurulum kontrolu; hicbir seyi degistirmez
   OKU_BENI.txt
   1_FATURALAR\        <- faturalar buraya
   2_EXCEL_CIKTI\      <- Excel buraya cikar
-  3_ISLENENLER\       <- islenen faturalar otomatik buraya tasinir (+ OZET.txt)
+  3_ISLENENLER\       <- islenen faturalar otomatik buraya tasinir (+ OZET.txt);
+                         ISLENEN_DOSYALAR.txt tekrar korumasi (dosya ve mail
+                         eki ozetleri)
   CALISTIRMA_GECMISI.txt  <- her calistirmanin denetim kaydi
-  PERSONEL\           <- personel ana verisi + 1C listesi
-  veri\               <- harita ve ogrenilen defterler
+  PERSONEL\           <- personel ana verisi (zorunlu) + 1C listesi (onerilir)
+  veri\               <- harita ve ogrenilen defterler (+ veri\gecmis\ yedekleri)
   program\            <- python.exe, kutuphaneler, kod (kullanici dokunmaz)
 ```
 
@@ -51,7 +54,11 @@ Paketi 30 MB altina indirmek icin su parcalar cikarilir. Her biri once
 
 Kirpmadan sonra dogrulama, bu modulleri `sys.meta_path` ile engelleyip
 boru hattini gercek ornek mesajla ucdan uca calistirarak yapilir. Beklenen
-sonuc: 405 satir okunur, 33 mahsup satiri uretilir, mutabakat kapanir.
+sonuc (Temmuz 2026 ornegi): 405 satir okunur (299 gider + 106 kutuk), 33
+mahsup satiri uretilir, dort faturanin dordu kapanir, kapak "MUTABAKAT
+KAPALI, TASLAK" der (inceleme bekleyen satirlar oldugu icin). Test paketi
+(`python -m unittest discover -s testler`) 445 testtir, yaklasik 75 saniye
+surer; paketleme oncesi gelistirme makinesinde gecmelidir.
 
 ## Boyut
 

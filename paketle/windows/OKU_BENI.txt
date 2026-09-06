@@ -33,6 +33,8 @@ ILK KURULUM (bir kez, 2 dakika)
 
    1C listesi olmadan da calisir, ama Renservis, Renstroydetal, RC,
    One Tower ve Top Tower personeli "eslesmedi" olarak kalir.
+   Ana veri ise ZORUNLUDUR: klasorde yalnizca 1C listesi varsa program
+   net bir hata verip durur; personel dosyasi bossa uyari yazar.
 
 Kurulum bu kadar.
 
@@ -41,8 +43,15 @@ HER AY NE YAPACAKSINIZ
 =======================
 
 1. Gelen faturalari 1_FATURALAR klasorune atin.
-   Outlook mailini (.msg) oldugu gibi atabilirsiniz, ekleri kendi acilir.
+   Outlook mailini (.msg) oldugu gibi atabilirsiniz, ekleri kendi acilir:
+   zip arsivleri, zip icindeki mailler, onlarin ekleri (en fazla 6 seviye).
    Kabul edilen tipler: .msg  .xlsx  .xls  .xlsm  .csv
+   Sifreli zip girdisi, bulut (OneDrive/SharePoint) baglantisi olarak gelen
+   ek, bozuk ek ve 6 seviyeden derin ic mail okunmaz; her biri Excel'in
+   Kontrol sayfasinda "okunmayan ek" olarak tek tek listelenir. Boyle bir
+   eki olan mail arsive TASINMAZ ve kapak MUTABAKAT ACIK olur, cunku o ekin
+   parasi tabloda yoktur. Ekleri baska bir mailden zaten okunmus "ikiz"
+   mail ayni icerik sayilir ve arsive gider.
 
 2. CALISTIR.bat dosyasina CIFT TIKLAYIN.
 
@@ -63,60 +72,102 @@ O zaman 1_FATURALAR klasorune koymaniza gerek kalmaz.
 EXCEL'I NASIL OKUYACAKSINIZ
 ============================
 
-Dokuz sayfa var. Sirasi okuma sirasidir.
+Dokuz sayfa var. Sirasi okuma sirasidir: once kapak, sonra muhasebeye
+gidecek tablo, sonra kaniti.
 
-  Ozet          KAPAK. Tutarlar, mutabakat durumu (yesil = para kaybolmadi),
-                sirket kirilimi, dikkat notlari ve sayfa rehberi. Dosya
-                acilinca ilk bu gelir; 30 saniyede butun calismayi anlatir.
+  Ozet          KAPAK. Tutarlar, mutabakat durumu, satir durumu (gider ve
+                kutuk satirlari ayri sayilir), sirket kirilimi, en buyuk
+                masraf merkezleri, dikkat notlari ve sayfa rehberi. Dosya
+                acilinca ilk bu gelir.
 
   Mahsuplasma   MUHASEBEYE GIDECEK TABLO BUDUR. Her fatura icin hangi
-                sirkete ve projeye ne kadar yazilacagi.
-
-  Sirket Kirilimi  Tuzel kisi (RHI, UST LUGA, RSS, RC, BSK) ustte, projeleri
-                altinda. Muhasebenin okuma sirasi.
-
-  Harita Onerileri  Haritada tanimli olmayan gorev yerleri; sirketi 1C'den
-                bulunmus, kod onerilmis, yapistirmaya hazir satir. Bossa
-                yapilacak bir sey yok.
+                sirkete ve projeye ne kadar yazilacagi. Kolon sirasi:
+                Fatura / Kaynak Dosya, Sirket, Masraf Merkezi Kodu, Masraf
+                Merkezi Adi, Gider Tipi, Paylasim, Tutar, Para Birimi,
+                Fatura Payi, Satir, Kisi, Otomatik, Incele, Eslesmedi,
+                Gider Donemi, Elle Dagitim Etiketi, Evrak / Fatura No,
+                Durum. TOPLAM satiri para birimi bazindadir (tek para
+                birimi: filtreye uyan tek satir; birden cok: her para icin
+                ayri satir). Kisi kolonu toplanmaz; ayni kisi Bilet ve Otel
+                satirlarinda yeniden sayilir.
 
   Kontrol       Mutabakat. Her fatura icin okunan / yinelenen /
                 dagitilan / dagitilamayan tutar.
                 >>> "Fark" sutunu SIFIR olmak zorunda. <<<
                 Sifir degilse tablo muhasebeye gonderilmemeli.
+                Altinda ek bloklar: fatura detay listeleri capraz kontrolu,
+                "Yineleme suphesi (insan bakmali)", "Kaynak dosyadaki sirket
+                etiketi ile tablo sirketi farkli olan satirlar" (cift
+                bazinda; hata degil, yansitma bilgisi), isaret celiskileri,
+                okunmayan ekler, dagilima girmeyen satirlar.
 
   Dosyalar      DOSYA ENVANTERI. Verdiginiz her dosya ve mailin icindeki her
-                ek icin bir satir: OKUNDU / KUTUK / DETAY LISTESI / ATLANDI
-                (PDF gibi tablo olmayan) / AYNI ICERIK / OKUNAMADI. Satir
-                sayisi ve o dosyadan okunan tutar yazar; dosyayi acip kendi
-                toplamiyla karsilastirarak elle kontrol edebilirsiniz.
+                ek icin bir satir. Durumlar: OKUNDU / KUTUK / DETAY LISTESI /
+                SATIR YOK / OKUNAMADI / AYNI ICERIK / ATLANDI (PDF gibi tablo
+                olmayan) / MAIL / ARSIV / PERSONEL. Satir sayisi ve o
+                dosyadan okunan tutar yazar; dosyayi acip kendi toplamiyla
+                karsilastirarak elle kontrol edebilirsiniz. Ekler adina degil
+                icerigine (sha256 ozeti) gore tekillestirilir: ayni adli ama
+                farkli icerikli iki ek ikisi de okunur.
+
+  Sirket Kirilimi  Tuzel kisi (RHI, UST LUGA, RSS, RC, BSK) ustte, projeleri
+                altinda. Muhasebenin okuma sirasi. RSS = Renservis +
+                Renstroydetal (tek tuzel kisi).
+
+  Harita Onerileri  Haritada tanimli olmayan gorev yerleri; sirketi 1C'den
+                bulunmus, kod onerilmis, yapistirmaya hazir satir. Bossa
+                yapilacak bir sey yok.
 
   Sonuc         Butun satirlar, 28 kolon. Her satirda kisinin nasil
                 bulundugu, guven skoru, Turkce gerekce, EVRAK / FATURA NO ve
                 mail konusu yazar. "Bu satir neden bu projeye yazildi" ve
-                "hangi faturaya ait" sorularinin cevabi burada.
+                "hangi faturaya ait" sorularinin cevabi burada. Kaynak Dosya
+                kolonu Mahsuplasma ve Kontrol ile ayni adi tasir (mail eki
+                ise ekin adi). Tutarlar yuvarlanmaz.
 
   Incele        Sistemin emin olamadigi satirlar. Elle bakilmasi gerekenler.
+                Kutuk satirlari (katilimci, saglik, fatura detay listesi)
+                sayfanin sonundadir; para tasimazlar.
 
-  Eslesmedi     Kisi hic bulunamayan satirlar.
+  Eslesmedi     Kisi hic bulunamayan satirlar. Masraf merkezi olarak
+                (DAGITILAMAYAN) yazar; zayif bir oneri varsa Uyarilar
+                kolonundadir. Kutuk satirlari yine sondadir.
 
-  Kapaktaki mutabakat satiri uc renkte gelir:
-    YESIL  "MUTABAKAT KAPALI"          para kaybolmadi, inceleme bekleyen yok
+  Kapaktaki mutabakat satiri dort seviyede gelir:
+    YESIL  "MUTABAKAT KAPALI"          para kaybolmadi, inceleme bekleyen yok;
+                                       tablo onaya hazir
+    SARI   "MUTABAKAT KAPALI, DIKKAT"  bekleyen yok ama onaydan once
+                                       bakilacak not var (yineleme suphesi,
+                                       isaret celiskisi, okunmayan ek...)
     SARI   "MUTABAKAT KAPALI, TASLAK"  para kaybolmadi ama Incele/Eslesmedi
                                        sayfalarinda karar bekleyen satir var
-    KIRMIZI "MUTABAKAT ACIK"           bir fatura kapanmadi; gonderilmemeli
+    KIRMIZI "MUTABAKAT ACIK"           bir fatura kapanmadi ya da bir ek
+                                       okunamadi; gonderilmemeli
+  Durum satirinin altinda "Hazirlayan: otomasyon", "Kontrol eden" ve
+  "Onaylayan" satirlari vardir; ikisi elle doldurulur. Otomasyon hazirlar,
+  insan kontrol eder ve onaylar.
 
 
 KONSOLDA NE YAZAR
 ==================
 
-Islem bitince siyah pencerede sunlari gorursunuz:
+Islem bitince siyah pencerede su uc durumdan biri yazar; dil Excel
+kapagiyla aynidir:
 
-  [TAMAM] Butun faturalar kapandi. Para kaybolmadi.
-     Iyi. Excel muhasebeye gidebilir.
+  [TAMAM] Butun faturalar kapandi, inceleme bekleyen satir yok.
+          Tablo onaya hazir.
+     Yalnizca Incele ve Eslesmedi sayfalari bosken gorunur.
 
-  [DIKKAT] MUTABAKAT ACIK
-     Dagitim toplami fatura toplamina esit degil. Excel'in Kontrol
-     sayfasina bakin, hangi faturada sorun oldugunu yazar.
+  [TASLAK] Para kaybolmadi; mutabakat kapandi. Ama N satir inceleme,
+           M satir kisi bulunamadi.
+     Excel'deki Incele ve Eslesmedi sayfalari gorulmeden tablo onaya
+     sunulmamali. Ilk aylarda en sik goreceginiz durum budur.
+
+  [DIKKAT] MUTABAKAT ACIK. Bu tablo muhasebeye gonderilmemeli:
+     Altinda gercek sebep yazar: dagitim farki, tutari okunamayan satir,
+     faturanin kendi beyan ettigi toplamla fark, para birimi yok. Excel'in
+     Kontrol sayfasi hangi faturada sorun oldugunu gosterir. Bu durumda
+     faturalar arsive tasinmaz, 1_FATURALAR'da kalir.
 
   "<- haritada tanimli degil"
      O masraf merkezi finans koduna cevrilememis, gorev yeri metni
@@ -140,21 +191,34 @@ SIK KARSILASILAN DURUMLAR
 "Personel dosyasi bulunamadi"
     PERSONEL klasoru bos. Ana personel verisini oraya kopyalayin.
 
+"Ana personel verisi bulunamadi; yalnizca 1C listesi var"
+    Adinda "1C" ya da "personnel list" gecen dosya 1C listesi sayilir; ana
+    verinin adinda bu ifadeler gecmemeli. Ana veri olmadan program calismaz.
+
 "Islenecek fatura bulunamadi"
     1_FATURALAR klasoru bos ya da icindeki dosyalarin uzantisi taninmiyor.
 
 Ilk calistirma cok yavas
-    Normal. 24 MB'lik personel dosyasi ilk kez okunurken 30 saniye kadar
-    surer. Yanina bir onbellek dosyasi yazilir, sonraki calistirmalar
-    birkac saniyedir. Personel dosyasi degisince onbellek kendini yeniler.
+    Normal. 24 MB'lik personel dosyasi ilk kez okunurken 1-2 dakika
+    surebilir. Yanina bir onbellek dosyasi yazilir, sonraki calistirmalar
+    10 saniyenin altina iner. Personel dosyasi degisince onbellek kendini
+    yeniler.
 
 Bir fatura okunuyor ama 0 satir cikiyor
-    Dosyanin kolon adlari taninmamis. veri\kolon_esanlamlilari.csv
-    dosyasini Excel ile acin ve o dosyadaki gercek kolon adini ekleyin.
+    Dosyanin kolon adlari taninmamis; Dosyalar sayfasinda SATIR YOK yazar.
+    veri\kolon_esanlamlilari.csv dosyasini Excel ile acin ve o dosyadaki
+    gercek kolon adini ekleyin.
     Ornek satir:
         alan;kolon_adi;not
         kisi;Beneficiary;yeni tedarikci boyle yaziyor
     Bir kez eklemek yeterli, sonraki aylarda calisir.
+
+Bilinen bir tedarikci dosyasi "OKUYUCU: ..." uyarisiyla Incele'ye dustu
+    Assessment, arabuluculuk ve saglik listesi okuyuculari sayfayi adiyla
+    degil icerigiyle bulur. Tedarikci sablonu degistirmisse dosya genel
+    okuyucuya duser; satirlar "OKUYUCU: ..." uyarisiyla Incele'ye gider ve
+    Dosyalar sayfasinda tur "energo_assessment -> genel" gorunur. Satirlari
+    kontrol edin; sablon kalici degistiyse okuyucunun guncellenmesi gerekir.
 
 Masraf merkezi haritasi
     veri\masraf_merkezi_haritasi.csv dosyasi gorev yerlerini finans
@@ -177,19 +241,25 @@ Masraf merkezi haritasi
     verdiginiz dosyalara dokunulmaz; onlar kendi klasorunuzde kalir.
 
 Program ogreniyor mu
-    Kismen, ve kendiliginden. Saglik ve katilimci listelerinden TC kimlik
-    koprusu ile dogum tarihiyle dogrulanmis isim varyantlari, guveni 0,85 ve
-    ustu olan eslesmeler veri klasorundeki CSV dosyalarina yazilir; ay ay
-    daha iyi eslesir. Bu pakette secim yapilacak bir ekran YOKTUR: Incele
-    sayfasindaki bir satiri kalici cozmek icin veri\aliases.csv (calisan)
-    ya da veri\harici_kisiler.csv (calisan olmayan) dosyasina bir satir
-    eklersiniz; ornekleri dosyalarin icinde.
+    Kismen, ve kendiliginden. Saglik ve katilimci listelerindeki kisiler ek
+    kisi defterine, TC kimlik numaralari sicil koprusune yazilir; ad soyad
+    ve dogum tarihi personel verisiyle birebir tutan kayitlardan isim
+    varyantlari (alias) turetilir. Hepsi veri klasorundeki CSV dosyalarina
+    gider; ay ay daha iyi eslesir. Bu pakette secim yapilacak bir ekran
+    YOKTUR: Incele sayfasindaki bir satiri kalici cozmek icin
+    veri\aliases.csv (calisan) ya da veri\harici_kisiler.csv (calisan
+    olmayan) dosyasina bir satir eklersiniz; ornekleri dosyalarin icinde.
+    Bir defterin ustune yazilmadan once eski hali veri\gecmis\ altina
+    kopyalanir.
 
 Ayni faturayi yanlislikla iki kez islersem
     Program her islenen dosyanin parmak izini 3_ISLENENLER\ISLENEN_DOSYALAR.txt
-    icinde tutar. Ayni icerik tekrar gelirse konsolda ve Excel kapaginda
-    "DAHA ONCE ISLENDI" uyarisi cikar. Mutabakat ACIK cikan calistirmada
-    faturalar arsive TASINMAZ, 1_FATURALAR'da kalir; okunamayan dosya da kalir.
+    icinde tutar; ust duzey dosyalarin yaninda mail eklerinin ozetleri de
+    oradadir. Ayni icerik tekrar gelirse (ayni ek baska bir mailin icinde
+    gelse bile) konsolda ve Excel kapaginda "DAHA ONCE ISLENDI" uyarisi
+    cikar. Mutabakat ACIK cikan calistirmada faturalar arsive TASINMAZ,
+    1_FATURALAR'da kalir; okunamayan dosya ve bir eki okunamayan mail de
+    kalir.
 
 
 BILINEN SINIRLAMA
@@ -199,12 +269,16 @@ Su anki dosyalariniz icin bir sorun YOKTUR. Asagidaki not, ileride olur da
 parola korumali bir dosya gelirse ne yapacaginizi anlatir.
 
 Bugune kadar gelen dosyalarin hicbiri parola korumali degil. Temmuz 2026
-mailindeki 12 ek ve iki personel dosyasi tek tek kontrol edildi, hepsi acik.
+mailindeki 12 tablo eki ve iki personel dosyasi tek tek kontrol edildi,
+hepsi acik.
 
 Program, parola korumali bir Excel ya da Outlook dosyasini acamaz. Paketi
 kucuk tutmak icin sifre cozme kutuphanesi cikarildi. Boyle bir dosya gelirse
-program size soyler. Cozum basit: dosyayi Excel'de acin, parolayi girin,
-"Farkli Kaydet" ile parolasiz kaydedin, sonra 1_FATURALAR klasorune atin.
+program size soyler: dosya Dosyalar sayfasinda OKUNAMADI olarak gorunur,
+1_FATURALAR'da kalir ve kapak MUTABAKAT ACIK olur. Sifreli bir zip girdisi de
+ayni sekilde "okunmayan ek" olarak listelenir. Cozum basit: dosyayi Excel'de
+acin, parolayi girin, "Farkli Kaydet" ile parolasiz kaydedin (zip icin
+arsivi parolasiz yeniden olusturun), sonra 1_FATURALAR klasorune atin.
 
 
 GIZLILIK
@@ -214,10 +288,17 @@ Program internete hic cikmaz, yapay zeka kullanmaz. Personel dosyalari ve
 faturalar bilgisayarinizdan disari gitmez.
 
 Kisisel veri iceren yerler (ad soyad, sicil, TC kimlik, tutar):
-  - veri\            ogrenilen eslesme defterleri
+  - veri\            ogrenilen eslesme defterleri ve veri\gecmis\ yedekleri
   - 2_EXCEL_CIKTI\   uretilen Excel'ler
   - 3_ISLENENLER\    islenmis faturalar ve calistirma ozetleri
   - PERSONEL\        personel dosyalari ve yanlarindaki .pkl onbellekler
   - CALISTIRMA_GECMISI.txt
 Bu klasorleri paylasmayin. Outlook eklerinin acildigi gecici dizin islem
 bitince otomatik silinir; bilgisayarda kalinti birakmaz.
+
+Programin kendi onlemleri:
+  - TC kimlik numaralari konsolda ve uyarilarda maskelidir; yalnizca ilk
+    uc hane gorunur. Excel ciktisinda TC kimlik kolonu yoktur.
+  - .pkl onbellekleri yalnizca sahibinin okuyabilecegi izinle yazilir.
+  - Konsol, OZET.txt ve CALISTIRMA_GECMISI.txt isaret celiskisini ad
+    tasimadan yazar; adli ayrinti yalnizca Excel'in Kontrol sayfasindadir.

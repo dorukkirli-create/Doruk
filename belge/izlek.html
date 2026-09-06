@@ -145,8 +145,8 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--dim);font-size:12.5px;
       <div class="myth">
         <span class="q">“PDF’leri açıp okuyor mu?”</span>
         <span class="a"><span class="no">Hayır.</span> Sadece tablo dosyaları
-        okunur. Temmuz mailinizde <strong>12 farklı PDF</strong> (zip ve iç maillerde
-        tekrar edenlerle 17 ek) atlandı ve artık her biri Excel’in Kontrol sayfasında
+        okunur. Temmuz mailinizde <strong>13 farklı PDF</strong> (17 PDF ekinin 4'ü
+        zip ve iç maillerde tekrar eden aynı dosya) atlandı ve her biri Excel’in Kontrol sayfasında
         “okunmayan ek” olarak listelenir. Hepsini açıp okudum: resmi e-fatura nüshaları
         ve sigorta poliçesi kişi bazlı kırılım taşımıyor; biri taranmış görüntü, metin
         katmanı bile yok. Ayrıntı aşağıda.</span>
@@ -233,7 +233,8 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--dim);font-size:12.5px;
       kullanmaz</strong>. Aynı numaralı PDF ve XLSX yan yana durur; kırılım
       XLSX’tedir, PDF ise resmi nüshadır.</p>
       <div class="key">Sonuç: iki mailden toplam <strong>12 tablo dosyası</strong>
-      çıkarıldı, <strong>17 PDF eki (12 farklı)</strong> atlandı ve listelendi. Her dosya nereden geldiğini taşır,
+      çıkarıldı, <strong>17 PDF ekinden 13 farklı olanı</strong> atlandı ve listelendi;
+      kalan 4'ü içeriği birebir aynı olan tekrarlardır, ayrıca sayılmaz. Her dosya nereden geldiğini taşır,
       böylece çıktıda “bu satır hangi mailin hangi zip’inden geldi” sorusu
       cevaplanabilir.</div>
     </div>
@@ -410,9 +411,10 @@ uyarilar       : yok</pre>
     <div class="body">
       <h4>Denetim</h4>
       <h2>PDF’lerde gerçekten bir şey var mı</h2>
-      <p>“Eminiz?” diye sordunuz. Tahmin etmemek için 12 farklı PDF’in hepsini açıp
-      metnini çıkardım (aşağıda sekiz fatura; kalan dördü sigorta poliçesi, poliçe
-      eki ve koçluk faturasının iki nüshası, hiçbirinde kişi kırılımı yok). Sonuç:</p>
+      <p>“Eminiz?” diye sordunuz. Tahmin etmemek için PDF&rsquo;lerin hepsini açıp metnini çıkardım: 13 farklı
+      dosya, 12 ayrı belge (ASS&hellip;2867 faturası iki farklı nüsha olarak gelmiş).
+      Aşağıda sekiz fatura; kalan dördü sigorta poliçesi, poliçe eki ve koçluk
+      faturasının iki nüshası, hiçbirinde kişi kırılımı yok. Sonuç:</p>
       <div class="tw">
         <table>
           <thead><tr><th>PDF</th><th>İçeriği</th><th>Kişi kırılımı</th></tr></thead>
@@ -461,19 +463,23 @@ uyarilar       : yok</pre>
       örtüşüyor.</p>
       <div class="shot">
         <div class="cap"><span><span class="dot">●</span> Sirket Kirilimi sayfası</span><span>Temmuz 2026, USD</span></div>
-<pre><b>UST LUGA</b>                    29.742,50   %51,9    88 satir   74 kisi
-    GPP Project              29.587,06   %99,5
+<pre><b>UST LUGA</b>                    28.879,36   %50,3    85 satir   73 kisi
+    GPP Project              28.723,92   %99,5
     Ust-Luga - Reshetnikova     155,44    %0,5
 
-<b>RHI</b>                         19.779,84   %34,5    56 satir   35 kisi
+<b>RHI</b>                         19.760,84   %34,4    56 satir   35 kisi
     RHI Russia - Headquarter  6.905,24   %34,9
     Ust Luga Fabrication      4.231,83   %21,4
     Regional Management       3.821,34   %19,3
     ALNG2-GBS                 2.814,45   %14,2
+    Amursky Gas Processing    1.432,66    %7,3
 
-<b>RSS</b>                          3.075,96    %5,4     9 satir    6 kisi
-    <span class="hi">Renservis - Lytkarino</span>     2.139,72   %69,6
-    <span class="hi">Renstroydetal - UL GPC</span>      568,01   %18,5
+<b>(dagitilamayan)</b>              3.845,21    %6,7     8 satir    5 kisi
+
+<b>RSS</b>                          3.210,24    %5,6    10 satir    7 kisi
+    <span class="hi">Renservis - Lytkarino</span>     2.139,72   %66,7
+    <span class="hi">Renstroydetal - UL GPC</span>      568,01   %17,7
+    <span class="hi">Renstroydetal - Lytkarino</span>   288,23    %9,0
 
 <b>RC</b>                           1.441,09    %2,5     6 satir    6 kisi
     <span class="hi">One Tower</span>                  844,34   %58,6
@@ -483,8 +489,10 @@ uyarilar       : yok</pre>
     <span class="hi">Bsk Management Group</span>       259,23  %100,0</pre>
       </div>
       <div class="key">Vurgulu satırlar daha önce <strong>“haritada tanımlı değil”</strong>
-      diyordu. Dokuzunun da şirketi 1C’den bulundu ve haritaya eklendi. Artık
-      tanımsız görev yeri kalmadı.</div>
+      diyordu. Dokuzunun da şirketi 1C&rsquo;den bulundu ve haritaya eklendi. Artık
+      tanımsız görev yeri kalmadı. Renservis ile Renstroydetal aynı tüzel kişidir;
+      kaynak dosyada hangi adla yazılırsa yazılsın tabloda tek satırda,
+      <span class="mono">RSS</span> olarak toplanır.</div>
       <p class="note">Bir sonraki ay yeni bir proje çıkarsa Excel’e
       <strong>Harita Onerileri</strong> sayfası gelir: şirketi 1C’den bulunmuş,
       kodu önerilmiş, CSV satırı yapıştırmaya hazır. Kod önerisi finansın

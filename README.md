@@ -16,14 +16,17 @@ doğrudan dağıtır, emin olmadıklarını gerekçesiyle birlikte inceleme kuyr
 koyar. Amaç elle çalışmayı sıfırlamak değil, **elle bakılacak satır sayısını
 azaltmak** ve her kararın nedenini görünür kılmak.
 
-Ölçülen durum (Temmuz 2026, iki Outlook maili, 405 satır; 1C listesi ve
-öğrenen defterler açık): 225 satır otomatik dağıtılıyor (%55,6), 166 satır
-gerekçesiyle incelemeye düşüyor (%41,0), 14 satırda kişi bulunamıyor (%3,5) ve
-tutarı görünür biçimde `(DAGITILAMAYAN)` satırında kalıyor. Yalnız seyahat
-dosyası ve 1C listesi olmadan ölçüldüğünde 134 satırın 82'si otomatik, 52'si
-insana kalır; o 52'nin 20'si grup şirketi personelidir ve 1C listesi olmadan
-**hiçbir zaman** otomatik dağıtılamaz. Sayılar ve nasıl üretildikleri aşağıda
-[Ölçülen performans](#ölçülen-performans) bölümündedir.
+Ölçülen durum (Temmuz 2026, iki Outlook maili, 405 satır = 299 gider satırı +
+106 kütük satırı; 1C listesi ve öğrenen defterler açık): 299 gider satırının
+160'ı otomatik dağıtılıyor (%53,5), 123'ü gerekçesiyle incelemeye düşüyor
+(%41,1), 16'sında kişi bulunamıyor (%5,4) ve tutarı görünür biçimde
+`(DAGITILAMAYAN)` satırında kalıyor. Kütük satırları (katılımcı listesi 50,
+sağlık kontrol listesi 50, dört fatura detay listesi 6) para taşımaz; defter
+beslemesi ve çapraz kontrol içindir, yüzdeye girmez. Yalnız seyahat dosyası ve
+1C listesi olmadan ölçüldüğünde 134 satırın 81'i otomatik, 53'ü insana kalır;
+o 53'ün 20'sinde kişi hiç bulunmaz, bunların çoğu grup şirketi personelidir ve
+1C listesi olmadan **hiçbir zaman** otomatik dağıtılamaz. Sayılar ve nasıl
+üretildikleri aşağıda [Ölçülen performans](#ölçülen-performans) bölümündedir.
 
 ## Nasıl çalışır
 
@@ -141,9 +144,11 @@ Gereken: Python 3.11, `pandas`, `openpyxl`, `xlrd`, `rapidfuzz`, `streamlit`,
 
 1. **Personel verisini yükleyin.** *Ayarlar* sekmesinde
    `2025_2026_giris_cikis.xlsx` dosyasının yolunu verin. Dosya 24 MB'dır ve ilk
-   okunuşu yaklaşık 25 saniye sürer; sonrasında yanına bir önbellek dosyası
-   yazılır ve açılışlar 2-3 saniyeye iner. Dosya değişince önbellek kendini
-   yeniler.
+   okunuşu 1-2 dakika sürebilir; sonrasında yanına bir önbellek dosyası
+   yazılır ve açılışlar 10 saniyenin altına iner (ölçüldü: önbellekli yükleme
+   yaklaşık 3 saniye). Dosya değişince önbellek kendini yeniler. Ana veri
+   zorunludur: yalnızca 1C listesi verilirse program net bir hata verir,
+   personel dosyası boşsa uyarı yazar.
 2. **Fatura dosyalarını bırakın.** *Fatura İşle* sekmesinde dosyaları
    sürükleyip bırakın veya bir klasör yolu verin. Birden fazla dosya aynı anda
    işlenebilir; Outlook `.msg` dosyalarının ekleri otomatik açılır.
@@ -161,8 +166,12 @@ Gereken: Python 3.11, `pandas`, `openpyxl`, `xlrd`, `rapidfuzz`, `streamlit`,
    mutabakat), `Dosyalar` (dosya envanteri: hangi dosya ve ek okundu, hangisi
    atlandı, neden; satır ve tutar), `Sirket Kirilimi` (tüzel kişi üstte, projeleri altında),
    `Harita Onerileri` (tanımsız görev yerleri için hazır satırlar), `Sonuc`
-   (tüm satırlar, evrak numarasıyla), `Incele` (elle bakılacaklar), `Eslesmedi`
-   (kişi bulunamayanlar).
+   (tüm satırlar, 28 kolon, evrak numarasıyla), `Incele` (elle bakılacaklar),
+   `Eslesmedi` (kişi bulunamayanlar). Son üç sayfada `Kaynak Dosya`
+   `Mahsuplasma` ve `Kontrol` ile aynı adı taşır (mail eki ise ekin adı);
+   `Eslesmedi` satırları masraf merkezi olarak `(DAGITILAMAYAN)` gösterir,
+   varsa zayıf öneri `Uyarilar` kolonundadır; tutarlar yuvarlanmaz; kütük
+   satırları `Incele` ve `Eslesmedi` sayfalarının sonundadır.
 7. **Klasör kendini toplar.** Masaüstü paketinde işlenen faturalar
    `3_ISLENENLER\<tarih_saat>\` altına taşınır, her çalıştırma
    `CALISTIRMA_GECMISI.txt` dosyasına kaydedilir. Gelecek ay aynı dosyalar
@@ -173,12 +182,31 @@ Gereken: Python 3.11, `pandas`, `openpyxl`, `xlrd`, `rapidfuzz`, `streamlit`,
 Nihai çıktı satır dökümü değil, **dağıtım tablosudur**. Her fatura için altında
 hangi projeye ne kadar yazılacağı yazar:
 
-| Fatura | Masraf Merkezi | Şirket | Gider Tipi | Tutar | Fatura Payı | Satır | Kişi | Durum |
-|---|---|---|---|---|---|---|---|---|
-| ENERGO TEMMUZ.xls | GPP | UST LUGA | Bilet | 22.327,76 | %45,6 | 62 | 54 | 2 eşleşmeyen satır |
-| ENERGO TEMMUZ.xls | HQ-MOSCOW | RHI | Bilet | 4.428,18 | %9,1 | 12 | 5 | 7 satır incelenecek |
-| ENERGO TEMMUZ.xls | HQ-MOSCOW | RHI | Otel | 2.397,06 | %4,9 | 7 | 4 | |
-| ENERGO TEMMUZ.xls | (DAGITILAMAYAN) | | Diğer | 2.142,05 | %4,4 | 2 | 0 | MASRAF MERKEZI YOK |
+| Fatura / Kaynak Dosya | Sirket | Masraf Merkezi Kodu | Gider Tipi | Tutar | Para Birimi | Fatura Payı | Satır | Kişi | Otomatik | Incele | Eslesmedi | Durum |
+|---|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---|
+| ENERGO TEMMUZ.xls | UST LUGA | GPP | Bilet | 21.464,57 | USD | %43,9 | 59 | 52 | 46 | 13 | 0 | 13 satır incelenecek |
+| ENERGO TEMMUZ.xls | RHI | HQ-MOSCOW | Bilet | 4.428,18 | USD | %9,0 | 12 | 5 | 5 | 7 | 0 | 7 satır incelenecek |
+| ENERGO TEMMUZ.xls | RHI | HQ-MOSCOW | Otel | 2.397,06 | USD | %4,9 | 7 | 4 | 7 | 0 | 0 | |
+| ENERGO TEMMUZ.xls | | (DAGITILAMAYAN) | Diğer | 2.237,78 | USD | %4,6 | 3 | 1 | 0 | 0 | 3 | kişi bulunamadı |
+| ENERGO TEMMUZ.xls | | (DAGITILAMAYAN) | Bilet | 1.607,43 | USD | %3,3 | 5 | 4 | 0 | 0 | 5 | kişi bulunamadı |
+
+Sayfanın tam kolon sırası: Fatura / Kaynak Dosya, Sirket, Masraf Merkezi Kodu,
+Masraf Merkezi Adi, Gider Tipi, Paylasim, Tutar, Para Birimi, Fatura Payi,
+Satir, Kisi, Otomatik, Incele, Eslesmedi, Gider Donemi, Elle Dagitim Etiketi,
+Evrak / Fatura No, Durum. Temmuz 2026'da tablo 33 satırdır. TOPLAM satırları
+para birimi bazındadır: tek para birimi varsa `SUBTOTAL` formülüyle tek satır
+(filtreye uyar), birden çok para birimi varsa her biri için ayrı satır; `Kisi`
+kolonu toplanmaz, çünkü aynı kişi Bilet ve Otel satırlarında yeniden sayılır.
+
+Kapak (`Ozet`) sayfasındaki durum satırı dört seviyedir: **MUTABAKAT KAPALI**
+(para kaybolmadı, inceleme bekleyen yok; onaya hazır), **KAPALI, DİKKAT**
+(bekleyen yok ama onaydan önce bakılacak not var), **KAPALI, TASLAK** (para
+kaybolmadı ama `Incele` / `Eslesmedi` sayfalarında karar bekleyen satır var)
+ve **AÇIK** (bir fatura kapanmadı ya da bir ek okunamadı; gönderilmemeli).
+Altında `Hazırlayan: otomasyon`, `Kontrol eden`, `Onaylayan` satırları elle
+doldurulur. Kapak gider ve kütük satırlarını ayrı sayar. Temmuz 2026'da kapak
+"MUTABAKAT KAPALI, TASLAK" der: 123 gider satırı inceleme, 16 satır kişi
+bulunamadı bekler; kütük listelerinde ayrıca 42 satır kimlik kararı bekler.
 
 Tablonun üç kuralı vardır.
 
@@ -209,9 +237,15 @@ Eşleştirme kaba bir kova (belge tarihi + mutlak tutar + para birimi) içinde
 yapılır, sonra kova içinde isimler eşleştirilir. İsim anahtar olarak
 kullanılmaz çünkü iki dosya aynı kişiyi farklı yazar: ham döküm
 `ORNEKSOY AHMETCAN`, elle dağıtılmış hal `AHMET CAN ORNEKSOY`, bazen de
-kırpılmış (`ORNEKSOY AHMETCA`) ya da yanlış (`KARATAS ANIL` /
-`ALI YALCINKAYA`). Kişi adı olmayan kurumsal kalemler (cenaze çelengi,
-toplantı organizasyonu) da bu sayede yakalanır.
+kırpılmış (`ORNEKSOY AHMETCA`) ya da yanlış (`VELI ANIL` /
+`ALI ORNEKTAS`). Kişi adı olmayan kurumsal kalemler (cenaze çelengi,
+toplantı organizasyonu) da bu sayede yakalanır. Otomatik karar verilemeyen
+çiftler (aynı gün ve tutar ama isimlerin yalnızca bir kelimesi ortak, aynı
+kişi ve tarih ama farklı tutar, tarihsiz satır) elenmez ya da elendiği
+söylenir; `Kontrol` sayfasındaki "Yineleme suphesi (insan bakmali)" bloğunda
+listelenir. Temmuz 2026'da bir kalem bu bloktadır; o yüzden `YUZYIL
+TEMMUZ.xlsx` satırı `Kontrol` sayfasında "KAPANDI, DIKKAT" yazar (dosyanın
+tamamı yinelenen olduğu için net tutarı sıfır, dağıtım oranı boştur).
 
 Elenen kayıt atılmadan önce taşıdığı **dağıtım talimatı** tutulan kayda
 aktarılır. İki dosya birbirini tamamlar: ham döküm tutarı doğru taşır, elle
@@ -221,6 +255,16 @@ dağıtılmış hal insanın aldığı kararı taşır. Örnek: `RHI 1/3 - RENST
 Paylaşım etiketleri pratikte **tüzel kişi** adıdır, proje değil. Bu yüzden
 proje aynı kalır, tutar şirketler arasında bölünür. Etiket masraf merkezi
 haritasında gerçekten bir projeye karşılık geliyorsa o zaman proje de bölünür.
+Etiketler kanonik bir sözlükle haritanın şirket koduna çevrilir: Renservis ve
+Renstroydetal tek tüzel kişidir, ikisi de `RSS` olur; tabloda `RENSTROYDETAL`
+ayrı bir şirket olarak çıkmaz.
+
+Kaynak dosyadaki şirket etiketi ile tablonun şirketi farklı olabilir: acente
+çoğu zaman faturanın **kesildiği** tarafı yazar (`RHI`), tablo ise kişinin
+personel kaydındaki tüzel kişiyi kullanır. Bu bir hata değil, şirketler arası
+yansıtmanın kendisidir. Temmuz 2026'da 63 satır, 25.942,89 USD bu durumdadır;
+en büyüğü `RHI -> UST LUGA`, 56 satır, 23.972,24 USD. `Kontrol` sayfası bu
+çiftleri tek tek listeler, kapakta tek bir not olarak görünür.
 
 Kişi listeleri (katılımcı listesi, sağlık kontrol listesi) dağılıma girmez;
 bunlar fatura değil kütüktür ve tutar taşımazlar. Temmuz 2026 mailinde 106
@@ -236,12 +280,42 @@ bölünmesiyle bulunur. Bölme kuruşta yapılır ve artık kuruşlar ilk kişil
 birer birer eklenir; böylece kişi tutarlarının toplamı faturanın kendi beyan
 ettiği toplama kuruşuna kadar eşittir (Temmuz 2026: 1.943,74 USD, fark 0,00).
 
+### Dosya envanteri ve mail okuma
+
+`Dosyalar` sayfası verilen her dosya ve mailin içindeki her ek için bir satır
+yazar. Durumlar: `OKUNDU` (gider satırı üretti), `KUTUK` (kişi listesi),
+`DETAY LISTESI` (tutar kolonu olmayan fatura detay listesi), `SATIR YOK`
+(açıldı ama gider satırı çıkmadı), `OKUNAMADI` (bozuk, parola korumalı, boş),
+`AYNI ICERIK` (daha önce okunan bir ekle birebir aynı), `ATLANDI` (PDF gibi
+tablo olmayan ek), `MAIL`, `ARSIV` ve `PERSONEL` (personel verisine benzeyen
+dosya, fatura olarak işlenmedi). Ekler adına değil **içerik özetine (sha256)**
+göre tekilleştirilir: aynı adlı ama farklı içerikli iki ek ikisi de okunur,
+farklı adlı ama aynı içerikli ek bir kez sayılır.
+
+Temmuz 2026 envanteri: OKUNDU 4, KUTUK 3, DETAY LISTESI 4, SATIR YOK 1,
+AYNI ICERIK 8 (4'ü PDF tekrarı), ATLANDI 13 (13 farklı PDF; toplam 17 PDF
+ekinin 4'ü tekrar), MAIL 11 (kök mail + 10 ekli iç mail), ARSIV 5.
+
+Mail okumada sessiz atlama yoktur. Şifreli zip girdisi, iç içe zip, bulut
+(OneDrive / SharePoint) bağlantısı olarak gelen ek, bozuk ek ve 6 seviyeden
+derin iç mail tek tek "okunmayan ek" olarak `Kontrol` sayfasında listelenir.
+Bir mailin bir eki okunamazsa o mail arşive **taşınmaz** ve kapak
+`MUTABAKAT AÇIK` olur, çünkü o ekin parası tabloda yoktur. Ekleri başka bir
+mailden zaten okunmuş "ikiz" mail aynı içerik sayılır ve arşive gider.
+Masaüstü paketinin tekrar koruması (`3_ISLENENLER\ISLENEN_DOSYALAR.txt`)
+üst düzey dosyaların yanında mail eklerinin özetlerini de tutar.
+
+Özel okuyucular (assessment, arabuluculuk, sağlık listesi) sayfayı adıyla
+değil içeriğiyle bulur. Şablon tanınmazsa dosya genel okuyucuya düşer, satır
+`OKUYUCU: ...` uyarısıyla `INCELE` olur ve envanterde tür
+`energo_assessment -> genel` biçiminde görünür.
+
 ## Desteklenen dosya tipleri
 
 | Kaynak | Tanıma ipucu | Kimlik anahtarı | Masraf merkezi |
 |---|---|---|---|
 | Antik / Yüzyıl ham cari hareket dökümü (`.xls`) | "Cari Hareket Dökümü Detay" başlığı, `İşlem`/`Evrak No`/`Borç` kolonları | Kişi adı açıklama metnine gömülü | Yok, eşleştirmeden gelir |
-| Yüzyıl elle dağıtılmış (`.xlsx`) | `S.NO`, `AÇIKLAMA`, `ŞANTİYESİ` kolonları | Kişi adı açıklamada | Var (`ŞANTİYESİ`) — doğruluk referansı |
+| Yüzyıl elle dağıtılmış (`.xlsx`) | `S.NO`, `AÇIKLAMA`, `ŞANTİYESİ` kolonları | Kişi adı açıklamada | Var (`ŞANTİYESİ`); dağıtımda kullanılmaz, `Elle Dagitim Etiketi` olarak taşınır |
 | Energo assessment yansıtma (`.xlsx`) | `Fatura Detay` + `Kişi Listesi` sayfaları, `Katılımcı` kolonu | Ad Soyad | Yok |
 | Energo assessment fatura detay listesi (`ASS... Fatura Detayı.xlsx`) | `Katılımcı` + `Paket` kolonları var, tutar kolonu yok | Ad Soyad | Yok; kütük sayılır, yansıtma ile çapraz kontrol edilir |
 | Energo arabuluculuk (`.xlsx`) | `PERSONEL T.C.`, `PROJE` kolonları | **TC kimlik no** | Var (`PROJE`) |
@@ -322,7 +396,7 @@ python3 testler/kapsam_olc.py      # kapsam ve otomasyon oranı
 python3 -m testler.dogruluk_olc    # elle dağıtılmış dosyaya karşı doğruluk
 ```
 
-Ölçüm örneklemi: Temmuz 2026 seyahat faturası, Mayıs–Temmuz 2026 Energo
+Ölçüm örneklemi: Temmuz 2026 seyahat faturası, Mayıs-Temmuz 2026 Energo
 yansıtma dosyaları ve Koç Üniversitesi katılımcı listesi. Her iki betik de
 öğrenen defterlerin geçici bir kopyasıyla çalışır; ölçüm `veri/` dizinini
 kirletmez ve her koşuda aynı noktadan başlar (iki ardışık koşu birebir aynı
@@ -332,47 +406,54 @@ sonucu verdi).
 
 | Dosya | Tip | Satır | Kişi çıkarıldı | Sicil bulundu | OTOMATİK | İNCELE | EŞLEŞMEDİ | Otomasyon |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| `ANTIK_CARI_TEMMUZ_2026.xls` | antik_cari | 134 | 132 | 105 | 82 | 32 | 20 | **%61,2** |
-| `YUZYIL_TEMMUZ_2026_ELLE_DAGITILMIS.xlsx` | yuzyil_dagitilmis | 134 | 132 | 105 | 79 | 35 | 20 | **%59,0** |
+| `ANTIK_CARI_TEMMUZ_2026.xls` | antik_cari | 134 | 132 | 105 | 81 | 33 | 20 | **%60,4** |
+| `YUZYIL_TEMMUZ_2026_ELLE_DAGITILMIS.xlsx` | yuzyil_dagitilmis | 134 | 132 | 103 | 77 | 36 | 21 | **%57,5** |
 | `ASSESSMENT_YANSITMA_2026_05_06.xlsx` | energo_assessment | 6 | 6 | 5 | 4 | 1 | 1 | **%66,7** |
-| `ARABULUCULUK_2026_06_07.xlsx` | energo_arabulucu | 25 | 25 | 22 | 0 | 25 | 0 | **%0,0** |
+| `ARABULUCULUK_2026_06_07.xlsx` | energo_arabulucu | 25 | 25 | 21 | 0 | 25 | 0 | **%0,0** |
 | `SAGLIK_KONTROL_LISTE.xlsx` | energo_saglik | 50 | 50 | 34 | 14 | 34 | 2 | **%28,0** |
 | `KOC_UNI_KATILIMCI_LISTESI.xlsx` | koc_katilimci | 50 | 50 | 50 | 46 | 4 | 0 | **%92,0** |
-| **TOPLAM** | | **399** | **395** | **321** | **225** | **131** | **43** | **%56,4** |
+| **TOPLAM** | | **399** | **395** | **318** | **222** | **133** | **44** | **%55,6** |
 
-Çözülen (OTOMATİK + İNCELE) satır oranı **%89,2**. Kişi çıkarılamayan 4 satırın
+Çözülen (OTOMATİK + İNCELE) satır oranı **%89,0**. Kişi çıkarılamayan 4 satırın
 tamamı gerçekten kişisiz kurumsal giderdir (cenaze çelengi, toplantı
-organizasyonu); bunlar kişiye mahsuplaşmaz.
+organizasyonu); bunlar kişiye mahsuplaşmaz. (Sağlık ve Koç listeleri
+uygulamada kütük sayılır ve dağılıma girmez; burada yalnızca kimlik çözme
+oranı için sayılırlar.)
 
 #### 1C ikincil personel defteri açıkken
 
 Yukarıdaki tablo **yalnızca ana veriyle** ölçülmüştür. Uygulama, yanında bir
 1C personel listesi bulduğunda onu ikincil defter olarak da kullanır
 (grup şirketlerini kapsar, ölçülen katkı: 17.517 isimli kayıttan 5.234'ü ana
-veride yoktur). Aynı örneklem, 1C defteri açıkken:
+veride yoktur). Aynı dosyalar iki Outlook mailinin ekleri olarak uygulamanın
+kendisiyle işlendiğinde (1C defteri açık):
 
 | Dosya | Satır | OTOMATİK | İNCELE | EŞLEŞMEDİ | Otomasyon |
 |---|---:|---:|---:|---:|---:|
-| `ANTIK_CARI_TEMMUZ_2026.xls` | 134 | 82 | 45 | 7 | %61,2 |
-| `YUZYIL_..._ELLE_DAGITILMIS.xlsx` | 134 | 79 | 48 | 7 | %59,0 |
-| `ASSESSMENT_YANSITMA_2026_05_06.xlsx` | 6 | 4 | 2 | 0 | %66,7 |
-| `ARABULUCULUK_2026_06_07.xlsx` | 25 | 0 | 25 | 0 | %0,0 |
-| `SAGLIK_KONTROL_LISTE.xlsx` | 50 | 14 | 36 | 0 | %28,0 |
-| `KOC_UNI_KATILIMCI_LISTESI.xlsx` | 50 | 46 | 4 | 0 | %92,0 |
-| **TOPLAM** | **399** | **225** | **160** | **14** | **%56,4** |
+| `ENERGO TEMMUZ.xls` (ham döküm) | 134 | 80 | 46 | 8 | %59,7 |
+| `YUZYIL TEMMUZ.xlsx` (elle dağıtılmış) | 134 | 76 | 50 | 8 | %56,7 |
+| Assessment yansıtma | 6 | 4 | 2 | 0 | %66,7 |
+| Arabuluculuk | 25 | 0 | 25 | 0 | %0,0 |
+| Sağlık kontrol listesi (kütük) | 50 | 14 | 36 | 0 | %28,0 |
+| Koç katılımcı listesi (kütük) | 50 | 46 | 4 | 0 | %92,0 |
+| **TOPLAM** | **399** | **220** | **163** | **16** | **%55,1** |
 
-Çözülen oran **%89,2 -> %96,5**, eşleşmeyen satır **43 -> 14**. Otomasyon oranı
-**değişmez (%56,4)**, çünkü 1C listesi tek bir tarihe ait durum fotoğrafıdır,
-aylık dönem serisi değildir; bu defterden gelen her kayıt "dönem
-doğrulanamadı" uyarısı taşır ve bilerek incelemeye gönderilir. Yani 1C defteri
-**otomatik dağıtımı artırmaz, "hiç bulunamadı" sayısını azaltır** — kullanıcıya
-boş satır yerine doğrulanacak bir aday verir.
+Çözülen oran **%89,0 -> %96,0**, eşleşmeyen satır **44 -> 16**. Otomasyon oranı
+**artmaz** (%55,6 -> %55,1), çünkü 1C listesi tek bir tarihe ait durum
+fotoğrafıdır, aylık dönem serisi değildir; bu defterden gelen her kayıt (Temmuz
+2026'da 43 gider satırı, `yardimci_defter` yöntemi) "dönem doğrulanamadı"
+uyarısı taşır ve bilerek incelemeye gönderilir. Yani 1C defteri **otomatik
+dağıtımı artırmaz, "hiç bulunamadı" sayısını azaltır**; kullanıcıya boş satır
+yerine doğrulanacak bir aday verir. Aynı iki mailin 299 gider satırındaki
+yöntem dağılımı: `tam_isim` 176, `yardimci_defter` 43, `aile` 26, `alias` 14,
+`harici` 8, `transliterasyon` 8, `yok` 8, `ek_defter` 7, `alt_kume` 4,
+`bulanik` 3, `prefix` 2.
 
 Uçlardaki iki sayı tesadüf değil, doğrudan **kaynak dosyada kimlik alanı olup
 olmadığını** ölçüyor:
 
-- **Koç katılımcı listesi %92** — dosyada `ID` kolonu doğrudan sicil numarası.
-- **Arabuluculuk %0** — dosyada TC kimlik var ama `veri/tckn_sicil.csv` köprüsü
+- **Koç katılımcı listesi %92**: dosyada `ID` kolonu doğrudan sicil numarası.
+- **Arabuluculuk %0**: dosyada TC kimlik var ama `veri/tckn_sicil.csv` köprüsü
   boş olduğu için 25 satırın hepsi isim üzerinden bulunup 0,70 güvenle
   incelemeye düşüyor. Köprü doldurulunca bu dosya 0,99 güvenle otomatiğe geçer.
   Aynı sebep sağlık listesinin %28'ini de açıklar. **Bu iki dosyadaki düşük
@@ -381,17 +462,17 @@ olmadığını** ölçüyor:
 `ornek_mail.msg` bilerek toplama **katılmaz**: ekleri yukarıdaki faturaların
 aynısını ikinci kez taşır, toplama girseydi her satır iki kez sayılır ve oran
 şişerdi (ilk ölçümde toplam 804 görünüyordu, gerçek 399). Ekler ayrı bir
-tabloda raporlanır ve satır satır aynı sonucu verir — yani `.msg` okuyucusu
+tabloda raporlanır ve satır satır aynı sonucu verir; yani `.msg` okuyucusu
 doğru çalışıyor.
 
-### Eşleşmeyen 43 satırın nedeni (1C defteri kapalıyken)
+### Eşleşmeyen 44 satırın nedeni (1C defteri kapalıyken)
 
 | Kategori | Adet | Pay | Anlamı |
 |---|---:|---:|---|
-| `ALGORITMA` | **0** | %0,0 | Kişi veride var, eşleştirici bulamadı — **düzeltilebilir** |
-| `PARSER` | **0** | %0,0 | Satırda kişi var ama çıkarılamadı — **düzeltilebilir** |
-| `VERI_KAPSAMI` | 39 | %90,7 | Kişi personel ana verisinde yok — düzeltilemez |
-| `KISISIZ` | 4 | %9,3 | Satırda kişi yok (kurumsal gider) — kusur değil |
+| `ALGORITMA` | **0** | %0,0 | Kişi veride var, eşleştirici bulamadı; **düzeltilebilir** |
+| `PARSER` | **0** | %0,0 | Satırda kişi var ama çıkarılamadı; **düzeltilebilir** |
+| `VERI_KAPSAMI` | 40 | %90,9 | Kişi personel ana verisinde yok; düzeltilemez |
+| `KISISIZ` | 4 | %9,1 | Satırda kişi yok (kurumsal gider); kusur değil |
 
 Düzeltilebilir kusur **sıfır**. Eşleşmeyen her satır ya grup şirketi / dış
 danışman / taşeron personelidir (veri kapsamı dışı), ya da kişiye
@@ -405,7 +486,7 @@ hizalama hatası yok.
 
 **Kritik bulgu: elle dosya "doğruluk referansı" değildir.** Naif karşılaştırma
 %48,6 verdi. Bu 57 "hatanın" nedeni tek tek açıldığında hatanın otomasyonda
-olmadığı görüldü — iki dosya **aynı soruyu cevaplamıyor**:
+olmadığı görüldü; iki dosya **aynı soruyu cevaplamıyor**:
 
 ```
 GPP Project çalışanı -> elle 'RHI'            : 54 satır
@@ -438,7 +519,7 @@ Bu yüzden doğruluk üç ayrı okumayla raporlanır:
 | `tüzel` | %96,4 (107/111) | Otomasyon elle dosyayla çelişiyor mu. Zayıf test: 'RHI' 100 satırda ayrım yapmıyor. |
 | `bilgi` | **%86,7 (13/15)** | Elle dosyanın gerçek proje bilgisi taşıdığı satırlar. **Tek geçerli ölçüm budur.** |
 
-### Bulunan gerçek otomasyon hataları: 2 — ikisi de İNCELE bayrağıyla yakalandı
+### Bulunan gerçek otomasyon hataları: 2, ikisi de İNCELE bayrağıyla yakalandı
 
 - **#131, adaş vakası** (ESB-LED, 31.07). Bulunan sicil Amursky'de çalışmış ama
   **06.04.2026'da çıkmış**. Aynı günün aynı partisindeki iki kişi için hem elle
@@ -468,14 +549,19 @@ personeli ancak burada bulunur.
 İki dosya aynı sicil uzayını kullanır (12.283 ortak sicil), bu yüzden güvenle
 birlikte kullanılırlar.
 
-| Ölçüm | Sadece ana veri | Ana veri + 1C listesi |
-|---|---|---|
-| Masraf merkezi çözülen satır | 362 / 405 | 397 / 405 |
-| Oran | yüzde 89,4 | yüzde 98,0 |
-| Hiç eşleşmeyen | 52 | 14 |
+| Ölçüm (Temmuz 2026, 299 gider satırı) | Sadece ana veri | Ana veri + 1C listesi |
+|---|---:|---:|
+| Kişi bulunan gider satırı | 257 / 299 | 283 / 299 |
+| Oran | yüzde 86,0 | yüzde 94,6 |
+| Hiç eşleşmeyen | 42 | 16 |
+| Otomatik dağıtılan | 162 | 160 |
+| Dağıtılamayan tutar (USD) | 8.176,14 | 3.845,21 |
+| Dağıtım oranı | yüzde 85,8 | yüzde 93,3 |
 
 Ayarlar sekmesinde ikinci dosya yolunu da verin. Zorunlu değildir, olmadan da
-çalışır; ama olmadan grup şirketi personeli bulunamaz.
+çalışır; ama olmadan grup şirketi personeli bulunamaz. Ana veri ise
+zorunludur: `PERSONEL` klasöründe yalnızca 1C listesi varsa masaüstü paketi
+net bir hata verip durur, personel dosyası boşsa uyarı yazar.
 
 1C listesinden gelen bir kayıt her zaman şu uyarıyı taşır: *"1C listesi tek
 tarihli olduğu için gider ayındaki durum doğrulanamadı."* Bu kasıtlıdır. O kişi
@@ -539,7 +625,7 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
   eklendikçe aralık kendiliğinden genişler.
 - **Henüz işe başlamamış aday ve yeni girenler ana veride olmaz.** Bunlar için
   sağlık kontrol listesi gibi yardımcı kaynaklardan ek kişi defteri
-  beslenmelidir. Ölçüm: eşleşmeyen 43 satırın 39'u (%90,7) tam olarak bu
+  beslenmelidir. Ölçüm: eşleşmeyen 44 satırın 40'ı (%90,9) tam olarak bu
   gruptur ve hiçbiri algoritma kusuru değildir.
 - **Aile bireyleri ve dış danışmanlar otomatik eşleşmez.** Eşin veya çocuğun
   bileti çalışanın soyadıyla gelir; sistem bunu "aile bireyi olabilir" diye
@@ -568,7 +654,7 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
   otomasyon hatası budur (#131, adaş vakası): alias doğru sicile gidiyor ama
   o sicil Nisan 2026'da çıkmış; fatura Temmuz'da yeni işe girmiş **aynı adlı
   başka birine** ait. Sistem bunu çözemez, ama iki uyarı üretip satırı
-  incelemeye gönderir — yani hata sessizce geçmez.
+  incelemeye gönderir; yani hata sessizce geçmez.
 - **Doğruluk ölçümünün karşılaştırılabilir örneklemi küçüktür.** Elle
   dağıtılmış dosyanın 134 satırının yalnızca 15'i hem otomasyonla
   karşılaştırılabilir hem de gerçek proje bilgisi taşır. %86,7 doğruluk bu 15
@@ -577,8 +663,8 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
 - **Ölçüm betikleri 1C ikincil defterini kullanmıyor.**
   `testler/kapsam_olc.py` ve `testler/dogruluk_olc.py` yalnızca ana veriyle
   çalışır; uygulamanın kendisi ise yanında bir 1C listesi bulduğunda onu
-  otomatik kullanır. Bu yüzden betiklerin bastığı eşleşmeyen sayısı (43),
-  uygulamanın gerçek davranışına (14) göre **kötümserdir**. Yukarıdaki
+  otomatik kullanır. Bu yüzden betiklerin bastığı eşleşmeyen sayısı (44),
+  uygulamanın gerçek davranışına (16) göre **kötümserdir**. Yukarıdaki
   "1C ikincil personel defteri açıkken" tablosu farkı gösterir. Betiklere bir
   `--yardimci` seçeneği eklenmesi bekleyen bir iştir; ölçümlerin ikisi de
   düzeltilene kadar alt sınır olarak okunmalıdır.
@@ -592,17 +678,34 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
 
 Kişisel veri repoya girmez. `.gitignore` şunları dışarıda tutar:
 
-- `ornek_veri/` — personel ana verisi ve gerçek faturalar
-- `cikti/` — üretilen Excel dosyaları
-- `veri/*.csv` — öğrenen defterler (TC kimlik ve ad soyad içerir)
-- `*.pkl` — personel önbelleği
+- `ornek_veri/`: personel ana verisi ve gerçek faturalar
+- `cikti/`: üretilen Excel dosyaları
+- `veri/*.csv`: öğrenen defterler (TC kimlik ve ad soyad içerir)
+- `veri/gecmis/`: defterlerin üstüne yazılmadan önce alınan yedekleri
+- `veri/*.tmp`, `*.csv.tmp`: defter yazımı sırasındaki geçici dosyalar
+- `*.pkl`: personel önbelleği
 
 Tek istisna `veri/masraf_merkezi_haritasi.csv`; o bir yapılandırma dosyasıdır,
 kişisel veri içermez ve repoda tutulur.
 
-Bütün işlem sizin bilgisayarınızda olur. Hiçbir veri dışarıya gönderilmez,
-uygulama internet bağlantısı olmadan çalışır. Öğrenen defterleri yedeklemek
-isterseniz şirket içi bir paylaşıma kopyalayın, genel bir depoya koymayın.
+Çalışma zamanında da şu kurallar geçerlidir:
+
+- "Öğrenmeyi kaydet" (`ogrenmeyi_kaydet`) kapalıyken hiçbir defter diske
+  yazılmaz; besleme yalnızca bellekte kalır. Ölçüm betikleri bu yüzden
+  defterlerin geçici bir kopyasıyla çalışır.
+- TC kimlik numaraları log satırlarında ve uyarılarda maskelidir; yalnızca ilk
+  üç hane görünür. Excel çıktısında TC kimlik kolonu yoktur.
+- Personel önbelleği (`.pkl`) yalnızca sahibinin okuyabileceği izinle
+  (`0600`) yazılır.
+- Konsol ve `OZET.txt` işaret çelişkisini ad taşımadan yazar; adlı ayrıntı
+  yalnızca Excel'in `Kontrol` sayfasındadır.
+- Belgelerdeki ve testlerdeki gerçek bilet numaraları ve kişi adları uydurma
+  değerlerle değiştirilmiştir.
+
+Bütün işlem sizin bilgisayarınızda olur. Kullanımda hiçbir veri dışarıya
+gönderilmez, uygulama internet bağlantısı olmadan çalışır. Öğrenen defterleri
+yedeklemek isterseniz şirket içi bir paylaşıma kopyalayın, genel bir depoya
+koymayın.
 
 ## Yeni ay geldiğinde ne yapmalı
 
@@ -625,10 +728,10 @@ isterseniz şirket içi bir paylaşıma kopyalayın, genel bir depoya koymayın.
 python3 -m unittest discover -s testler -v
 ```
 
-Son durum: **250 test, hepsi geçiyor** (yaklaşık 50 saniye). Testler standart
+Son durum: **445 test, hepsi geçiyor** (yaklaşık 75 saniye). Testler standart
 kütüphaneyle yazılmıştır, ek bir test paketi gerekmez.
 `ornek_veri/` dizini repoda olmadığı için veri gerektiren testler o dizin
 yoksa atlanır (`skipped`); metin normalizasyon testleri her ortamda çalışır.
 `testler/test_eslestirici.py` içindeki altın örnekler gerçek Temmuz 2026
 verisinden elle doğrulanmış vakalardır ve boş bir öğrenme defteriyle
-çalışır — yani her biri sıfırdan kurulan bir sistemde de geçmelidir.
+çalışır; yani her biri sıfırdan kurulan bir sistemde de geçmelidir.
