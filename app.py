@@ -121,6 +121,7 @@ KAYNAK_TIP_ADLARI: dict[str, str] = {
     "antik_cari": "Antik/Yuzyil seyahat - ham cari hareket dokumu",
     "yuzyil_dagitilmis": "Yuzyil seyahat - elle dagitilmis (referans)",
     "energo_assessment": "Energo - assessment yansitma",
+    "energo_assessment_detay": "Energo - assessment fatura detay listesi (tutarsiz, kutuk)",
     "energo_arabulucu": "Energo - arabuluculuk",
     "energo_saglik": "Energo - saglik kontrol listesi",
     "koc_katilimci": "Koc Universitesi - egitim katilimci listesi",
@@ -1881,7 +1882,7 @@ def sekme_inceleme() -> None:
         "Personel ara (isim ya da sicil)",
         value="",
         key=f"ara_{indeks}",
-        placeholder="Örn: Gunal Emre  veya  102084",
+        placeholder="Örn: Yilmaz Mehmet  veya  123456",
         help="Personel ana verisinde arar. Aday listesi arama sonuçlarıyla genişler.",
     )
 
@@ -2197,7 +2198,7 @@ Birden fazla aday bulunduğunda güven skoru bilinçli olarak düşürülür ve 
     blok_baslik("Sık karşılaşılan durumlar")
     st.markdown(
         """
-- **Aile bireyi:** *GUNAL DARIA* gibi bir isim çalışan listesinde yoktur ama *Gunal Emre*
+- **Aile bireyi:** *AKSOY DARIA* gibi bir isim çalışan listesinde yoktur ama *Aksoy E.*
   vardır. Sistem bunu aile bireyi olarak işaretler ve masraf merkezini çalışandan devralır,
   ama güveni düşürüp incelemeye gönderir.
 - **Kişi hiç yok:** Grup şirketi (RENSERVIS, ONE TOWER…), taşeron veya yeni giren olabilir.

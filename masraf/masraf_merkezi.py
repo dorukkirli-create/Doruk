@@ -448,6 +448,49 @@ class MasrafMerkeziHaritasi:
 # ----------------------------------------------------------------------
 
 
+#: Kimligi ISIMDEN turetilen yontemler; es isimli kontrolu bunlara uygulanir.
+_ISIM_TABANLI_YONTEMLER = frozenset({
+    "tam_isim", "alt_kume", "prefix", "transliterasyon", "bulanik", "alias",
+})
+
+
+def _yardimci_kaydi(yardimci: Any, sicil: str | None) -> dict | None:
+    """1C listesinde sicile karsilik gelen kayit (yoksa None)."""
+    if yardimci is None or not sicil:
+        return None
+    try:
+        return yardimci.sicil_ile(str(sicil))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _yardimci_es_isimliler(yardimci: Any, eslesme: Any, gorev_yeri: str | None) -> list[tuple[str, str]]:
+    """1C listesinde ayni isimli, FARKLI sicilli ve FARKLI projedeki kisiler.
+
+    Returns:
+        [(gorev_yeri, sirket)] listesi; bos ise es isimli yok.
+    """
+    if yardimci is None:
+        return []
+    try:
+        from masraf.metin import isim_normalize
+        ad = eslesme.ad_soyad or ""
+        adaylar = yardimci.isimle_adaylar(isim_normalize(ad)) if ad else []
+    except Exception:  # noqa: BLE001
+        return []
+    sonuc: list[tuple[str, str]] = []
+    for sicil in adaylar:
+        if str(sicil) == str(eslesme.sicil):
+            continue
+        kayit = _yardimci_kaydi(yardimci, sicil)
+        if not kayit or not kayit.get("gorev_yeri"):
+            continue
+        if _anahtar(kayit["gorev_yeri"]) == _anahtar(gorev_yeri or ""):
+            continue
+        sonuc.append((str(kayit["gorev_yeri"]), str(kayit.get("sirket2") or kayit.get("sirket") or "?")))
+    return sonuc
+
+
 def _durum_belirle(guven: float, uyarilar: list[str], masraf_merkezi: str | None,
                    guven_esigi: float, alt_esik: float) -> str:
     """Guven skoru ve uyarilara bakarak cikti sayfasini belirler."""
@@ -658,11 +701,21 @@ def masraf_merkezi_coz(
             "masraf merkezi kullanildi."
         )
     elif donem_eslesme == "onceki_donem":
-        uyarilar.append(
+        mesaj = (
             f"Kisinin gider ayinda ({_ay_metni(belge_tarihi)}) personel kaydi yok. "
             f"Kayitli son donemi {_ay_metni(donem)}; o donemin masraf merkezi "
             "kullanildi. Cikis masrafi ise dogru santiyedir, kontrol edin."
         )
+        # Ana veriden cikmis ama 1C listesinde BASKA bir projede aktifse,
+        # muhtemelen grup sirketine gecmistir; masraf oraya ait olabilir.
+        baska = _yardimci_kaydi(yardimci, eslesme.sicil)
+        if baska and baska.get("gorev_yeri") and _anahtar(baska["gorev_yeri"]) != _anahtar(gorev_yeri or ""):
+            mesaj += (
+                f" DIKKAT: 1C listesinde kisi '{baska['gorev_yeri']}' "
+                f"({baska.get('sirket2') or baska.get('sirket') or '?'}) projesinde gorunuyor; "
+                "grup sirketine gecmis olabilir, masraf oraya ait olabilir."
+            )
+        uyarilar.append(mesaj)
     elif (
         son_donem is not None
         and belge_tarihi is not None
@@ -750,6 +803,18 @@ def masraf_merkezi_coz(
                     f"PROJE UYUSMAZLIGI: kaynak dosyada '{kaynak_etiket}' ({kaynak_kodu}) "
                     f"yaziyor, personel kaydina gore '{masraf_merkezi}'. Kontrol edin."
                 )
+
+    # 5) Isimle bulunan kisinin 1C listesinde AYNI ISIMLI ama farkli projede
+    #    baska bir kaydi varsa otomatik kabul edilmez. Olculdu: Temmuz 2026'da
+    #    iki satir boyle; ikisi de ULF-GPC-RHI yerine RSS Lytkarino olabilir.
+    if eslesme.yontem in _ISIM_TABANLI_YONTEMLER and eslesme.sicil:
+        esler = _yardimci_es_isimliler(yardimci, eslesme, gorev_yeri)
+        if esler:
+            uyarilar.append(
+                "1C listesinde ayni isimli baska kisi var: "
+                + "; ".join(f"{y} ({s})" for y, s in esler[:2])
+                + ". Dogru kisi olduguna emin olun."
+            )
 
     durum = _durum_belirle(eslesme.guven, uyarilar, masraf_merkezi, guven_esigi, alt_esik)
 

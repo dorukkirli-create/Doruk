@@ -239,7 +239,7 @@ class PersonelDefteri:
         soyad indeksi ilk token uzerinden kurulur.
 
         DIKKAT: Bir kisinin adi donemler arasinda DEGISEBILIR (orn. evlilik
-        sonrasi soyadi degisikligi: sicil 625770 'Coskun Ese' -> 'Yaprak Ese').
+        sonrasi soyadi degisikligi: ornegin bir sicilde 'Eski Soyad Ad' -> 'Yeni Soyad Ad').
         Indeksler kisinin TUM donemlerdeki yazimlarini kapsar, bu nedenle eski
         adiyla kesilmis bir fatura da dogru sicile eslesir. sicil_ile() ise her
         zaman EN GUNCEL adi dondurur; bu yuzden eslesen isim ile dondurulen ad
@@ -319,8 +319,13 @@ class PersonelDefteri:
                     defter = paket["defter"]
                     defter._kaynak_yol = str(kaynak)
                     return defter
-            except (pickle.PickleError, EOFError, KeyError, AttributeError, OSError):
-                pass  # Bozuk/eski onbellek: sessizce yeniden oku.
+            except Exception:  # noqa: BLE001
+                # Bozuk, eski veya farkli surumle yazilmis onbellek (PickleError,
+                # EOFError, KeyError, AttributeError, ModuleNotFoundError,
+                # ValueError...). Hangisi olursa olsun dogru davranis ayni:
+                # sessizce kaynaktan yeniden oku. Onbellek bir hizlandiricidir,
+                # programi cokertme hakki yoktur.
+                pass
 
         df = pd.read_excel(kaynak, sheet_name=0)
         defter = cls(df)

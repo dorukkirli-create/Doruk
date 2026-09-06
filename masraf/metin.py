@@ -115,8 +115,8 @@ def isim_normalize(s: str) -> str:
 
     Buyuk harf + ASCII katlama + sadece harf ve bosluk + tek bosluk.
 
-    >>> isim_normalize("Özakay, Mustafa Kemal")
-    'OZAKAY MUSTAFA KEMAL'
+    >>> isim_normalize("Demiralp, Ahmet Can")
+    'DEMIRALP AHMET CAN'
     """
     if not s:
         return ""
@@ -133,11 +133,11 @@ def isim_imzasi(s: str) -> str:
     Normalize edilmis ismin harflerini siralar. Boylece ayni kisinin farkli
     yazimlari tek bir anahtara duser::
 
-        'KOCKESEN TALIPKEREM'   -> AEEEEIKKKLMNOPSST
-        'TALIP KEREM KOCKESEN'  -> AEEEEIKKKLMNOPSST
+        'KARADUMAN HALITCAN'    -> AAAAACDHIKLMNNRTU
+        'HALIT CAN KARADUMAN'   -> AAAAACDHIKLMNNRTU
 
     Iki sorunu birden cozer: soyadin one alinmasi ve bitisik yazilmis ad
-    ('TALIPKEREM'). Sozluge ihtiyac duymaz.
+    ('HALITCAN'). Sozluge ihtiyac duymaz.
 
     Yanlis eslesme riski dusuktur: iki farkli kisinin isminin harf harf ayni
     olmasi gerekir. Yine de tek basina KIMLIK KANITI DEGILDIR; yalnizca
@@ -153,7 +153,7 @@ def isim_tokenlari(s: str) -> frozenset[str]:
     Sirasiz olmasi 'SOYAD AD' ile 'AD SOYAD' yazimlarinin ayni kumeye
     dusmesini saglar.
 
-    >>> isim_tokenlari("Ozakay Mustafa Kemal") == frozenset({"OZAKAY", "MUSTAFA", "KEMAL"})
+    >>> isim_tokenlari("Demiralp Ahmet Can") == frozenset({"DEMIRALP", "AHMET", "CAN"})
     True
     """
     norm = isim_normalize(s)
@@ -409,8 +409,8 @@ def kisi_metnini_temizle(s: str) -> str:
     anahtar kelimesinden itibaren kesilir), guzergah kodlari ve kalan rakamlar
     atilir; sonuc buyuk harf + ASCII olarak dondurulur.
 
-    >>> kisi_metnini_temizle("TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI")
-    'OZAKAY MUSTAFAKEMAL'
+    >>> kisi_metnini_temizle("TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI")
+    'DEMIRALP AHMETCAN'
     """
     if not s:
         return ""

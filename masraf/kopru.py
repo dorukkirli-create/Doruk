@@ -212,18 +212,21 @@ def kopru_ozeti(satirlar: Iterable, defter, adaylar: list[KopruAdayi]) -> dict:
 # --------------------------------------------------------------------------
 #
 # Neden gerekli: bulanik ve aile kademeleri isim benzerligine bakar ve
-# yanilabilir. Olculen ornek (Temmuz 2026 saglik kontrol listesi):
+# yanilabilir. Olculen ornek (Temmuz 2026 saglik kontrol listesi, 7 kisi;
+# gercek adlar ve dogum tarihleri bilerek yazilmadi):
 #
-#   GOKHAN GUZEL   (dogum 18.04.1980) -> Guzel Serdal        (15.07.1977)  YANLIS
-#   MEHMET E NERGIZ(dogum 05.06.1989) -> Nergiz Mehmet Kerem (08.09.1981)  YANLIS
-#   BARIS GOCEDEN  (dogum 20.02.1984) -> Baris Baris         (10.06.1986)  YANLIS
-#   OGUN BIZ       (dogum 06.08.1992) -> Biz Selami          (15.02.1991)  YANLIS
-#   SEHRIBAN OZKAN (dogum 03.01.1995) -> Seriban Ozkan       (03.01.1995)  DOGRU
-#   YASAR MERT YANAR(dogum 17.10.1994)-> Banar Yasar Mert    (17.10.1994)  DOGRU
-#   MEHMET DALKILIC(dogum 24.04.1987) -> Dalkilinc Mehmet    (24.04.1987)  DOGRU
+#   Listedeki kisi         Personelde isim benzeri     Dogum tarihi   Sonuc
+#   A SOYADI-1             Soyadi-1 Baska-Ad           farkli         YANLIS
+#   B SOYADI-2             Soyadi-2 Baska-Ad           farkli         YANLIS
+#   C SOYADI-3             Soyadi-3 Soyadi-3           farkli         YANLIS
+#   D SOYADI-4             Soyadi-4 Baska-Ad           farkli         YANLIS
+#   E SOYADI-5             Soyadi-5 (bir harf eksik)   ayni           DOGRU
+#   F SOYADI-6             Soyadi-6 (ilk harf farkli)  ayni           DOGRU
+#   G SOYADI-7             Soyadi-7 (bir harf fazla)   ayni           DOGRU
 #
-# Dogum tarihi dortunu de eler, ucunu de dogrular. Yazim farki (Yanar/Banar,
-# Sehriban/Seriban, Dalkilic/Dalkilinc) dogum tarihi ile guvenle asilir.
+# Dogum tarihi dortunu de eler, ucunu de dogrular. Bir harflik yazim farki
+# (eksik, fazla ya da degismis harf) dogum tarihi ile guvenle asilir; yalniz
+# soyadi benzeyen ama baska bir insan olan dort kayit ise ayni yolla elenir.
 
 _BENZERLIK_ESIGI = 78  # rapidfuzz token_set_ratio alt siniri
 

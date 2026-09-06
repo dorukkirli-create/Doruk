@@ -32,8 +32,8 @@ Yineleme anahtari
 -----------------
 (belge tarihi, mutlak tutar, isim harflerinin siralanmis hali) uclusudur.
 Isim SIRADAN BAGIMSIZ karsilastirilir cunku iki dosya ayni kisiyi farkli
-yazar: ham dokum 'OZAKAY MUSTAFAKEMAL', elle dagitilmis hal
-'MUSTAFA KEMAL OZAKAY'. Harfler siralandiginda ikisi ayni anahtari verir.
+yazar: ham dokum 'DEMIRALP AHMETCAN', elle dagitilmis hal
+'AHMET CAN DEMIRALP'. Harfler siralandiginda ikisi ayni anahtari verir.
 Tarih ve tutar zaten esitken iki farkli kisinin isminin harf harf ayni
 olmasi pratikte imkansizdir.
 
@@ -81,10 +81,19 @@ _KAYNAK_ONCELIGI: dict[str, int] = {
 }
 
 #: Dagilima girmeyen kaynak tipleri: bunlar fatura degil kisi kutugudur.
-_KUTUK_TIPLERI = frozenset({"referans_liste", "energo_saglik", "koc_katilimci"})
+_KUTUK_TIPLERI = frozenset({
+    "referans_liste", "energo_saglik", "koc_katilimci",
+    # Tedarikcinin fatura basina gonderdigi tutarsiz katilimci listesi;
+    # tutar yansitma dosyasindadir. Dagilima girmez, capraz kontrol edilir.
+    "energo_assessment_detay",
+})
+#: Detay listesinin karsiligi olan, tutar tasiyan kaynak tipi.
+_DETAY_KARSILIGI = "energo_assessment"
 
 #: Kurus altinda kalan farklar kapali sayilir.
 _TOLERANS = 0.005
+#: Bundan buyuk bir fark yuvarlama artigi olamaz; gomulmez, acik birakilir.
+_AZAMI_YUVARLAMA = 0.50
 
 
 @dataclass
@@ -160,6 +169,16 @@ class IsaretCeliskisi:
             f"{self.kullanilan:+,.2f} {self.para_birimi}."
         )
 
+    def kisa_aciklama(self) -> str:
+        """Kisi adi tasimayan ozet; kapak sayfasi gibi yonetici gorunumleri icin."""
+        tarih = f"{self.belge_tarihi:%d.%m.%Y}" if self.belge_tarihi else "tarihsiz"
+        tutar = max(abs(t) for t in self.tutarlar) if self.tutarlar else 0.0
+        return (
+            f"{tarih} tarihli {tutar:,.2f} {self.para_birimi} kalem iki dosyada zit "
+            f"isaretli ({' / '.join(self.kaynaklar)}); ham dokumdeki deger kullanildi. "
+            "Ayrinti Kontrol sayfasinda."
+        )
+
 
 @dataclass
 class KontrolSatiri:
@@ -178,6 +197,19 @@ class KontrolSatiri:
     satir_sayisi: int
     yinelenen_tutar: float = 0.0
     yinelenen_satir: int = 0
+    #: Tutari okunamayan satirlar. Bunlar 'gelen'e giremez ama YOK sayilamaz:
+    #: fatura toplami onlari icerir. Sifirdan buyukse mutabakat acik kalir.
+    tutarsiz_satir: int = 0
+    #: Kaynak dosyanin KENDI beyan ettigi toplam (varsa). Okunanla farki,
+    #: okuyucunun kacirdigi tutari ele verir.
+    beyan_toplam: float | None = None
+
+    @property
+    def beyan_farki(self) -> float | None:
+        """Faturanin beyan ettigi toplam ile okunan arasindaki fark."""
+        if self.beyan_toplam is None:
+            return None
+        return round(self.beyan_toplam - self.gelen, 2)
 
     @property
     def fark(self) -> float:
@@ -188,7 +220,28 @@ class KontrolSatiri:
 
     @property
     def kapali_mi(self) -> bool:
-        return abs(self.fark) < 0.01
+        """Kapali: dagitim toplami tutuyor, tutarsiz satir yok, beyanla fark yok."""
+        if abs(self.fark) >= 0.01:
+            return False
+        if self.tutarsiz_satir:
+            return False
+        bf = self.beyan_farki
+        if bf is not None and abs(bf) >= 0.01:
+            return False
+        return True
+
+    @property
+    def acik_sebebi(self) -> str:
+        """Kapanmadiysa neden; kapaliysa bos."""
+        sebepler = []
+        if abs(self.fark) >= 0.01:
+            sebepler.append(f"dagitim farki {self.fark:+.2f}")
+        if self.tutarsiz_satir:
+            sebepler.append(f"{self.tutarsiz_satir} satirda tutar okunamadi")
+        bf = self.beyan_farki
+        if bf is not None and abs(bf) >= 0.01:
+            sebepler.append(f"faturanin beyan ettigi toplamdan {bf:+.2f} farkli")
+        return "; ".join(sebepler)
 
     @property
     def net(self) -> float:
@@ -201,12 +254,52 @@ class KontrolSatiri:
 
 
 @dataclass
+class DetayKontrolu:
+    """Fatura detay listesindeki kisilerin yansitma satirlariyla capraz kontrolu.
+
+    Tedarikci her fatura icin tutarsiz bir katilimci listesi gonderir; tutar
+    yansitma dosyasindadir. Iki liste ayni kisileri tasimali. Tasimiyorsa ya
+    yansitmada bir kisi eksik (para eksik dagitilir) ya da fazla (fatura
+    kapsaminda olmayan kisiye pay yazilir). Ikisi de muhasebe hatasidir.
+    """
+
+    fatura_no: str
+    kaynak: str
+    detay_kisi: int
+    yansitma_kisi: int
+    eksik: list[str] = field(default_factory=list)   # detayda var, yansitmada yok
+    fazla: list[str] = field(default_factory=list)   # yansitmada var, detayda yok
+
+    @property
+    def tutarli_mi(self) -> bool:
+        return not self.eksik and not self.fazla
+
+    @property
+    def eslesen(self) -> int:
+        return self.detay_kisi - len(self.eksik)
+
+    def aciklama(self) -> str:
+        if self.tutarli_mi:
+            return f"{self.fatura_no}: detay listesindeki {self.detay_kisi} kisi yansitmayla birebir"
+        parcalar = [f"{self.fatura_no}: fatura detay listesi ile yansitma UYUSMUYOR"]
+        if self.yansitma_kisi == 0:
+            parcalar.append("yansitma dosyasinda bu fatura numarasi hic yok")
+        if self.eksik:
+            parcalar.append("yansitmada eksik: " + ", ".join(self.eksik))
+        if self.fazla:
+            parcalar.append("detay listesinde olmayan: " + ", ".join(self.fazla))
+        return "; ".join(parcalar)
+
+
+@dataclass
 class MahsupTablosu:
     """Mahsuplasma ciktisinin tamami."""
 
     satirlar: list[MahsupSatiri] = field(default_factory=list)
     kontrol: list[KontrolSatiri] = field(default_factory=list)
     isaret_celiskileri: list[IsaretCeliskisi] = field(default_factory=list)
+    detay_kontrolleri: list[DetayKontrolu] = field(default_factory=list)
+    uyarilar: list[str] = field(default_factory=list)
     yinelenen_sayisi: int = 0
     kutuk_satir_sayisi: int = 0
     tutarsiz_satir_sayisi: int = 0
@@ -329,6 +422,38 @@ class MahsupTablosu:
         return not self.acik_kontroller
 
 
+def _detay_kontrolu(detaylar: list[Any], aday: list[Any]) -> list[DetayKontrolu]:
+    """Detay listesi kisilerini ayni fatura numarali yansitma kisileriyle kiyaslar."""
+    if not detaylar:
+        return []
+    yansitma: dict[str, dict[str, str]] = defaultdict(dict)   # fatura_no -> imza -> ad
+    for s in aday:
+        if getattr(s.satir, "kaynak_tip", "") != _DETAY_KARSILIGI:
+            continue
+        ek = s.satir.ek if isinstance(s.satir.ek, dict) else {}
+        no = str(ek.get("fatura_no") or "").strip()
+        imza = _isim_imzasi(s.satir.kisi_ham)
+        if no and imza:
+            yansitma[no][imza] = s.satir.kisi_ham or ""
+    gruplar: dict[tuple[str, str], dict[str, str]] = defaultdict(dict)
+    for s in detaylar:
+        ek = s.satir.ek if isinstance(s.satir.ek, dict) else {}
+        no = str(ek.get("fatura_no") or "").strip() or "(fatura no yok)"
+        imza = _isim_imzasi(s.satir.kisi_ham)
+        if imza:
+            gruplar[(no, _kaynak_adi(s))][imza] = s.satir.kisi_ham or ""
+    cikti: list[DetayKontrolu] = []
+    for (no, kaynak), kisiler in sorted(gruplar.items()):
+        karsi = yansitma.get(no, {})
+        cikti.append(DetayKontrolu(
+            fatura_no=no, kaynak=kaynak,
+            detay_kisi=len(kisiler), yansitma_kisi=len(karsi),
+            eksik=sorted(ad for imza, ad in kisiler.items() if imza not in karsi),
+            fazla=sorted(ad for imza, ad in karsi.items() if imza not in kisiler),
+        ))
+    return cikti
+
+
 def _kaynak_adi(sonuc: Any) -> str:
     """Satirin ait oldugu faturayi adlandirir.
 
@@ -342,7 +467,7 @@ def _kaynak_adi(sonuc: Any) -> str:
 def _isim_imzasi(ham: str | None) -> str:
     """Isim sirasindan ve bosluklardan bagimsiz karsilastirma imzasi.
 
-    'OZAKAY MUSTAFAKEMAL' ve 'MUSTAFA KEMAL OZAKAY' ayni imzayi verir; iki
+    'DEMIRALP AHMETCAN' ve 'AHMET CAN DEMIRALP' ayni imzayi verir; iki
     dosya ayni kisiyi farkli sirayla ve farkli bitisiklikte yazdigi icin
     gereklidir. Tanim ``masraf.metin`` icindedir; harici kisiler defteri de
     ayni imzayi kullanir, ikisi ayrisamasin diye tek kaynaktan gelir.
@@ -354,7 +479,7 @@ def _yineleme_anahtari(sonuc: Any) -> tuple | None:
     """Ayni islemi iki farkli dosyada tanimak icin KABA anahtar.
 
     (belge tarihi, mutlak tutar, para birimi). Isim BILEREK disarida birakilir:
-    iki dosya ayni kisiyi farkli yazar, hatta kirpar ('OZAKAY MUSTAFAKEMA'),
+    iki dosya ayni kisiyi farkli yazar, hatta kirpar ('DEMIRALP AHMETCA'),
     hatta yanlis yazar ('YALCINKAYA ANIL' / 'ALI YALCINKAYA'). Isim bu kaba
     kova icinde ESLESTIRICI olarak kullanilir, anahtar olarak degil.
 
@@ -373,7 +498,7 @@ def _eslesme_puani(a: Any, b: Any) -> int:
     """Ayni kovadaki iki kaydin ayni kisi olma gucu. Buyuk = daha guclu.
 
     3: isim imzalari birebir ayni.
-    2: biri digerinin kirpilmis hali ('OZAKAY MUSTAFAKEMA' <- 'OZAKAY MUSTAFAKEMAL').
+    2: biri digerinin kirpilmis hali ('DEMIRALP AHMETCA' <- 'DEMIRALP AHMETCAN').
     1: ortak token var (bir kelime yanlis yazilmis olabilir).
     0: isim yok veya hicbir benzerlik yok.
     """
@@ -429,11 +554,18 @@ def _kovayi_esle(tutulanlar: list[Any], digerleri: list[Any]) -> list[tuple[Any,
                 bos_tutulan.remove(en_iyi)
                 ciftler.append((en_iyi, d))
         bekleyen = kalan_bekleyen
-    # Kalanlar: isim eslesmedi ama kova ayni. Sirayla baglanir.
-    for d in bekleyen:
-        if not bos_tutulan:
-            break
-        ciftler.append((bos_tutulan.pop(0), d))
+    # Kalanlar: isim eslesmedi ama kova (tarih, tutar, doviz) ayni. Iki
+    # durumda bagla: (a) ikisi de isimsiz kurumsal kalem, (b) kalan sayilar
+    # esit, yani ayni parti (6 kisilik grup ucusu iki dosyada 6'sar). Sayilar
+    # farkliysa fazlalik gercekten yeni islem olabilir; baglamak para yutar.
+    if bekleyen and bos_tutulan:
+        isimsiz = all(not _isim_imzasi(d.satir.kisi_ham) for d in bekleyen) and \
+                  all(not _isim_imzasi(t.satir.kisi_ham) for t in bos_tutulan)
+        if isimsiz or len(bekleyen) == len(bos_tutulan):
+            for d in bekleyen:
+                if not bos_tutulan:
+                    break
+                ciftler.append((bos_tutulan.pop(0), d))
     return ciftler
 
 
@@ -479,7 +611,13 @@ def _paylar(sonuc: Any, harita: Any = None) -> list[tuple]:
     o zaman proje de bolunur.
     """
     ek = sonuc.satir.ek if isinstance(sonuc.satir.ek, dict) else {}
-    merkez = sonuc.masraf_merkezi or DAGITILAMAYAN
+    # ESLESMEDI: kimlik kabul esiginin altinda. Zayif bir tahmine dayanarak
+    # tutari bir projeye yazmak yanlis mahsuplasmadir; tutar gorunur bicimde
+    # dagitilamayan kalir, insan karar verir.
+    if getattr(sonuc, "durum", None) == "ESLESMEDI":
+        merkez = DAGITILAMAYAN
+    else:
+        merkez = sonuc.masraf_merkezi or DAGITILAMAYAN
     ad = ek.get("masraf_merkezi_adi") or None
     sirket = sonuc.sirket or sonuc.sirket2
     haritada = bool(ek.get("masraf_merkezi_haritada", True)) and merkez != DAGITILAMAYAN
@@ -519,6 +657,11 @@ def _artigi_dagit(satirlar: list[MahsupSatiri], hedef: float) -> None:
     fark = round(hedef - mevcut, 2)
     if abs(fark) < _TOLERANS:
         return
+    # Yuvarlama artigi kurus mertebesindedir. Daha buyuk bir fark yuvarlama
+    # degil hatadir; onu en buyuk satira gomersek mutabakat sahte kapanir.
+    # Dokunma, kontrol satiri acik kalsin ve gorunsun.
+    if abs(fark) > _AZAMI_YUVARLAMA:
+        return
     en_buyuk = max(satirlar, key=lambda s: abs(s.tutar))
     en_buyuk.tutar = round(en_buyuk.tutar + fark, 2)
 
@@ -547,14 +690,27 @@ def mahsuplasma_uret(
 
     # 1) Kutuk satirlarini ve tutarsizlari ayikla.
     aday: list[Any] = []
+    tutarsizlar: list[Any] = []
+    detaylar: list[Any] = []
     for s in sonuclar:
-        if getattr(s.satir, "kaynak_tip", "") in _KUTUK_TIPLERI:
+        tip = getattr(s.satir, "kaynak_tip", "")
+        if tip in _KUTUK_TIPLERI:
             tablo.kutuk_satir_sayisi += 1
+            if tip == "energo_assessment_detay":
+                detaylar.append(s)
             continue
         if s.satir.tutar is None:
             tablo.tutarsiz_satir_sayisi += 1
+            tutarsizlar.append(s)
             continue
         aday.append(s)
+
+    # 1b) Fatura detay listeleri (tutarsiz) yansitma satirlariyla capraz
+    #     kontrol edilir. Kisi kumesi ayni degilse uyari uretilir.
+    tablo.detay_kontrolleri = _detay_kontrolu(detaylar, aday)
+    for dk in tablo.detay_kontrolleri:
+        if not dk.tutarli_mi:
+            tablo.uyarilar.append("FATURA DETAYI: " + dk.aciklama())
 
     # 2) Okunan her sey once kontrol tablosuna yazilir. Eleme sonrasi degil
     #    ONCESI kaydedilir; boylece 'gelen' dosyada gercekten ne varsa odur.
@@ -575,6 +731,22 @@ def mahsuplasma_uret(
         k = _kontrol(s)
         k.gelen += float(s.satir.tutar)
         k.satir_sayisi += 1
+    # Tutari okunamayan satirlar kendi dosyalarinin kontrol satirinda
+    # SAYILIR; boylece 'mutabakat kapali' derken 76 dolar sessizce kaybolmaz.
+    for s in tutarsizlar:
+        _kontrol(s).tutarsiz_satir += 1
+    # Kaynak dosya kendi toplamini beyan ediyorsa (energo okuyucusu fatura
+    # detayindaki 'Genel Toplam'i ek['fatura_ozeti'] icinde tasir) onu al.
+    for s in list(aday) + tutarsizlar:
+        ek = s.satir.ek if isinstance(s.satir.ek, dict) else {}
+        ozet = ek.get("fatura_ozeti")
+        if isinstance(ozet, dict) and ozet:
+            k = _kontrol(s)
+            if k.beyan_toplam is None:
+                try:
+                    k.beyan_toplam = round(sum(float(v) for v in ozet.values()), 2)
+                except (TypeError, ValueError):
+                    pass
 
     # 3) Yinelenen islemleri ele. Kaba kova (tarih, tutar, doviz) icinde
     #    dosyalar 1:1 eslestirilir; kaynak onceligi dusuk olan (ham dokum)

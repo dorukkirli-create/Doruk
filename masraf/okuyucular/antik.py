@@ -248,8 +248,8 @@ def _otel_kisi(aciklama: str) -> list[str]:
 def _vize_kisi(aciklama: str) -> str | None:
     """Vize satirindan kisi adini cikarir.
 
-    >>> _vize_kisi("TALIP KEREM KOCKESEN RUSYA FEDERASYONU TURISTIK E-VIZE")
-    'TALIP KEREM KOCKESEN'
+    >>> _vize_kisi("HALIT CAN KARADUMAN RUSYA FEDERASYONU TURISTIK E-VIZE")
+    'HALIT CAN KARADUMAN'
     """
     return _temizle_ve_dogrula(_fold(aciklama))
 

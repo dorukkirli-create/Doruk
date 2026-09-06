@@ -48,10 +48,10 @@ Dosya bir cari hareket dökümü. Masraf merkezi kolonu hiç yok. Kişi adı aç
 ve dört farklı kalıpta geçiyor:
 
 ```
-TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI
-PC2255749381 TEMIR MEHMET\M  KYA-SAW-LED BILET BEDELI
-CIHAN BALABAN GRAND PLAZA HOTEL HANOI [11.07.2026] - [13.07.2026]  (2) KONAKLAMA YURTDISI
-EKSTRA BAGAJ UCRETI ISA MUCAHIT SAHIN TARAFINDAN TASINDI
+TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI
+PC2255749381 DEMIR MEHMET\M  KYA-SAW-LED BILET BEDELI
+CANER AKSU GRAND PLAZA HOTEL HANOI [11.07.2026] - [13.07.2026]  (2) KONAKLAMA YURTDISI
+EKSTRA BAGAJ UCRETI ALI MURAT SAHIN TARAFINDAN TASINDI
 ```
 
 Bilet satırlarında soyad önce geliyor, otel satırlarında ad önce geliyor. Otel adı isme yapışık.
@@ -119,7 +119,7 @@ Endişe edilecek konu isim benzersizliğiydi. Ölçtüm:
 Seyahat, eğitim ve değerlendirme masrafı yapan popülasyon ağırlıklı olarak RHI beyaz yaka.
 Orada çakışma binde iki. Yani isimle eşleştirme bu iş için yeterince güvenli.
 
-Çakışmanın yoğunlaştığı yer Hindistan vatandaşı mavi yaka personel. Kumar Manoj ismi 14 farklı
+Çakışmanın yoğunlaştığı yer Hindistan vatandaşı mavi yaka personel. En yaygın Hint ad-soyad çifti 14 farklı
 sicile ait. Bu kişiler seyahat faturası üretmiyor, ama otomasyon yine de çoklu aday durumunda
 otomatik karar vermemeli.
 
@@ -143,10 +143,10 @@ projesine gitmeli.
 
 | Faturadaki isim | Bağlı olduğu çalışan | Sicil | Masraf merkezi |
 |---|---|---|---|
-| GUNAL DARIA, GUNAL SERAFIMA, GUNAL YENISEY | Gunal Emre | 102084 | RHI Russia Headquarter Moscow |
-| ARAS CELENLIGIL, SEVIM CELENLIGIL | Celenligil Onur | 423806 | ALNG2-GBS Project |
-| COSKUN ELIF MUALLA GOKCE | Coskun Emre | 512495 | GPP Project |
-| ECE OLGA, UGUR OLGA | soyadı eşleşen çalışan | - | - |
+| AKSOY D., AKSOY S., AKSOY Y. (eş ve iki çocuk) | Aksoy E. | (gizli) | RHI Russia Headquarter Moscow |
+| KARATAS A., KARATAS S. (eş ve çocuk) | Karatas O. | (gizli) | ALNG2-GBS Project |
+| DEMIRALP E. M. G. (eş) | Demiralp A. | (gizli) | GPP Project |
+| iki farklı soyadlı OLGA | soyadı eşleşen çalışan | - | - |
 
 Kural: soyadı tek bir çalışan ile eşleşiyorsa aile bireyi olarak işaretle, masraf merkezini
 o çalışandan devral, ama güven skorunu düşür ve incelemeye gönder. Otomatik kabul etme.
@@ -157,11 +157,11 @@ o çalışandan devral, ama güven skorunu düşür ve incelemeye gönder. Otoma
 
 | Faturadaki yazım | Gerçek kişi | Sicil | Masraf merkezi |
 |---|---|---|---|
-| YRMAK MEKHMET VEISI | Irmak Mehmet Veysi | 300973 | Regional Management RHI |
-| IYLMAZ GEKHAN | Yilmaz Gokhan | 105045 | RHI Russia Headquarter Moscow |
+| YRMAK MEKHMET VEISI | Irmak M. V. | (gizli) | Regional Management RHI |
+| IYLMAZ GEKHAN | Yilmaz G. | (gizli) | RHI Russia Headquarter Moscow |
 
 Bu iki satır elle dağıtılmış dosyada RENSERVIS ve RHI olarak işaretlenmiş. Personel verisine göre
-Irmak Mehmet Veysi RHI Regional Management'ta. Yani elle yapılan dağıtımda bir hata var gibi
+ilk kişi RHI Regional Management'ta. Yani elle yapılan dağıtımda bir hata var gibi
 görünüyor. Doğrulanması gereken bir nokta.
 
 ### Çözülebilir: kesilmiş ve bitişik isimler
@@ -170,11 +170,11 @@ Excel kopyalama sırasında isimler 20 karakterde kesilmiş.
 
 | Faturadaki yazım | Gerçek kişi | Sicil |
 |---|---|---|
-| OZAKAY/MUSTAFAKEMA | Ozakay Mustafa Kemal | 100003 |
-| ALLANAZAROV/ALLANAZA | Allanazarov ailesinden biri | - |
-| GRINEVICH/NATALIA | - | - |
+| DEMIRALP/AHMETCA | Demiralp Ahmet Can | (gizli) |
+| (SOYAD)/(SOYA | aynı soyadlı biri; kırpık isim tek kişiye inmiyor | - |
+| (SOYAD)/(AD), Rus uyruklu | - | - |
 
-Ayrıca MUSTAFAKEMAL gibi bitişik yazılmış çift adlar var. Sözlük tabanlı ayırma ile çözülüyor.
+Ayrıca AHMETCAN gibi bitişik yazılmış çift adlar var. Sözlük tabanlı ayırma ile çözülüyor.
 
 ### Çözülebilir: metin gürültüsü
 
@@ -187,10 +187,10 @@ Bu grup üç alt kategoriye ayrılıyor.
 
 **Grup şirketi personeli.** Personel ana verisi sadece RHI ve UST LUGA tüzel kişilerini kapsıyor.
 Renservis, Renstroydetal, RC Peter, RC Moskova, One Tower, Top Tower personeli bu dosyada yok.
-Örnek: Tolga Surul (One Tower), Koray Erdur (Top Tower), Vedat Boynuegri (Renservis).
+Örnek: One Tower, Top Tower ve Renservis'te çalışan üç kişi (isimler bu belgede yazılmadı).
 
-**Dış danışmanlar.** Talip Kerem Kockesen bir kurumsal gelişim koçu, çalışan değil. Faturası
-"KURUMSAL GELİŞİM KOÇLUĞU BEDELİ" olarak geliyor. Bu kişilerin ayrı bir dış kişi defterinde
+**Dış danışmanlar.** Faturalardan biri bir kurumsal gelişim koçuna ait; bu kişi çalışan değil.
+Faturası "KURUMSAL GELİŞİM KOÇLUĞU BEDELİ" olarak geliyor. Bu kişilerin ayrı bir dış kişi defterinde
 tutulması gerekiyor.
 
 **Henüz sicili olmayan yeni girenler.** Sizin bahsettiğiniz durum tam olarak bu. Ankara Peter ve
@@ -204,25 +204,16 @@ Sağlık Kontrol Listesi ile karşılaştırdım:
 **15 tanesi, yani yüzde 35'i, sağlık kontrol listesinde TC kimlik numarası ve şantiye bilgisiyle
 mevcut.**
 
-*TC kimlik numaraları ilk üç ve son üç hane dışında maskelenmiştir; bu belge kaynak kodla birlikte saklanır ve kimlik numarası taşımamalıdır.*
+*Bu belge kaynak kodla birlikte saklanır; kişi adı ve kimlik numarası taşımaz. 15 kişinin
+şantiye dağılımı aşağıdadır.*
 
-| İsim | TC kimlik (maskeli) | Şantiye |
-|---|---|---|
-| NEVZAT GULER | 635*****888 | Ust Luga Gas Processing Complex GPC |
-| GOKHAN GUZEL | 550*****188 | Ust Luga GPP projesi |
-| ENIS DONMEZ | 720*****796 | Ust Luga GPP projesi |
-| HARUN YILDIZ | 344*****056 | Ust Luga GPP projesi |
-| AHMET CELER | 394*****404 | UST LUGA |
-| MUSTAFA OZCAN | 345*****688 | LYTKARINO |
-| HUSEYIN BAGUC | 116*****052 | Ust Luga Gas Processing Complex GPP |
-| OGUZHAN CANKAYA | 105*****220 | Ust Luga Gas Processing Complex GPC |
-| FURKAN ERDEM | 594*****320 | Ust Luga Gas Processing Complex GPC |
-| HARUN NERGIS | 232*****694 | Ust Luga GPP projesi |
-| MEHMET TURAN | 262*****980 | Ust Luga Gas Processing Complex GPC |
-| MUHAMMED YILMAZ | 281*****434 | Amur AGPP |
-| ISA MUCAHIT SAHIN | 139*****882 | Ust Luga Gas Processing Complex GPC |
-| ALI GUNDOGDU | 104*****660 | UST LUGA, Renstroydetal |
-| UMUT OZTURK | 398*****224 | Ust Luga GPP projesi, Yaka LLC |
+| Şantiye (sağlık listesindeki yazım) | Kişi |
+|---|---:|
+| Ust Luga Gas Processing Complex GPC / GPP | 6 |
+| Ust Luga GPP projesi | 5 |
+| UST LUGA (biri Renstroydetal, biri Yaka LLC notlu) | 2 |
+| LYTKARINO | 1 |
+| Amur AGPP | 1 |
 
 Yani otomasyonun bir "ek kişi defteri" tutması ve bunu sağlık listesi gibi yardımcı kaynaklardan
 otomatik beslemesi gerekiyor. Bu tek başına eşleşme oranını ciddi şekilde yukarı çeker.
@@ -328,9 +319,9 @@ Energo tarafına da yapılabilir.
 
 ### Bulunan veri çelişkisi
 
-Köprüyü kurarken bir çelişki çıktı. Mehmet Turan, TC 262*****980, doğum yılı 1983,
-sicil 549718. Personel verisi Temmuz 2026'da görev yerini Amursky Gas Processing Plant
-gösteriyor. Sağlık kontrol listesi ise Ust Luga Gas Processing Complex diyor. Seyahat
+Köprüyü kurarken bir çelişki çıktı. Sağlık listesindeki bir kişi (adı ve sicili bu
+belgede yazılmadı) için personel verisi Temmuz 2026'da görev yerini Amursky Gas Processing
+Plant gösteriyor. Sağlık kontrol listesi ise Ust Luga Gas Processing Complex diyor. Seyahat
 faturasındaki uçuşu da Ankara Petersburg, yani Ust Luga yönü.
 
 Üç kaynaktan ikisi Ust Luga diyor, personel verisi Amur diyor. Bu tek satır bile
@@ -449,12 +440,18 @@ binlerce sahte satır üretirdi.
 
 ### Çıktı
 
-Altı sayfalı Excel üretiliyor: Mahsuplasma, Kontrol, Sonuc, Incele, Eslesmedi,
-Ozet. Satır dökümünde her satır 25 kolon taşıyor ve içinde eşleştirme yöntemi,
-güven skoru ve Türkçe gerekçe var. Böylece "bu satır neden bu projeye yazıldı"
-sorusu her zaman cevaplanabiliyor.
+Sekiz sayfalı Excel üretiliyor: Ozet (kapak), Mahsuplasma, Kontrol, Sirket
+Kirilimi, Harita Onerileri, Sonuc, Incele, Eslesmedi. Satır dökümünde her satır
+28 kolon taşıyor: eşleştirme yöntemi, güven skoru, Türkçe gerekçe, evrak / fatura
+numarası ve mail konusu. Böylece "bu satır neden bu projeye yazıldı" ve "hangi
+faturaya ait" soruları her zaman cevaplanabiliyor.
 
-Sayfa sırası iş akışı sırasıdır: önce muhasebeye gidecek olan, sonra kanıtı.
+Biçim RHI kurumsal kimliğidir: Georgia başlıklar, Arial gövde, lacivert tablo
+başlıkları, gizli kılavuz çizgileri, `0,0%` yüzdeler. Kapak sayfası en baştadır;
+dosya açıldığında tutarlar, mutabakat durumu ve şirket kırılımı tek bakışta
+görünür.
+
+Sayfa sırası okuma sırasıdır: önce kapak, sonra muhasebeye gidecek olan, sonra kanıtı.
 Ayrıntı için [bölüm 13](#13-nihai-çıktı-mahsuplaşma-tablosu).
 
 ### Testler
@@ -540,9 +537,9 @@ Sebep basit: iki dosya aynı kişiyi farklı yazıyor.
 
 | Ham döküm | Elle dağıtılmış | Sorun |
 |---|---|---|
-| `OZAKAY MUSTAFAKEMAL` | `MUSTAFA KEMAL OZAKAY` | Sıra ters, ad bitişik |
-| `OZAKAY MUSTAFAKEMA` | `MUSTAFA KEMAL OZAKAY` | Kırpılmış (18 karakter) |
-| `YALCINKAYA ANIL` | `ALI YALCINKAYA` | Ad yanlış yazılmış |
+| `DEMIRALP AHMETCAN` | `AHMET CAN DEMIRALP` | Sıra ters, ad bitişik |
+| `DEMIRALP AHMETCA` | `AHMET CAN DEMIRALP` | Kırpılmış (18 karakter) |
+| `KARATAS ANIL` | `ALI YALCINKAYA` | Ad yanlış yazılmış |
 | (boş) | (boş) | Kurumsal kalem, kişi yok |
 
 Çözüm iki katmanlı. Önce kaba bir kova: belge tarihi + mutlak tutar + para

@@ -25,6 +25,8 @@ import datetime
 import unittest
 from pathlib import Path
 
+from testler.altin import altin, altin_veya_none
+
 try:
     from masraf.kayit import PersonelDefteri
     from masraf.masraf_merkezi import MasrafMerkeziHaritasi, masraf_merkezi_coz
@@ -61,8 +63,8 @@ class DonemEslesmesiTest(unittest.TestCase):
         cls.defter = PersonelDefteri.yukle(PERSONEL)
         cls.harita = (MasrafMerkeziHaritasi.yukle(HARITA) if HARITA.is_file()
                       else MasrafMerkeziHaritasi.yukle(Path("veri") / "yok.csv"))
-        # Butun donemlerde kaydi olan, ayrilmamis bir kisi: Ozakay Mustafa Kemal
-        cls.aktif_sicil = "100003"
+        # Butun donemlerde kaydi olan, ayrilmamis bir kisi (altin.json'dan).
+        cls.aktif_sicil = altin("aktif_sicil", "sicil")
 
     # ---------------- donem_kaydi seviyesi ----------------
 

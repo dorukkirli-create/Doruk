@@ -19,6 +19,8 @@ haneli rakam olarak dogrulanir, sicil metne cevrilip '.0' eki atilir.
 
 from __future__ import annotations
 
+import re
+
 from pathlib import Path
 from typing import Any
 
@@ -55,8 +57,9 @@ _SIRKET_ESLERI: dict[str, str] = {
     "rc moskova": "RC",
     "rsd": "RSD",
     "renstroydetal": "RSD",
-    "renservis": "RENSERVIS",
-    "rs": "RENSERVIS",
+    "renservis": "RSS",
+    "rs": "RSS",
+    "rss": "RSS",
 }
 
 
@@ -94,6 +97,15 @@ def _hucre_alici(satir: list[Any]):
 # 1) Assessment yansitma
 # --------------------------------------------------------------------------
 
+_FATURA_NO_DESENI = re.compile(r"\b([A-Z]{2,4}\d{8,})\b")
+
+
+def _dosya_adindan_fatura_no(dosya_adi: str) -> str | None:
+    """'ASS2026000002867 300620261013 ENERGO Fatura Detayi.xlsx' -> 'ASS2026000002867'."""
+    m = _FATURA_NO_DESENI.search(dosya_adi or "")
+    return m.group(1) if m else None
+
+
 def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
     """Assessment yansitma dosyasinin 'Kisi Listesi' sayfasini okur.
 
@@ -129,6 +141,16 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
     i_pay = kolon_ara(harita, "energo payi", "pay")
     i_yansitma = kolon_ara(harita, "yansitma", "masraf yeri", "sirket")
 
+    # Tedarikci her fatura icin ayrica 'ASS... Fatura Detayi.xlsx' gonderir:
+    # ayni katilimcilar, ama TUTAR KOLONU YOK. Tutarlar yansitma dosyasinin
+    # 'Kisi Listesi' sayfasindadir. Bu dosya fatura degil, faturanin kisi
+    # listesidir; gider satiri uretirse mutabakat 'tutar okunamadi' diye
+    # acik kalir. Kutuk olarak isaretlenir, mahsuplasmada yansitma
+    # satirlariyla capraz kontrol edilir (bkz. mahsuplasma.detay_kontrolu).
+    detay_listesi = i_pay is None and i_usd is None and i_toplam is None
+    kaynak_tip = "energo_assessment_detay" if detay_listesi else "energo_assessment"
+    dosya_fatura_no = _dosya_adindan_fatura_no(p.name)
+
     sonuclar: list[GiderSatiri] = []
     for r in range(baslik_i + 1, len(satirlar)):
         satir = satirlar[r]
@@ -140,6 +162,7 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
         tutar = hucre_sayisi(al(i_pay))
         if tutar is None:
             tutar = hucre_sayisi(al(i_usd))
+        fatura_no = hucre_metni(al(i_fatura_no)) or dosya_fatura_no
 
         fatura_tarihi = hucre_tarihi(al(i_fatura_tarihi), calisma.datemode)
         katilim_tarihi = hucre_tarihi(al(i_tarih), calisma.datemode)
@@ -147,7 +170,7 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
         sonuclar.append(
             GiderSatiri(
                 kaynak_dosya=p.name,
-                kaynak_tip="energo_assessment",
+                kaynak_tip=kaynak_tip,
                 satir_no=r + 1,
                 belge_tarihi=fatura_tarihi or katilim_tarihi,
                 aciklama=" | ".join(
@@ -156,7 +179,7 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
                         katilimci,
                         hucre_metni(al(i_paket)),
                         hucre_metni(al(i_tur)),
-                        hucre_metni(al(i_fatura_no)),
+                        fatura_no,
                     )
                     if m
                 ),
@@ -175,10 +198,13 @@ def assessment_oku(yol: str | Path) -> list[GiderSatiri]:
                     "uygulama_turu": hucre_metni(al(i_tur)),
                     "uygulama_yeri": hucre_metni(al(i_yer)),
                     "paket": hucre_metni(al(i_paket)),
-                    "fatura_no": hucre_metni(al(i_fatura_no)),
+                    "fatura_no": fatura_no,
                     "fatura_toplam": hucre_sayisi(al(i_toplam)),
                     "fatura_usd": hucre_sayisi(al(i_usd)),
-                    "tutar_yontemi": "kisi satirindaki Energo Payi",
+                    "tutar_yontemi": (
+                        "fatura detay listesi; tutar yansitma dosyasinda"
+                        if detay_listesi else "kisi satirindaki Energo Payi"
+                    ),
                 },
             )
         )
@@ -217,6 +243,18 @@ def _arabulucu_fatura_ozeti(calisma: Any) -> dict[str, float]:
             continue
         ozet[anahtar] = ozet.get(anahtar, 0.0) + tutar
     return ozet
+
+
+def _kurusa_bol(toplam: float, adet: int) -> list[float]:
+    """toplam'i adet kisiye kurus hassasiyetinde, artiksiz boler.
+
+    Sonuc listesinin toplami round(toplam, 2)'ye ESITTIR. Artik kuruslar
+    listenin basindaki kisilere birer birer eklenir (en buyuk kalan yontemi
+    esit paylarda buna indirgenir).
+    """
+    kurus = int(round(toplam * 100))
+    taban, artik = divmod(kurus, adet)
+    return [(taban + (1 if i < artik else 0)) / 100 for i in range(adet)]
 
 
 def arabulucu_oku(yol: str | Path) -> list[GiderSatiri]:
@@ -275,20 +313,52 @@ def arabulucu_oku(yol: str | Path) -> list[GiderSatiri]:
         if anahtar:
             sayimlar[anahtar] = sayimlar.get(anahtar, 0) + 1
 
+    # Etiket uyusmazligi koprusu. Tedarikci ozet sayfasinda 'RSD' yazar,
+    # kisi listesinde 'Renservis' der; ikisi ayni paydir ama sozlukte ayni
+    # anahtara dusmez. Sozlugu genisletmek kirilgan: her ay yeni bir yazim
+    # gelebilir. Saglam kural: kisisiz kalan TEK bir kova ve kovasiz kalan
+    # kisiler varsa, o kisiler o kovanindir. Olculdu: Temmuz 2026'da bu
+    # kopru olmadan 76,78 USD sessizce dagilim disinda kaliyordu.
+    kisisiz_kovalar = [k for k in fatura_ozeti if not sayimlar.get(k)]
+    kovasiz_kisiler = [k for k in sayimlar if k not in fatura_ozeti]
+    kopru: dict[str, str] = {}
+    if len(kisisiz_kovalar) == 1 and kovasiz_kisiler:
+        for k in kovasiz_kisiler:
+            kopru[k] = kisisiz_kovalar[0]
+        for k in kovasiz_kisiler:
+            sayimlar[kisisiz_kovalar[0]] = sayimlar.get(kisisiz_kovalar[0], 0) + sayimlar.pop(k)
+
+    # Esit bolme kurusta kayip yaratir: 1709,91 / 22 = 77,7233 -> 77,72 x 22 =
+    # 1709,84; yedi kurus yok olur ve fatura beyanla kapanmaz. Kurus artigi
+    # ilk kisilere birer kurus olarak eklenir; boylece kisi tutarlari toplami
+    # sirket toplaminin kendisine esittir. Olculdu: Temmuz 2026'da 0,07 USD.
+    paylar: dict[str, list[float]] = {
+        k: _kurusa_bol(fatura_ozeti[k], n)
+        for k, n in sayimlar.items() if k in fatura_ozeti and n
+    }
+    pay_sirasi: dict[str, int] = {k: 0 for k in paylar}
+
     sonuclar: list[GiderSatiri] = []
     for r, satir in ham_satirlar:
         al = _hucre_alici(satir)
         personel = hucre_metni(al(i_personel))
-        sirket = _sirket_anahtari(al(i_sirket))
+        sirket_ham = _sirket_anahtari(al(i_sirket))
+        sirket = kopru.get(sirket_ham, sirket_ham)
 
         tutar: float | None = None
         yontem = "fatura detayinda eslesen masraf yeri yok"
-        if sirket and sirket in fatura_ozeti and sayimlar.get(sirket):
-            tutar = round(fatura_ozeti[sirket] / sayimlar[sirket], 2)
+        if sirket in paylar:
+            tutar = paylar[sirket][pay_sirasi[sirket]]
+            pay_sirasi[sirket] += 1
             yontem = (
                 f"'{sirket}' masraf yeri toplami "
                 f"({fatura_ozeti[sirket]:.2f}) / {sayimlar[sirket]} kisi"
             )
+            if abs(tutar * sayimlar[sirket] - fatura_ozeti[sirket]) >= 0.005:
+                yontem += "; kurus artigi ilk kisilere dagitildi"
+            if sirket_ham != sirket:
+                yontem += (f"; kisi listesinde '{sirket_ham}' yaziyor, fatura detayinda "
+                           f"karsiligi olmayan tek kova '{sirket}' oldugu icin ona baglandi")
 
         olay_tarihi = hucre_tarihi(al(i_tarih), calisma.datemode)
         fatura_tarihi = hucre_tarihi(al(i_fatura_tarihi), calisma.datemode)

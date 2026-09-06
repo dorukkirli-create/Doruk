@@ -107,8 +107,11 @@ KONTROL_KOLONLARI: tuple[tuple[str, str, int], ...] = (
     ("Fark", "sayi", 11),
     ("Satir", "tamsayi", 7),
     ("Yinelenen Satir", "tamsayi", 14),
+    ("Tutarsiz Satir", "tamsayi", 13),
+    ("Faturada Yazan Toplam", "sayi", 18),
+    ("Beyan Farki", "sayi", 12),
     ("Dagitim Orani", "yuzde", 13),
-    ("Mutabakat", "metin", 16),
+    ("Mutabakat", "metin", 40),
 )
 
 #: Mahsup satirinin 'Durum' sutununda gosterilecek kisa uyarilar.
@@ -229,7 +232,7 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
         _metin(sonuc.statu),
         _metin(sonuc.kategori),
         _tarih(sonuc.cikis_tarihi),
-        satir.tutar,
+        round(satir.tutar, 2) if isinstance(satir.tutar, (int, float)) else satir.tutar,
         _metin(satir.para_birimi),
         _metin(satir.masraf_merkezi_kaynak),
         # Denetim izi: bir satir sorgulandiginda hangi belgeye ait oldugu
@@ -292,7 +295,7 @@ class _Bicimler:
         self.kpi_metin = calisma.add_format({
             "font_name": BASLIK_YAZI, "font_size": 15, "bold": True,
             "font_color": LACIVERT, "valign": "vcenter"})
-        self.kpi_etiket = f(font_size=9, font_color=ORTA_GRI, valign="top")
+        self.kpi_etiket = f(font_size=9, font_color=ORTA_GRI, valign="top", text_wrap=True)
         self.durum_iyi = f(bold=True, font_color=BEYAZ, bg_color="#2E7D32", align="center",
                            valign="vcenter")
         self.durum_kotu = f(bold=True, font_color=BEYAZ, bg_color="#C62828", align="center",
@@ -549,7 +552,7 @@ def _ozet_yaz(
     dikkat: list[str] = []
     if mahsup is not None:
         for c in getattr(mahsup, "isaret_celiskileri", []) or []:
-            dikkat.append("İşaret çelişkisi: " + c.aciklama())
+            dikkat.append("İşaret çelişkisi: " + c.kisa_aciklama())
         if getattr(mahsup, "tutarsiz_satir_sayisi", 0):
             dikkat.append(f"{mahsup.tutarsiz_satir_sayisi} satırda tutar okunamadı; dağılıma girmedi.")
     if oneriler:
@@ -690,8 +693,11 @@ def kontrol_satir_degerleri(kontrol: Any) -> list[Any]:
         kontrol.fark,
         kontrol.satir_sayisi,
         kontrol.yinelenen_satir,
+        kontrol.tutarsiz_satir,
+        kontrol.beyan_toplam,
+        kontrol.beyan_farki,
         round(kontrol.dagitim_orani / 100.0, 4),
-        "KAPANDI" if kontrol.kapali_mi else "ACIK - KONTROL EDIN",
+        "KAPANDI" if kontrol.kapali_mi else f"ACIK - {kontrol.acik_sebebi}",
     ]
 
 
@@ -766,6 +772,8 @@ def _sirket_ozeti_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
     """
     if not hasattr(tablo, "sirket_ozeti"):
         return
+    from masraf.mahsuplasma import DAGITILAMAYAN
+
     degerler: list[list[Any]] = []
     renkler: list[str] = []
     for grup in tablo.sirket_ozeti():
@@ -776,14 +784,20 @@ def _sirket_ozeti_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
         ])
         renkler.append("baslik")
         for proje in grup["projeler"]:
-            uyari = "" if proje["haritada_var"] else "HARITADA TANIMLI DEGIL"
+            if proje["masraf_merkezi"] == DAGITILAMAYAN:
+                # Harita sorunu degil: kisi ya da merkez bulunamadi.
+                uyari, renk = "KISI / MERKEZ BULUNAMADI", "engel"
+            elif proje["haritada_var"]:
+                uyari, renk = "", "tamam"
+            else:
+                uyari, renk = "HARITADA TANIMLI DEGIL", "uyari"
             degerler.append([
                 "    " + str(proje["masraf_merkezi_adi"] or proje["masraf_merkezi"]),
                 "proje", proje["masraf_merkezi"],
                 proje["tutar"], grup["para_birimi"], proje["pay_yuzde"] / 100.0,
                 proje["satir_sayisi"], proje["kisi_sayisi"], uyari,
             ])
-            renkler.append("tamam" if proje["haritada_var"] else "uyari")
+            renkler.append(renk)
     _tablo_yaz(
         calisma, "Sirket Kirilimi", SIRKET_KOLONLARI, degerler, renkler, bicimler,
         bos_mesaj="(Dagitilacak satir yok)",
@@ -851,7 +865,7 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
     sayfa = _tablo_yaz(
         calisma, "Kontrol", KONTROL_KOLONLARI, k_degerler, k_renkler, bicimler,
         bos_mesaj="(Kontrol edilecek fatura yok)",
-        toplam_sutunlari=(2, 3, 4, 5, 6, 8, 9),   # Fark (7) ve oran (10) toplanmaz
+        toplam_sutunlari=(2, 3, 4, 5, 6, 8, 9, 10, 11),   # Fark, Beyan Farki ve oran toplanmaz
     )
 
     # Kontrol sayfasinin altina aciklamalar ve isaret celiskileri.
@@ -870,9 +884,32 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
         "Dagitilamayan = kisi veya masraf merkezi bulunamadigi icin projeye "
         "yazilamayan tutar. Silinmez; Mahsuplasma sayfasinda "
         "'(DAGITILAMAYAN)' satiri olarak durur.",
+        "Tutarsiz Satir = dosyada var ama tutari okunamayan satirlar. Sifir "
+        "degilse fatura toplaminin bir kismi dagilima girmemistir; mutabakat "
+        "ACIK kalir.",
+        "Faturada Yazan Toplam = kaynak dosyanin kendi beyan ettigi toplam "
+        "(varsa). Beyan Farki = bu toplam ile okunan arasindaki fark; sifir "
+        "degilse okuyucu bir seyi kacirmistir.",
     ):
         sayfa.write_string(satir, 0, metin, bicimler.ozet_metin)
         satir += 1
+
+    if getattr(tablo, "detay_kontrolleri", None):
+        satir += 1
+        sayfa.write_string(satir, 0, "Fatura detay listeleri (capraz kontrol)", bicimler.bolum)
+        satir += 1
+        sayfa.write_string(
+            satir, 0,
+            "Tedarikci her fatura icin tutarsiz bir katilimci listesi gonderir; "
+            "tutar yansitma dosyasindadir. Iki listedeki kisiler ayni olmali.",
+            bicimler.ozet_metin,
+        )
+        satir += 1
+        for dk in tablo.detay_kontrolleri:
+            bicim = bicimler.durum_iyi if dk.tutarli_mi else bicimler.durum_kotu
+            sayfa.write_string(satir, 0, "TAMAM" if dk.tutarli_mi else "UYUSMUYOR", bicim)
+            sayfa.write_string(satir, 1, f"{dk.aciklama()}  [{dk.kaynak}]", bicimler.ozet_metin)
+            satir += 1
 
     if getattr(tablo, "isaret_celiskileri", None):
         satir += 1

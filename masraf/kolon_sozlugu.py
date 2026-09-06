@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 from datetime import date
 from pathlib import Path
 from typing import Iterable
@@ -62,7 +63,17 @@ ORNEK_SATIRLAR: tuple[tuple[str, str, str], ...] = (
 
 
 def varsayilan_yol(veri_dizini: str | Path = "veri") -> Path:
-    """Sozluk dosyasinin varsayilan yolu."""
+    """Sozluk dosyasinin varsayilan yolu.
+
+    Okuyucular calisma dizinine gore 'veri' der; oysa boru hatti hangi veri
+    dizinini kullandigini bilir ve MASRAF_VERI_DIZINI ortam degiskenine
+    yazar. Varsayilan istendiginde once ona bakilir; boylece arayuz baska
+    bir dizinden calissa da ayni sozluk bulunur.
+    """
+    if str(veri_dizini) == "veri":
+        ortam = os.environ.get("MASRAF_VERI_DIZINI")
+        if ortam:
+            return Path(ortam) / DOSYA_ADI
     return Path(veri_dizini) / DOSYA_ADI
 
 

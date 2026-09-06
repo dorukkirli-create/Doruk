@@ -14,6 +14,7 @@ KAYNAK_TIPLERI: frozenset[str] = frozenset({
     "antik_cari",
     "yuzyil_dagitilmis",
     "energo_assessment",
+    "energo_assessment_detay",
     "energo_arabulucu",
     "energo_saglik",
     "koc_katilimci",
@@ -62,7 +63,7 @@ class GiderSatiri:
     """
 
     kaynak_dosya: str
-    kaynak_tip: str            # 'antik_cari' | 'yuzyil_dagitilmis' | 'energo_assessment' | 'energo_arabulucu' | 'energo_saglik' | 'koc_katilimci' | 'genel'
+    kaynak_tip: str            # 'antik_cari' | 'yuzyil_dagitilmis' | 'energo_assessment' | 'energo_assessment_detay' | 'energo_arabulucu' | 'energo_saglik' | 'koc_katilimci' | 'genel'
     satir_no: int              # kaynak dosyadaki 1 tabanli satir
     belge_tarihi: date | None
     aciklama: str

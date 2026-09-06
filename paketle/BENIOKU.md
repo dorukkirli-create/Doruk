@@ -21,6 +21,8 @@ Otomasyon\
   OKU_BENI.txt
   1_FATURALAR\        <- faturalar buraya
   2_EXCEL_CIKTI\      <- Excel buraya cikar
+  3_ISLENENLER\       <- islenen faturalar otomatik buraya tasinir (+ OZET.txt)
+  CALISTIRMA_GECMISI.txt  <- her calistirmanin denetim kaydi
   PERSONEL\           <- personel ana verisi + 1C listesi
   veri\               <- harita ve ogrenilen defterler
   program\            <- python.exe, kutuphaneler, kod (kullanici dokunmaz)
@@ -49,7 +51,7 @@ Paketi 30 MB altina indirmek icin su parcalar cikarilir. Her biri once
 
 Kirpmadan sonra dogrulama, bu modulleri `sys.meta_path` ile engelleyip
 boru hattini gercek ornek mesajla ucdan uca calistirarak yapilir. Beklenen
-sonuc: 405 satir okunur, 34 mahsup satiri uretilir, mutabakat kapanir.
+sonuc: 405 satir okunur, 35 mahsup satiri uretilir, mutabakat kapanir.
 
 ## Boyut
 

@@ -252,8 +252,8 @@ footer{padding:var(--s5) 0 var(--s6);color:var(--text-dim);font-size:12.5px;
       </table>
     </div>
     <p class="note" style="margin-top:var(--s3)">İsim eşleştirmesi göründüğünden zordur.
-    Havayolu <span class="mono">OZAKAY/MUSTAFAKEMAL</span> yazar: soyad önce, ad bitişik.
-    Sistem bunu açıp <span class="mono">Ozakay Mustafa Kemal</span> kaydına bağlar.</p>
+    Havayolu <span class="mono">DEMIRALP/AHMETCAN</span> yazar: soyad önce, ad bitişik.
+    Sistem bunu açıp <span class="mono">Demiralp Ahmet Can</span> kaydına bağlar.</p>
   </section>
 
   <section>
@@ -388,13 +388,15 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
   <section>
     <div class="sec-head">
       <h2>Excel nasıl okunur</h2>
-      <p>Sekiz sayfa var, sırası iş akışı sırasıdır: önce muhasebeye gidecek olan, sonra kanıtı.</p>
+      <p>Sekiz sayfa var, sırası okuma sırasıdır: önce kapak, sonra muhasebeye gidecek olan, sonra kanıtı.
+      Biçim RHI kurumsal kimliğidir; dosya açıldığında ilk görülen kapaktır.</p>
     </div>
     <div class="tw">
       <table>
         <thead><tr><th style="width:22%">Sayfa</th><th>İçeriği</th></tr></thead>
         <tbody>
-          <tr><td><strong>Mahsuplasma</strong></td><td><strong>Muhasebeye giden tablo budur.</strong> Her fatura için hangi projeye ne kadar yazılacağı.</td></tr>
+          <tr><td><strong>Ozet</strong></td><td><strong>Kapak.</strong> Tutarlar, mutabakat durumu (yeşil = para kaybolmadı), şirket kırılımı, en büyük merkezler, dikkat notları ve tıklanabilir sayfa rehberi.</td></tr>
+          <tr><td><strong>Mahsuplasma</strong></td><td><strong>Muhasebeye giden tablo budur.</strong> Her fatura için hangi şirkete ve projeye ne kadar yazılacağı.</td></tr>
           <tr><td><strong>Kontrol</strong></td><td>Mutabakat. <em>Fark</em> sütunu sıfır olmak zorunda.</td></tr>
           <tr><td><strong>Sirket Kirilimi</strong></td><td>Tüzel kişi üstte, projeleri altında. Muhasebenin okuma sırası.</td></tr>
           <tr><td>Harita Onerileri</td><td>Haritada tanımlı olmayan görev yerleri, şirketi 1C’den bulunmuş ve CSV satırı hazır. Boşsa yapılacak bir şey yok.</td></tr>
@@ -423,9 +425,11 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         kendiliğinden açılır.</p>
       </div>
       <div class="doer">
-        <span class="doer__k">3 &middot; Temizle</span>
-        <p>İşlem bitince <span class="mono">1_FATURALAR</span> klasörünü boşaltın. Eski
-        faturalar kalırsa gelecek ay tekrar işlenir ve tutarlar iki kez sayılır.</p>
+        <span class="doer__k">3 &middot; Kontrol edin</span>
+        <p>İşlenen faturalar kendiliğinden <span class="mono">3_ISLENENLER</span>
+        altına taşınır, çalıştırma <span class="mono">CALISTIRMA_GECMISI.txt</span>
+        dosyasına kaydedilir. Sizin yapacağınız tek şey Excel’in kapağındaki mutabakat
+        satırının yeşil olduğunu görmek.</p>
       </div>
     </div>
   </section>
@@ -444,13 +448,13 @@ güven   : 0,60          masraf merkezi: GPP          durum: İNCELE</pre>
         yoktur ve hiçbir zaman otomatik eşleşmez. Doğru davranış onu
         <span class="mono">harici_kisiler.csv</span> dosyasına yazmaktır:</p>
         <div class="tw"><table><thead><tr><th>Kolon</th><th>Değer</th></tr></thead><tbody>
-          <tr><td class="mono">isim_norm</td><td>TALIP KEREM KOCKESEN</td></tr>
-          <tr><td class="mono">ad_soyad</td><td>Talip Kerem Kockesen</td></tr>
+          <tr><td class="mono">isim_norm</td><td>HALIT CAN KARADUMAN</td></tr>
+          <tr><td class="mono">ad_soyad</td><td>Halit Can Karaduman</td></tr>
           <tr><td class="mono">kurum</td><td>Dis konusmaci</td></tr>
           <tr><td class="mono">masraf_merkezi</td><td>RHI Russia - Headquarter (Moscow)</td></tr>
         </tbody></table></div>
         <p class="note" style="margin-top:var(--s3)">Tek satır yeter. Fatura metni
-        <span class="mono">KOCKESEN TALIPKEREM</span> yazsa bile bulunur; sistem ismi
+        <span class="mono">KARADUMAN HALITCAN</span> yazsa bile bulunur; sistem ismi
         sıradan ve bitişiklikten bağımsız karşılaştırır.</p>
       </div>
       <div>

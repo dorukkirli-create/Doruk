@@ -60,7 +60,7 @@ class CikarilanEk:
         return " > ".join(self.zincir + [self.ad])
 
 
-def _guvenli_ad(ad: str, varsayilan: str = "adsiz", azami: int = 80) -> str:
+def _guvenli_ad(ad: str, varsayilan: str = "adsiz", azami: int = 60) -> str:
     """Dosya adini isletim sistemi icin guvenli hale getirir.
 
     Outlook ekleri '>>: Konu' gibi adlar tasiyabiliyor, zip icinde de

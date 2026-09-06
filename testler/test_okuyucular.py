@@ -31,6 +31,8 @@ try:
 except ImportError:
     MODUL_VAR = False
 
+from testler.altin import altin, altin_veya_none
+
 ORNEK = KOK / "ornek_veri"
 ANTIK = ORNEK / "antik_travel" / "ANTIK_CARI_TEMMUZ_2026.xls"
 YUZYIL = ORNEK / "antik_travel" / "YUZYIL_TEMMUZ_2026_ELLE_DAGITILMIS.xlsx"
@@ -98,16 +100,16 @@ class AntikCariTest(OkuyucuTemeli):
         self.sozlesmeyi_dogrula(self.satirlar, "antik_cari")
 
     def test_bilet_satirinda_isim_temizlenmis(self):
-        # 'TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI'
+        # 'TK.......... SOYAD/ADAD MR  IST-CDG BILET BEDELI'
         satir = next(s for s in self.satirlar if s.satir_no == 10)
         self.assertEqual(satir.gider_tipi, "Bilet")
-        self.assertEqual(satir.kisi_ham, "OZAKAY MUSTAFAKEMAL")
+        self.assertEqual(satir.kisi_ham, altin("okuyucu", "bilet_kisi"))
 
     def test_otel_satirinda_otel_adi_atilmis(self):
-        # 'CIHAN BALABAN GRAND PLAZA HOTEL HANOI [...] KONAKLAMA YURTDISI'
+        # 'AD SOYAD GRAND PLAZA HOTEL HANOI [...] KONAKLAMA YURTDISI'
         satir = next(s for s in self.satirlar if s.satir_no == 12)
         self.assertEqual(satir.gider_tipi, "Otel")
-        self.assertEqual(satir.kisi_ham, "CIHAN BALABAN")
+        self.assertEqual(satir.kisi_ham, altin("okuyucu", "otel_kisi"))
 
     def test_gider_tipleri_dagilimi(self):
         tipler = {s.gider_tipi for s in self.satirlar}
@@ -303,6 +305,86 @@ class DosyaTipiKesfiTest(unittest.TestCase):
             with self.subTest(dosya=yol.name):
                 veri_gerek(self, yol)
                 self.assertEqual(dosya_tipini_bul(yol), beklenen)
+
+
+
+class KurusaBolTest(unittest.TestCase):
+    """Sirket toplami kisilere kurus kaybi olmadan bolunur."""
+
+    def test_toplam_kurusuna_kadar_korunur(self):
+        from masraf.okuyucular.energo import _kurusa_bol
+        for toplam, adet in ((1709.9136, 22), (157.1184, 2), (76.7088, 1), (100.0, 3), (0.01, 2), (10.0, 4)):
+            with self.subTest(toplam=toplam, adet=adet):
+                paylar = _kurusa_bol(toplam, adet)
+                self.assertEqual(len(paylar), adet)
+                self.assertEqual(round(sum(paylar), 2), round(toplam, 2))
+                # Paylar arasinda en fazla 1 kurus fark olur; artik basa gider.
+                self.assertLessEqual(max(paylar) - min(paylar), 0.01 + 1e-9)
+                self.assertEqual(paylar, sorted(paylar, reverse=True))
+
+    def test_temmuz_2026_ornegi(self):
+        from masraf.okuyucular.energo import _kurusa_bol
+        paylar = _kurusa_bol(1709.9136, 22)
+        self.assertEqual(paylar.count(77.73), 7)
+        self.assertEqual(paylar.count(77.72), 15)
+
+
+class FaturaNoDesenTest(unittest.TestCase):
+    def test_dosya_adindan(self):
+        from masraf.okuyucular.energo import _dosya_adindan_fatura_no
+        self.assertEqual(_dosya_adindan_fatura_no("ASS2026000002867 300620261013 ENERGO Fatura Detayı.xlsx"),
+                         "ASS2026000002867")
+        self.assertEqual(_dosya_adindan_fatura_no("ASS2026000002187 - 220520261131 ENERGO Fatura Detayı.xlsx"),
+                         "ASS2026000002187")
+        self.assertEqual(_dosya_adindan_fatura_no("UNF2026000000655.pdf"), "UNF2026000000655")
+        self.assertIsNone(_dosya_adindan_fatura_no("Katılımcı Listesi.xlsx"))
+
+
+@unittest.skipUnless(MODUL_VAR, "masraf.okuyucular bulunamadi")
+class TutarsizAssessmentDetayTest(unittest.TestCase):
+    """Tutar kolonu olmayan 'Fatura Detayi' listesi kutuk olarak okunur."""
+
+    def _dosya(self, klasor, ad, basliklar, satirlar):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Sayfa1"
+        ws.append(basliklar)
+        for r in satirlar:
+            ws.append(r)
+        yol = Path(klasor) / ad
+        wb.save(yol)
+        return yol
+
+    def test_tutar_kolonu_yoksa_detay(self):
+        import tempfile
+        from masraf.okuyucular.energo import assessment_oku
+        with tempfile.TemporaryDirectory() as d:
+            yol = self._dosya(
+                d, "ASS2026000009999 010720261000 ENERGO Fatura Detayı.xlsx",
+                ["Tarih", "Firma", "Katılımcı", "Pozisyon", "Firma Yetkilisi", "Uygulama Türü", "Uygulama Yeri", "Paket"],
+                [["25.06.2026", "RHI", "Ornek Kisi", "Muhendis", "Yetkili", "Online DM", "Online", "TEAM LEADER"]],
+            )
+            (satir,) = assessment_oku(yol)
+        self.assertEqual(satir.kaynak_tip, "energo_assessment_detay")
+        self.assertIsNone(satir.tutar)
+        self.assertEqual(satir.ek["fatura_no"], "ASS2026000009999")
+        self.assertIn("detay listesi", satir.ek["tutar_yontemi"])
+        self.assertEqual(satir.kisi_ham, "Ornek Kisi")
+
+    def test_tutar_kolonu_varsa_normal(self):
+        import tempfile
+        from masraf.okuyucular.energo import assessment_oku
+        with tempfile.TemporaryDirectory() as d:
+            yol = self._dosya(
+                d, "Yansitma.xlsx",
+                ["Tarih", "Katılımcı", "Paket", "Fatura Numarası", "Toplam", "USD", "Energo Payı", "Yansıtma"],
+                [["25.06.2026", "Ornek Kisi", "MANAGER", "ASS2026000009999", 49500, 1087.25, 1304.7, "RHI"]],
+            )
+            (satir,) = assessment_oku(yol)
+        self.assertEqual(satir.kaynak_tip, "energo_assessment")
+        self.assertEqual(satir.tutar, 1304.7)
+        self.assertEqual(satir.ek["fatura_no"], "ASS2026000009999")
 
 
 if __name__ == "__main__":

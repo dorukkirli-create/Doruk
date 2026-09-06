@@ -77,7 +77,7 @@ class OneriUretTest(unittest.TestCase):
 
     def test_firm2_sirket_olarak_kullanilir(self):
         defter = SahteDefter([
-            {"gorev_yeri": "One Tower", "sirket": "KASIM KOS", "sirket2": "RC"},
+            {"gorev_yeri": "One Tower", "sirket": "LLC A", "sirket2": "RC"},
             {"gorev_yeri": "One Tower", "sirket": "LLC X", "sirket2": "RC"},
         ])
         oneriler = oneri_uret([self._sonuc("One Tower", 500.0, False)],

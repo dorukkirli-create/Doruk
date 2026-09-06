@@ -1,16 +1,17 @@
 """Kademeli eslestiricinin altin ornek testleri (masraf.eslestirici).
 
 Buradaki ornekler Temmuz 2026 seyahat dosyasindan ELLE dogrulanmis gercek
-vakalardir. Her biri farkli bir eslestirme kademesini temsil eder:
+vakalardir; adlar ve siciller depoya girmez, ``ornek_veri/altin.json``
+dosyasindan okunur (bkz. testler/altin.py). Her biri farkli bir kademeyi
+temsil eder:
 
-    tam_isim         COSKUN EMRE            -> 512495
-    bitisik ad       OZAKAY MUSTAFAKEMAL    -> 100003
-    transliterasyon  IYLMAZ GEKHAN          -> 105045
-    transliterasyon  YRMAK MEKHMET VEISI    -> 300973
-    prefix (kesik)   ALLANAZAROV/ALLANAZA   -> 626961
-    aile             GUNAL DARIA            -> Gunal Emre (102084) uzerinden
-    yok              TALIP KEREM KOCKESEN   -> dis danisman, eslesmemeli
-    cakisma          KUMAR MANOJ            -> cok aday, otomatik kabul EDILMEZ
+    tam_isim         AD SOYAD birebir
+    bitisik ad       'SOYAD ADAD' (iki ad bitisik yazilmis)
+    transliterasyon  Kiril'den geri cevrilmis yazim (GE->GO, KH->H, IY->YI)
+    prefix (kesik)   bilet sisteminin 20 karakterde kestigi isim
+    aile             es/cocuk, calisan uzerinden
+    yok              dis danisman, eslesmemeli
+    cakisma          ayni isimde cok calisan, otomatik kabul EDILMEZ
 
 Testler ogrenen defterlerin BOS bir kopyasiyla calisir; boylece
 ``veri/aliases.csv`` icindeki birikmis duzeltmeler sonucu maskelemez.
@@ -28,6 +29,8 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
+
+from testler.altin import altin, altin_veya_none
 
 try:
     from masraf.defter import Defterler
@@ -103,9 +106,10 @@ class EslestiriciTemeli(unittest.TestCase):
 class AltinOrneklerTest(EslestiriciTemeli):
     """Bilinen dogru eslesmeler."""
 
-    def test_tam_isim_coskun_emre(self):
-        sonuc = self.esle("COSKUN EMRE", "Otel")
-        self.assertEqual(sonuc.sicil, "512495")
+    def test_tam_isim(self):
+        o = altin("eslestirici", "tam_isim")
+        sonuc = self.esle(o["isim"], "Otel")
+        self.assertEqual(sonuc.sicil, o["sicil"])
         self.assertEqual(sonuc.yontem, "tam_isim")
         self.assertGreaterEqual(sonuc.guven, 0.90)
         self.assertEqual(sonuc.aday_sayisi, 1)
@@ -113,72 +117,82 @@ class AltinOrneklerTest(EslestiriciTemeli):
     def test_isim_sirasi_onemsiz(self):
         # Otel satirlarinda 'AD SOYAD', bilet satirlarinda 'SOYAD AD' gelir;
         # ikisi de ayni sicile dusmelidir.
-        duz = self.esle("MUSTAFA KEMAL OZAKAY", "Otel")
-        ters = self.esle("OZAKAY MUSTAFA KEMAL", "Bilet")
-        self.assertEqual(duz.sicil, "100003")
-        self.assertEqual(ters.sicil, "100003")
+        o = altin("eslestirici", "bitisik")
+        duz = self.esle(o["duz"], "Otel")
+        ters = self.esle(o["ters"], "Bilet")
+        self.assertEqual(duz.sicil, o["sicil"])
+        self.assertEqual(ters.sicil, o["sicil"])
 
-    def test_bitisik_ad_ozakay_mustafakemal(self):
-        # 'MUSTAFAKEMAL' -> 'MUSTAFA KEMAL' acilmali.
-        sonuc = self.esle("OZAKAY MUSTAFAKEMAL")
-        self.assertEqual(sonuc.sicil, "100003")
-        self.assertEqual(sonuc.ad_soyad, "Ozakay Mustafa Kemal")
+    def test_bitisik_ad(self):
+        # 'ADAD' -> 'AD AD' acilmali.
+        o = altin("eslestirici", "bitisik")
+        sonuc = self.esle(o["bitisik"])
+        self.assertEqual(sonuc.sicil, o["sicil"])
+        self.assertEqual(sonuc.ad_soyad, o["ad_soyad"])
         self.assertGreaterEqual(sonuc.guven, 0.85)
 
     def test_kesik_isim_ayni_dosyada_cozulur(self):
-        # Bilet sistemi ismi 20 karakterde kesebiliyor: 'OZAKAY/MUSTAFAKEMA'.
+        # Bilet sistemi ismi 20 karakterde kesebiliyor: 'SOYAD/ADAD' -> 'SOYAD/ADA'.
         # Ayni dosyada tam yazim da varsa satir dogru sicile baglanmalidir.
+        o = altin("eslestirici", "bitisik")
         satirlar = [
-            gider("OZAKAY MUSTAFAKEMAL", "Bilet", 1),
-            gider("OZAKAY MUSTAFAKEMA", "Bilet", 2),
+            gider(o["bitisik"], "Bilet", 1),
+            gider(o["kesik"], "Bilet", 2),
         ]
         sonuclar = self.eslestirici.esle_toplu(satirlar)
-        self.assertEqual(sonuclar[0].sicil, "100003")
-        self.assertEqual(sonuclar[1].sicil, "100003")
+        self.assertEqual(sonuclar[0].sicil, o["sicil"])
+        self.assertEqual(sonuclar[1].sicil, o["sicil"])
         # Kesik isim kesin degildir; otomatik kabul edilmemelidir.
         self.assertNotEqual(durum_belirle(sonuclar[1]), DURUM_OTOMATIK)
 
     def test_kesik_isim_tek_basina_adaylari_verir(self):
         # Tam yazim dosyada yoksa bile dogru kisi ADAY olarak listelenmelidir.
-        sonuc = self.esle("OZAKAY MUSTAFAKEMA")
-        self.assertIn("100003", sonuc.aday_siciller)
+        o = altin("eslestirici", "bitisik")
+        sonuc = self.esle(o["kesik"])
+        self.assertIn(o["sicil"], sonuc.aday_siciller)
         self.assertNotEqual(durum_belirle(sonuc), DURUM_OTOMATIK)
 
-    def test_prefix_allanazarov(self):
-        sonuc = self.esle("ALLANAZAROV ALLANAZA")
-        self.assertEqual(sonuc.sicil, "626961")
+    def test_prefix_kesik_isim(self):
+        o = altin("eslestirici", "prefix")
+        sonuc = self.esle(o["isim"])
+        self.assertEqual(sonuc.sicil, o["sicil"])
         self.assertEqual(sonuc.yontem, "prefix")
 
-    def test_transliterasyon_iylmaz_gekhan(self):
-        # GE->GO, KH->H : 'IYLMAZ GEKHAN' -> 'Yilmaz Gokhan'
-        sonuc = self.esle("IYLMAZ GEKHAN")
-        self.assertEqual(sonuc.sicil, "105045")
+    def test_transliterasyon_ge_go_kh_h(self):
+        # GE->GO, KH->H, IY->YI
+        o = altin("eslestirici", "translit1")
+        sonuc = self.esle(o["isim"])
+        self.assertEqual(sonuc.sicil, o["sicil"])
         self.assertEqual(sonuc.yontem, "transliterasyon")
-        self.assertEqual(sonuc.ad_soyad, "Yilmaz Gokhan")
+        self.assertEqual(sonuc.ad_soyad, o["ad_soyad"])
 
-    def test_transliterasyon_yrmak_mekhmet_veisi(self):
-        # YR->IR, KH->H, EI->EY : 'Irmak Mehmet Veysi'
-        sonuc = self.esle("YRMAK MEKHMET VEISI")
-        self.assertEqual(sonuc.sicil, "300973")
+    def test_transliterasyon_yr_ir_ei_ey(self):
+        # YR->IR, KH->H, EI->EY
+        o = altin("eslestirici", "translit2")
+        sonuc = self.esle(o["isim"])
+        self.assertEqual(sonuc.sicil, o["sicil"])
         self.assertEqual(sonuc.yontem, "transliterasyon")
 
     def test_sicil_dogrudan_verilirse_kullanilir(self):
         # Koc katilimci listesinde ID = sicil; isim eslestirmeye gerek yok.
-        satir = gider("Ozakay Mustafa Kemal", "Egitim", sicil_ham="100003")
+        o = altin("aktif_sicil")
+        satir = gider(o["ad_soyad"], "Egitim", sicil_ham=o["sicil"])
         sonuc = self.eslestirici.esle(satir)
-        self.assertEqual(sonuc.sicil, "100003")
+        self.assertEqual(sonuc.sicil, o["sicil"])
         self.assertEqual(sonuc.yontem, "sicil")
         self.assertGreaterEqual(sonuc.guven, 0.95)
 
     def test_yontem_adlari_sozlesmede_tanimli(self):
-        for kisi in ("COSKUN EMRE", "IYLMAZ GEKHAN", "TALIP KEREM KOCKESEN",
-                     "OZAKAY MUSTAFAKEMAL"):
+        e = altin("eslestirici")
+        for kisi in (e["tam_isim"]["isim"], e["translit1"]["isim"],
+                     e["harici"]["isim"], e["bitisik"]["bitisik"]):
             with self.subTest(kisi=kisi):
                 self.assertIn(self.esle(kisi).yontem, YONTEMLER)
 
     def test_aciklama_turkce_ve_dolu(self):
         # Kullanici neden o sonuca varildigini gormeli.
-        for kisi in ("COSKUN EMRE", "IYLMAZ GEKHAN", "TALIP KEREM KOCKESEN"):
+        e = altin("eslestirici")
+        for kisi in (e["tam_isim"]["isim"], e["translit1"]["isim"], e["harici"]["isim"]):
             with self.subTest(kisi=kisi):
                 aciklama = self.esle(kisi).aciklama
                 self.assertTrue(aciklama and aciklama.strip())
@@ -188,45 +202,48 @@ class AltinOrneklerTest(EslestiriciTemeli):
 class AileKuraliTest(EslestiriciTemeli):
     """Es ve cocuklarin biletleri calisanin masraf merkezine yazilir."""
 
-    def test_gunal_daria_aile_bireyi(self):
+    def test_es_ve_cocuk_aile_bireyi(self):
+        o = altin("eslestirici", "aile1")
         satirlar = [
-            gider("GUNAL EMRE", "Bilet", 1),
-            gider("GUNAL DARIA", "Bilet", 2),
-            gider("GUNAL SERAFIMA", "Bilet", 3),
+            gider(o["calisan"], "Bilet", 1),
+            gider(o["es"], "Bilet", 2),
+            gider(o["cocuk"], "Bilet", 3),
         ]
         sonuclar = self.eslestirici.esle_toplu(satirlar)
         calisan, es, cocuk = sonuclar
 
-        self.assertEqual(calisan.sicil, "102084")
+        self.assertEqual(calisan.sicil, o["sicil"])
         self.assertEqual(calisan.yontem, "tam_isim")
 
         for sonuc in (es, cocuk):
             self.assertEqual(sonuc.yontem, "aile")
-            self.assertIn("102084", sonuc.aday_siciller)
+            self.assertIn(o["sicil"], sonuc.aday_siciller)
             # Aile bireyi kesin degildir: guven dusuk, otomatik kabul yok.
             self.assertLess(sonuc.guven, 0.80)
             self.assertNotEqual(durum_belirle(sonuc), DURUM_OTOMATIK)
 
-    def test_celenligil_aile_bireyi(self):
+    def test_ad_soyad_sirali_aile_bireyi(self):
+        o = altin("eslestirici", "aile2")
         satirlar = [
-            gider("CELENLIGIL ONUR", "Bilet", 1),
-            gider("ARAS CELENLIGIL", "Otel", 2),
+            gider(o["calisan"], "Bilet", 1),
+            gider(o["uye"], "Otel", 2),
         ]
         sonuclar = self.eslestirici.esle_toplu(satirlar)
-        self.assertEqual(sonuclar[0].sicil, "423806")
+        self.assertEqual(sonuclar[0].sicil, o["sicil"])
         self.assertEqual(sonuclar[1].yontem, "aile")
-        self.assertIn("423806", sonuclar[1].aday_siciller)
+        self.assertIn(o["sicil"], sonuclar[1].aday_siciller)
 
     def test_esle_toplu_sira_bagimsiz(self):
         # Aile bireyi calisandan ONCE gelse de ayni sonuc cikmali.
+        o = altin("eslestirici", "aile1")
         ters = [
-            gider("GUNAL DARIA", "Bilet", 1),
-            gider("GUNAL EMRE", "Bilet", 2),
+            gider(o["es"], "Bilet", 1),
+            gider(o["calisan"], "Bilet", 2),
         ]
         sonuclar = self.eslestirici.esle_toplu(ters)
         self.assertEqual(sonuclar[0].yontem, "aile")
-        self.assertIn("102084", sonuclar[0].aday_siciller)
-        self.assertEqual(sonuclar[1].sicil, "102084")
+        self.assertIn(o["sicil"], sonuclar[0].aday_siciller)
+        self.assertEqual(sonuclar[1].sicil, o["sicil"])
 
 
 class EslesmeyenlerTest(EslestiriciTemeli):
@@ -234,7 +251,7 @@ class EslesmeyenlerTest(EslestiriciTemeli):
 
     def test_dis_danisman_eslesmez(self):
         # Kurumsal gelisim koclugu veren dis danisman; personel degil.
-        sonuc = self.esle("TALIP KEREM KOCKESEN", "Vize")
+        sonuc = self.esle(altin("eslestirici", "harici", "isim"), "Vize")
         self.assertEqual(sonuc.yontem, "yok")
         self.assertIsNone(sonuc.sicil)
         self.assertEqual(sonuc.guven, 0.0)
@@ -255,9 +272,9 @@ class CakismaTest(EslestiriciTemeli):
     """Ayni isimde birden fazla calisan varsa otomatik kabul YASAK."""
 
     def test_cok_adayli_isim_otomatik_kabul_edilmez(self):
-        # 'Kumar Manoj' 8 farkli sicilde geciyor (Hindistanli iscilerde
+        # Ayni isim 8 farkli sicilde geciyor (Hindistanli iscilerde
         # isim cakismasi %10,9). Sistem tahmin YURUTMEMELI.
-        sonuc = self.esle("KUMAR MANOJ", "Otel")
+        sonuc = self.esle(altin("eslestirici", "cakisma", "isim"), "Otel")
         self.assertGreater(sonuc.aday_sayisi, 1,
                            "Cakisan isim icin birden fazla aday beklenir")
         self.assertLess(sonuc.guven, 0.80)
@@ -266,7 +283,7 @@ class CakismaTest(EslestiriciTemeli):
                         "Incelemeye giden satirda adaylar listelenmeli")
 
     def test_cakisma_adaylari_incelemede_gosterilir(self):
-        sonuc = self.esle("KUMAR MUKESH", "Otel")
+        sonuc = self.esle(altin("eslestirici", "cakisma", "isim2"), "Otel")
         self.assertGreater(sonuc.aday_sayisi, 1)
         self.assertNotEqual(durum_belirle(sonuc), DURUM_OTOMATIK)
 

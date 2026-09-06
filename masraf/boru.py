@@ -18,8 +18,8 @@ Islem sirasi ve nedenleri:
 2. Yardimci kaynaklardan defterler beslenir, sonra eslestirici kurulur
    (eslestirici indekslerini kurulusta olusturur, bu yuzden sira onemlidir).
 3. Eslestirme TEK seferde, tum satirlar uzerinde yapilir. Aile bireyi kurali
-   dosya sinirini asar: 'GUNAL EMRE' hangi dosyada eslesirse eslessin,
-   'GUNAL DARIA' onun uzerinden cozulur.
+   dosya sinirini asar: 'AKSOY EMRE' hangi dosyada eslesirse eslessin,
+   'AKSOY DARIA' onun uzerinden cozulur.
 4. Her satir masraf merkezine baglanir ve durumu belirlenir.
 
 Calisma zamaninda yapay zeka veya internet KULLANILMAZ.
@@ -158,6 +158,8 @@ def _mahsup_ozeti(mahsup) -> dict:
         "kutuk_satir": mahsup.kutuk_satir_sayisi,
         "tutarsiz_satir": mahsup.tutarsiz_satir_sayisi,
         "isaret_celiskisi": len(mahsup.isaret_celiskileri),
+        "detay_kontrolu": len(mahsup.detay_kontrolleri),
+        "detay_uyusmayan": [dk.fatura_no for dk in mahsup.detay_kontrolleri if not dk.tutarli_mi],
         "kapali_mi": mahsup.kapali_mi,
         "acik_fatura": [k.kaynak for k in mahsup.acik_kontroller],
         "toplamlar": mahsup.toplamlar(),
@@ -256,6 +258,13 @@ class Boru:
 
         self.defterler = Defterler(self.ayarlar.veri_dizini)
 
+        # Okuyucular kolon sozlugunu (kolon_esanlamlilari.csv) varsayilan
+        # olarak calisma dizinindeki 'veri' altinda arar. Boru hatti gercek veri
+        # dizinini bilir; ortam degiskeniyle bildirir ki arayuz baska bir
+        # dizinden calissa da ayni sozluk kullanilsin.
+        import os
+        os.environ["MASRAF_VERI_DIZINI"] = str(Path(self.ayarlar.veri_dizini).resolve())
+
         harita_yolu = self.ayarlar.cozulmus_harita_yolu()
         self.harita = MasrafMerkeziHaritasi.yukle(harita_yolu)
         if not self.harita.kaynak_var:
@@ -298,6 +307,9 @@ class Boru:
 
         satirlar: list[GiderSatiri] = []
         toplam = max(1, len(dosya_yollari))
+        # Bu calistirmada okunan eklerin icerik ozetleri. Ayni ek iki mailde
+        # gelirse ikincisi atlanir (bkz. kesif._msg_oku_icerik).
+        gorulen_ozetler: set[str] = set()
         for sira, yol in enumerate(dosya_yollari, start=1):
             hedef = Path(yol)
             _bildir(ilerleme, 5 + 25 * (sira - 1) / toplam, f"Okunuyor: {hedef.name}")
@@ -314,7 +326,7 @@ class Boru:
                 tip = dosya_tipini_bul(hedef)
                 # kesif.oku Outlook mesajlarini, referans listelerini ve
                 # ozel parser bos donerse genel parser'a dusmeyi kendi ele alir.
-                dosya_satirlari = kesif_oku(hedef)
+                dosya_satirlari = kesif_oku(hedef, gorulen_ozetler=gorulen_ozetler)
                 if not dosya_satirlari:
                     self.hatalar.append(
                         f"{hedef.name}: dosyadan hic gider satiri cikarilamadi "
@@ -625,6 +637,7 @@ class Boru:
             )
         for celiski in mahsup.isaret_celiskileri:
             self.uyarilar.append(celiski.aciklama())
+        self.uyarilar.extend(mahsup.uyarilar)
         ozet["mahsuplasma"] = _mahsup_ozeti(mahsup)
 
         cikti_dizini = Path(self.ayarlar.cikti_dizini)
@@ -641,8 +654,18 @@ class Boru:
              "tutar": o.tutar, "satir_sayisi": o.satir_sayisi}
             for o in oneriler
         ]
-        excel_yolu = (excel_yaz(sonuclar, str(yol), ozet, mahsup, oneriler)
-                      if sonuclar else "")
+        excel_yolu = ""
+        if sonuclar:
+            try:
+                excel_yolu = excel_yaz(sonuclar, str(yol), ozet, mahsup, oneriler)
+            except PermissionError:
+                # Ayni adli dosya Excel'de acik. Cokmek yerine yanina yaz.
+                yedek = yol.with_name(f"{yol.stem}_yeni{yol.suffix}")
+                excel_yolu = excel_yaz(sonuclar, str(yedek), ozet, mahsup, oneriler)
+                self.uyarilar.append(
+                    f"'{yol.name}' baska bir programda (muhtemelen Excel) acik oldugu "
+                    f"icin uzerine yazilamadi; cikti '{yedek.name}' olarak kaydedildi."
+                )
         return {
             "sonuclar": sonuclar, "ozet": ozet,
             "mahsup": mahsup, "excel_yolu": excel_yolu,

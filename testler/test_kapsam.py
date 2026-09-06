@@ -1,12 +1,13 @@
 """Kapsam olcumu ve aile kurali iyilestirmelerinin gerileme testleri.
 
 Buradaki ornekler ``testler/kapsam_olc.py`` ile yapilan kapsam olcumunde
-ALGORITMA SORUNU olarak tespit edilmis ve duzeltilmis GERCEK vakalardir:
+ALGORITMA SORUNU olarak tespit edilmis ve duzeltilmis GERCEK vakalardir
+(adlar ve siciller depoya girmez; ``ornek_veri/altin.json``den okunur):
 
-    HASAN HUSEYIN GOZUKARA  soyad SONDA (gider tipi 'Bilet' yaniltiyor)
-    NOVOSELOVA INNA         Rusca kadin soyadi eki, defterde erkek hali var
-    ZEYNEP SIMSEK           soyad SONDA, adaylar listelenmeli
-    TRAPEZNIKOVA POLINA     GERILEME KORUMASI: 'POLINA' bir ADDIR, soyad degil
+    soyad_sonda   'AD AD SOYAD' bilet satiri: soyad SONDA (gider tipi yaniltiyor)
+    disi_soyad    Rusca kadin soyadi eki, defterde erkek hali var
+    cok_aday      soyad SONDA, birden cok aday listelenmeli
+    rusca_ad      GERILEME KORUMASI: Rusca bir AD soyad sanilmamali
 
 Ilk ucu duzeltirken dorduncusunun bozulmamasi sarttir; iki uctan da soyad
 aramak, Rusca bir adi soyad sanip alakasiz bir calisana baglama riskini
@@ -24,6 +25,8 @@ from pathlib import Path
 KOK = Path(__file__).resolve().parents[1]
 if str(KOK) not in sys.path:
     sys.path.insert(0, str(KOK))
+
+from testler.altin import altin, altin_veya_none
 
 try:
     from masraf.defter import Defterler
@@ -123,57 +126,62 @@ class AileSoyadKonumuTest(unittest.TestCase):
         self.assertGreaterEqual(
             self.eslestirici._soyad_olasiligi("GOZUKARA"), AILE_SOYAD_BELIRGIN)
         self.assertLess(
-            self.eslestirici._soyad_olasiligi("HASAN"), AILE_SOYAD_BELIRGIN)
+            self.eslestirici._soyad_olasiligi(altin("kapsam", "soyad_sonda", "ad")),
+            AILE_SOYAD_BELIRGIN)
 
     def test_soyad_sonda_olsa_da_bulunur(self):
-        """'HASAN HUSEYIN GOZUKARA' bilet satiri ama isim AD SOYAD sirali.
+        """'AD AD SOYAD' bilet satiri ama isim AD SOYAD sirali.
 
-        Gider tipi 'Bilet' oldugu icin tercih ILK tokendir; ancak 'HASAN' bir
-        ADDIR. Dogru cevap sondaki 'GOZUKARA' soyadidir.
+        Gider tipi 'Bilet' oldugu icin tercih ILK tokendir; ancak ilk token
+        bir ADDIR. Dogru cevap sondaki soyaddir.
         """
-        sonuc = self.esle("HASAN HUSEYIN GOZUKARA")
+        o = altin("kapsam", "soyad_sonda")
+        sonuc = self.esle(o["isim"])
         self.assertEqual(sonuc.yontem, "aile")
-        self.assertEqual(sonuc.sicil, "573652")
-        self.assertIn("GOZUKARA", sonuc.aciklama)
+        self.assertEqual(sonuc.sicil, o["sicil"])
+        self.assertIn(o["soyad"], sonuc.aciklama)
 
     def test_disi_soyad_erkek_haliyle_eslesir(self):
-        """'NOVOSELOVA INNA' -> defterdeki 'Novoselov Nikita Romanovich'."""
-        sonuc = self.esle("NOVOSELOVA INNA")
+        """'SOYADOVA AD' -> defterdeki 'Soyadov ...' (erkek hali)."""
+        o = altin("kapsam", "disi_soyad")
+        sonuc = self.esle(o["isim"])
         self.assertEqual(sonuc.yontem, "aile")
-        self.assertEqual(sonuc.sicil, "D32079")
-        self.assertIn("NOVOSELOV", sonuc.aciklama)
+        self.assertEqual(sonuc.sicil, o["sicil"])
+        self.assertIn(o["soyad"], sonuc.aciklama)
 
     def test_sondaki_soyad_adaylari_listeler(self):
-        """'ZEYNEP SIMSEK': 4 Simsek var, kimlik belirsiz ama adaylar sunulur."""
-        sonuc = self.esle("ZEYNEP SIMSEK")
+        """Ayni soyadda 4 kisi var, kimlik belirsiz ama adaylar sunulur."""
+        o = altin("kapsam", "cok_aday")
+        sonuc = self.esle(o["isim"])
         self.assertEqual(sonuc.yontem, "aile")
         self.assertGreater(len(sonuc.aday_siciller), 1)
-        self.assertIn("SIMSEK", sonuc.aciklama)
+        self.assertIn(o["soyad"], sonuc.aciklama)
 
     def test_rusca_ad_soyad_sanilmaz(self):
-        """GERILEME KORUMASI: 'POLINA' bir ADDIR.
+        """GERILEME KORUMASI: Rusca bir AD soyad sanilmamali.
 
-        Defterde adi 'Polina Andreevna Ponomareva' olarak AD-SOYAD sirali
-        girilmis tek bir kayit vardir; iki uctan da soyad arayan naif bir
-        kural 'TRAPEZNIKOVA POLINA' satirini bu alakasiz kisiye baglar.
-        'POLINA'nin soyad olasiligi dusuk oldugu icin eslesme OLMAMALIDIR.
+        Defterde ayni adi tasiyan, AD-SOYAD sirali girilmis tek bir kayit
+        vardir; iki uctan da soyad arayan naif bir kural satiri bu alakasiz
+        kisiye baglar. Adin soyad olasiligi dusuk oldugu icin eslesme
+        OLMAMALIDIR.
         """
-        sonuc = self.esle("TRAPEZNIKOVA POLINA")
+        sonuc = self.esle(altin("kapsam", "rusca_ad", "isim"))
         self.assertEqual(sonuc.yontem, "yok")
         self.assertIsNone(sonuc.sicil)
 
     def test_tercih_edilen_uc_korunur(self):
         """Soyadi ONDE olan normal PNR satirlari degismemelidir.
 
-        'GUNAL DARIA' tek satir olarak islendiginde iki 'Gunal' calisani
+        Aile bireyi tek satir olarak islendiginde ayni soyadli iki calisan
         arasinda secim yapilamaz; sicil BOS kalir ve ikisi de aday listelenir.
-        (Gercek is akisinda ayni dosyada 'GUNAL EMRE' kesin eslestigi icin
-        secim netlesir; bu test yalniz soyadin ILK uctan alindigini dogrular.)
+        (Gercek is akisinda ayni dosyada calisanin kendisi kesin eslestigi
+        icin secim netlesir; bu test yalniz soyadin ILK uctan alindigini dogrular.)
         """
-        sonuc = self.esle("GUNAL DARIA")
+        o = altin("kapsam", "aile_tek")
+        sonuc = self.esle(o["isim"])
         self.assertEqual(sonuc.yontem, "aile")
-        self.assertIn("GUNAL", sonuc.aciklama)
-        self.assertIn("102084", sonuc.aday_siciller)
+        self.assertIn(o["soyad"], sonuc.aciklama)
+        self.assertIn(o["sicil"], sonuc.aday_siciller)
 
 
 @unittest.skipUnless(MODUL_VAR, "masraf.eslestirici bulunamadi")
@@ -189,15 +197,16 @@ class KapsamOlcumuTest(unittest.TestCase):
         self.arayici = kapsam_olc.ElleArayici(_ORTAM["defter"])
 
     def test_elle_arama_aday_dondurur(self):
-        adaylar = self.arayici.ara("GOZUKARA RAUF CAN")
+        adaylar = self.arayici.ara(altin("kapsam", "elle_arama"))
         self.assertTrue(adaylar)
         self.assertGreaterEqual(adaylar[0][2], self.modul.KESIN_ESIK)
 
     def test_soyad_kontrolu_adi_soyad_saymaz(self):
         """Olcum, motorun bilerek reddettigi ADLARI 'soyad var' saymamalidir."""
-        self.assertIsNone(self.arayici.soyad_var_mi("GOKHAN MENETLIOGLU"))
-        self.assertIsNone(self.arayici.soyad_var_mi("TRAPEZNIKOVA POLINA"))
-        self.assertEqual(self.arayici.soyad_var_mi("ZEYNEP SIMSEK"), "SIMSEK")
+        k = altin("kapsam")
+        self.assertIsNone(self.arayici.soyad_var_mi(k["soyad_ad_degil"]))
+        self.assertIsNone(self.arayici.soyad_var_mi(k["rusca_ad"]["isim"]))
+        self.assertEqual(self.arayici.soyad_var_mi(k["cok_aday"]["isim"]), k["cok_aday"]["soyad"])
 
     def test_isim_izi_kurumsal_gideri_ayirir(self):
         """Kisi barindirmayan satir PARSER sorunu sayilmamalidir."""

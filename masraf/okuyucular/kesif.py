@@ -17,8 +17,12 @@ Ipuclari:
 
 from __future__ import annotations
 
+import logging
+
 from pathlib import Path
 from typing import Callable
+
+_log = logging.getLogger(__name__)
 
 from masraf.modeller import GiderSatiri
 from masraf.okuyucular.antik import antik_cari_oku, yuzyil_dagitilmis_oku
@@ -153,7 +157,11 @@ class MesajOkunamadi(Exception):
     """
 
 
-def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderSatiri]:
+def _msg_oku(
+    yol: Path,
+    cikarma_dizini: str | Path | None = None,
+    gorulen_ozetler: set | None = None,
+) -> list[GiderSatiri]:
     """Outlook mesajindaki tum tablo eklerini cikarir ve tek tek okur.
 
     Mesaj bir kapsayicidir: icinde baska mesajlar, zip arsivleri ve Excel
@@ -172,20 +180,54 @@ def _msg_oku(yol: Path, cikarma_dizini: str | Path | None = None) -> list[GiderS
     # biz actiysak is bitince SILMEK zorundayiz; aksi halde her calistirmada
     # faturalar Windows'ta %TEMP% altinda birikir ve kimse fark etmez.
     bizim_dizin = cikarma_dizini is None
-    hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="masraf_msg_"))
+    hedef = Path(cikarma_dizini) if cikarma_dizini else Path(mkdtemp(prefix="mm_"))
     try:
-        return _msg_oku_icerik(yol, hedef)
+        return _msg_oku_icerik(yol, hedef, gorulen_ozetler)
     finally:
         if bizim_dizin:
             shutil.rmtree(hedef, ignore_errors=True)
 
 
-def _msg_oku_icerik(yol: Path, hedef: Path) -> list[GiderSatiri]:
+def _dosya_ozeti(yol: Path) -> str:
+    """Dosya iceriginin SHA-256 ozeti; ayni ek iki mailde gelirse ayni ozet."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(yol, "rb") as f:
+        for parca in iter(lambda: f.read(1 << 20), b""):
+            h.update(parca)
+    return h.hexdigest()
+
+
+def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None) -> list[GiderSatiri]:
     """``_msg_oku``'nun govdesi; gecici dizin yonetimi disarida tutulur."""
     from masraf.okuyucular.posta import msg_aciklarini_cikar
 
     satirlar: list[GiderSatiri] = []
     ekler = msg_aciklarini_cikar(yol, hedef)
+
+    # Ayni ek iki farkli mailde (iletilmis, tekrar gonderilmis) gelirse
+    # icerigi birebir aynidir. Ikisini de okumak parayi cift sayar; yineleme
+    # tespiti de yakalayamaz cunku ayni dosya adi 'ayni dosyadaki tekrar'
+    # sayilir. Cozum: icerik ozeti. Ilk goruleni oku, sonrakini atla ve soyle.
+    if gorulen_ozetler is not None:
+        kalan = []
+        for ek in ekler:
+            try:
+                ozet = _dosya_ozeti(ek.yol)
+            except OSError:
+                kalan.append(ek); continue
+            if ozet in gorulen_ozetler:
+                _log.warning("Ayni ek daha once okundu, atlandi: %s (%s)", ek.ad, yol.name)
+                continue
+            gorulen_ozetler.add(ozet)
+            kalan.append(ek)
+        atlanan = len(ekler) - len(kalan)
+        ekler = kalan
+        if not ekler and atlanan:
+            raise MesajOkunamadi(
+                f"mesajdaki {atlanan} ekin tamami baska bir mailden zaten okunmustu "
+                "(ayni icerik). Cift sayim olmasin diye atlandi."
+            )
 
     if not ekler:
         raise MesajOkunamadi(
@@ -234,7 +276,11 @@ def _msg_oku_icerik(yol: Path, hedef: Path) -> list[GiderSatiri]:
     raise MesajOkunamadi(" ".join(parcalar))
 
 
-def oku(yol: str | Path, cikarma_dizini: str | Path | None = None) -> list[GiderSatiri]:
+def oku(
+    yol: str | Path,
+    cikarma_dizini: str | Path | None = None,
+    gorulen_ozetler: set | None = None,
+) -> list[GiderSatiri]:
     """Dosya tipini bulur ve dogru parser'i calistirir.
 
     Outlook mesajlari kapsayici olarak ele alinir: icindeki tum tablo ekleri
@@ -246,7 +292,7 @@ def oku(yol: str | Path, cikarma_dizini: str | Path | None = None) -> list[Gider
     p = Path(yol)
     tip = dosya_tipini_bul(p)
     if tip == "outlook_msg":
-        return _msg_oku(p, cikarma_dizini)
+        return _msg_oku(p, cikarma_dizini, gorulen_ozetler)
     satirlar = oku_tip(p, tip)
     if not satirlar and tip != "genel":
         satirlar = genel_oku(p)

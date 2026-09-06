@@ -28,10 +28,10 @@ Adim  Yontem                                                        Guven
 SOZLESMEDEN BILINCLI SAPMALAR (hepsi dogruluk lehinedir):
 
 * ``harici`` ve ``ek_defter`` kademeleri ``bulanik`` ve ``aile`` kademelerinden
-  ONCE denenir. BILINEN kimlik, TAHMINDEN once gelir. Aksi halde "TALIP KEREM
-  KOCKESEN" gibi calisan olmadigi kesin bilinen bir kisi, soyadi tesadufen
-  eslesen bir calisanin aile bireyi sanilabilir; ya da saglik listesinden gelen
-  "AHMET CELER", %81 benzerlikteki "Bicer Ahmet" ile karistirilabilirdi.
+  ONCE denenir. BILINEN kimlik, TAHMINDEN once gelir. Aksi halde dis danisman
+  gibi calisan olmadigi kesin bilinen bir kisi, soyadi tesadufen eslesen bir
+  calisanin aile bireyi sanilabilir; ya da saglik listesinden gelen bir ad,
+  %81 benzerlikteki bambaska bir calisanla karistirilabilirdi (olculdu).
   ``harici`` kullanicinin acik karari oldugu icin ``tam_isim``den de oncedir.
 * Aday sayisi birden fazlaysa ``sicil`` alani DOLDURULMAZ (``None`` kalir) ve
   adaylar ``aday_siciller`` icinde listelenir. Tek istisna: butun adaylar ayni
@@ -39,8 +39,8 @@ SOZLESMEDEN BILINCLI SAPMALAR (hepsi dogruluk lehinedir):
   onerilir ama guven yine 0,6'nin altinda tutulur.
 
 BATCH IPUCU: ayni dosyadaki baska bir satirda kesin eslesen bir calisanin
-soyadi, aile bireyi tespitinde kanit olarak kullanilir (ornegin "GUNAL EMRE"
-kesin eslestiyse "GUNAL DARIA" onun aile bireyi sayilir). Sirali ``esle()``
+soyadi, aile bireyi tespitinde kanit olarak kullanilir (ornegin "AKSOY EMRE"
+kesin eslestiyse "AKSOY DARIA" onun aile bireyi sayilir). Sirali ``esle()``
 cagrilarinda bu kanit ONCEKI satirlardan toplanir; sira bagimsiz ve tam sonuc
 icin ``esle_toplu()`` kullanilmalidir.
 """
@@ -109,7 +109,7 @@ AZAMI_ADAY = 10
 #: Aile kuralinin "ayni dosyada kesin eslesen soyadas" ve "hepsi ayni gorev
 #: yerinde" kanitlari yalnizca NADIR soyadlar icin gecerlidir. 28 bin kisilik
 #: bir sirkette 'Ozturk' soyadli 12 calisan varken bunlardan birinin ayni ayda
-#: seyahat etmesi TESADUF olabilir; 'Celenligil' veya 'Gunal' gibi 1-2 kisilik
+#: seyahat etmesi TESADUF olabilir; 'Karatas' veya 'Aksoy' gibi 1-2 kisilik
 #: soyadlarda ise aile bagi cok daha olasidir. Bu sinirin ustundeki soyadlarda
 #: satir eslesmemis kabul edilip adaylariyla birlikte incelemeye gonderilir.
 NADIR_SOYAD_SINIRI = 8
@@ -121,12 +121,12 @@ SOYAD_ONDE_TIPLERI: frozenset[str] = frozenset({"Bilet"})
 
 #: Aile kuralinda bir tokenin "belirgin bicimde soyad" sayilmasi icin gereken
 #: soyad olasiligi. Personel verisinde isimler 'SOYAD AD' sirali oldugundan bu
-#: oran tokenin ilk konumda gecme sikligidir: 'GOZUKARA' 1,00 iken 'HASAN'
+#: oran tokenin ilk konumda gecme sikligidir: 'KARADAG' 1,00 iken 'HASAN'
 #: 0,02 civarindadir.
 AILE_SOYAD_BELIRGIN = 0.50
 
 #: Ote uc belirgin bicimde soyad iken bu esigin altinda kalan uc tamamen
-#: elenir. 'HASAN HUSEYIN GOZUKARA' satirinda 'HASAN' bu kurala takilir ve
+#: elenir. 'HASAN HUSEYIN KARADAG' satirinda 'HASAN' bu kurala takilir ve
 #: soyadi HASAN olan alakasiz calisanlara baglanma hatasi onlenir.
 AILE_SOYAD_ASGARI = 0.10
 
@@ -204,9 +204,9 @@ class Eslestirici:
             self._alias_token.setdefault(frozenset(isim.split(" ")), sicil)
         self._harici_token: dict[frozenset[str], dict] = {}
         # Isim sirasi ve bitisiklikten bagimsiz indeks. Fatura metinlerinde
-        # ayni kisi 'KOCKESEN TALIPKEREM' ve 'TALIP KEREM KOCKESEN' olarak
+        # ayni kisi 'KARADUMAN HALITCAN' ve 'HALIT CAN KARADUMAN' olarak
         # iki turlu geciyor; token kumesi bunlari ayni saymiyor cunku
-        # 'TALIPKEREM' tek token. Harf imzasi ikisini de yakalar.
+        # 'HALITCAN' tek token. Harf imzasi ikisini de yakalar.
         self._harici_imza: dict[str, dict] = {}
         for isim, kayit in self._defterler.harici.items():
             self._harici_token.setdefault(frozenset(isim.split(" ")), kayit)
@@ -355,7 +355,7 @@ class Eslestirici:
         """Kesilmis (truncate edilmis) fatura ismine uyan personel isimleri.
 
         PNR alanlari sabit uzunlukta oldugu icin uzun isimler kesilir:
-        'OZAKAY/MUSTAFAKEMA', 'ALLANAZAROV/ALLANAZA'. Kural: her fatura tokeni
+        'DEMIRALP/AHMETCA', 'SAPARMYRADOV/SAPARMYR'. Kural: her fatura tokeni
         ya birebir eslesir ya da (en az 4 harfliyse) bir personel tokeninin
         onekidir; en az bir token birebir, en az bir token onek olmalidir.
         """
@@ -401,7 +401,7 @@ class Eslestirici:
         """Bulanik eslesme icin aday isim havuzunu daraltir (blocking).
 
         Her fatura tokeni icin hem tokenin kendisi hem de ilk dort harfini
-        paylasan personel tokenlari kullanilir; boylece 'NERGIS' -> 'NERGIZ'
+        paylasan personel tokenlari kullanilir; boylece 'YILMAS' -> 'YILMAZ'
         gibi son harf hatalari da havuza girer. Cok yaygin tokenlar atlanir.
         """
         havuz: set[str] = set()
@@ -853,7 +853,7 @@ class Eslestirici:
 
         Personel ana verisinde isimler 'SOYAD AD' sirasindadir, yani bir
         tokenin ilk konumda gecme orani onun ne kadar soyad oldugunu soyler.
-        'GOZUKARA' yalnizca soyad olarak gecer (1,00); 'HASAN' yuzlerce isimde
+        'KARADAG' yalnizca soyad olarak gecer (1,00); 'HASAN' yuzlerce isimde
         ad olarak gecer, soyad olarak yalnizca birkacinda (~0,02).
 
         Bu olcu, gider tipinden gelen "bilet satirlarinda soyad ONDEDIR"
@@ -868,7 +868,7 @@ class Eslestirici:
         """Bir soyad tokeni icin aile adayi sicilleri toplar.
 
         Dogrudan arama sonuc vermezse Rusca kadin soyadi eki geri cevrilir
-        ('NOVOSELOVA' -> 'NOVOSELOV'); uretilen erkek hali personel soyad
+        ('IVANOVA' -> 'IVANOV'); uretilen erkek hali personel soyad
         indeksinde GERCEKTEN varsa kullanilir, yoksa atilir.
 
         Returns:
@@ -991,7 +991,7 @@ class Eslestirici:
         2. VERININ KENDISI. Her iki uctaki token icin ``_soyad_olasiligi``
            hesaplanir. Gider tipi yaniltici olabilir: elle dagitilmis seyahat
            dosyasinda bilet satirlari PNR degil duz 'AD SOYAD' yazilidir, bu
-           yuzden 'HASAN HUSEYIN GOZUKARA' satirinda tercih edilen ilk token
+           yuzden 'HASAN HUSEYIN KARADAG' satirinda tercih edilen ilk token
            ('HASAN') soyad DEGILDIR.
 
         Iki uc de degerlendirilir, en guclu kanit kazanir. Bir uctaki token
@@ -1023,7 +1023,7 @@ class Eslestirici:
             olasilik = olasiliklar[konum]
             tercihli = not tercih or konum == tercih
             # Gider tipinin gosterdigi ucun DISINDAKI uc ancak belirgin bicimde
-            # soyad ise degerlendirilir. Aksi halde 'TRAPEZNIKOVA POLINA'
+            # soyad ise degerlendirilir. Aksi halde 'SOKOLOVA POLINA'
             # satirinda Rusca bir AD olan 'POLINA' soyad sanilir ve alakasiz
             # bir calisana baglanir.
             if not tercihli and olasilik < AILE_SOYAD_BELIRGIN:
@@ -1117,8 +1117,8 @@ class Eslestirici:
 
         Birinci gecis kesin eslesmeleri bulur ve bunlarin soyadlarini kanit
         olarak toplar; ikinci gecis bu kanitla aile bireylerini cozer. Ornegin
-        'GUNAL EMRE' dosyanin herhangi bir yerinde kesin eslestiyse
-        'GUNAL DARIA' onun aile bireyi olarak isaretlenir.
+        'AKSOY EMRE' dosyanin herhangi bir yerinde kesin eslestiyse
+        'AKSOY DARIA' onun aile bireyi olarak isaretlenir.
 
         Tekil ``esle()`` cagrilarindan farki: sonuc, satirlarin dosyadaki
         sirasindan BAGIMSIZDIR.

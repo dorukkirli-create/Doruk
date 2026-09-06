@@ -20,19 +20,13 @@ try:
 except ImportError:
     MODUL_VAR = False
 
+from testler.altin import altin, altin_veya_none
+
 LISTE = Path("ornek_veri/personel/1C_Personnel_List_31082026.xlsx")
 
 #: (aranan isim, beklenen sicil, beklenen sirket, projede gecmesi beklenen metin)
-ALTIN_ORNEKLER = (
-    ("Celer Ahmet", "534561", "RENSTROYDETAL", "Renstroydetal"),
-    ("Boynuegri Vedat", "101074", "RENSERVIS", "Renservis"),
-    ("Erdur Koray", "408755", "RC", "Top Tower"),
-    ("Menetlioglu Gokhan", "404389", "RC", "One Tower"),
-    ("Ozcan Mustafa", "475837", "RENSTROYDETAL", "Lytkarino"),
-    ("Surul Tolga", "644705", "RC", "One Tower"),
-    ("Gundogdu Ali", "643032", "RENSTROYDETAL", "Renstroydetal"),
-    ("Kaiyrbekov Azat", "442829", "RENSERVIS", "Renservis"),
-)
+#: Gercek adlar depoya girmez; ornek_veri/altin.json'dan okunur.
+ALTIN_ORNEKLER = tuple(tuple(o) for o in (altin_veya_none("yardimci_defter") or ()))
 
 
 @unittest.skipUnless(MODUL_VAR, "masraf.yardimci_defter bulunamadi")
@@ -52,6 +46,8 @@ class YardimciDefterTest(unittest.TestCase):
             self.assertIn(beklenen, sirketler, f"{beklenen} kapsanmiyor")
 
     def test_altin_ornekler_bulunuyor(self):
+        if not ALTIN_ORNEKLER:
+            self.skipTest("altin ornekler yok (ornek_veri/altin.json)")
         for ad, sicil, sirket, proje_parcasi in ALTIN_ORNEKLER:
             with self.subTest(kisi=ad):
                 adaylar = self.defter.isimle_adaylar(isim_normalize(ad))

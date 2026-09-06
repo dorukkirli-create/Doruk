@@ -57,7 +57,7 @@ Akış:
             +--> tam isim tek kişide mi?          --> EŞLEŞTİ  (0,95)
             +--> isim alt kümesi tek kişide mi?   --> EŞLEŞTİ  (0,90)
             +--> bitişik ad açılıyor mu?          --> EŞLEŞTİ  (0,92)
-            |        (MUSTAFAKEMAL -> MUSTAFA KEMAL)
+            |        (AHMETCAN -> MUSTAFA KEMAL)
             +--> transliterasyon varyantı tutuyor mu? --> İNCELE  (0,88)
             |        (IYLMAZ GEKHAN -> YILMAZ GOKHAN)
             +--> kesik isim öneki tutuyor mu?     --> İNCELE   (0,85)
@@ -131,10 +131,17 @@ Gereken: Python 3.11, `pandas`, `openpyxl`, `xlrd`, `rapidfuzz`, `streamlit`,
 5. **İnceleyin.** *İnceleme* sekmesinde düşük güvenli satırlar tek tek gelir.
    Her satırın yanında sistemin **neden** o sonuca vardığı Türkçe yazar ve
    adaylar listelenir. Doğru kişiyi seçtiğinizde sistem bunu öğrenir.
-6. **Excel'i indirin.** Altı sayfalı çıktı: `Mahsuplasma` (dağıtım tablosu),
-   `Kontrol` (fatura bazında mutabakat), `Sonuc` (tüm satırlar),
-   `Incele` (elle bakılacaklar), `Eslesmedi` (kişi bulunamayanlar), `Ozet`
-   (dağılımlar, oranlar, tutar toplamları).
+6. **Excel'i indirin.** Sekiz sayfalı çıktı, RHI kurumsal kimliğinde:
+   `Ozet` (kapak: tutarlar, mutabakat durumu, şirket kırılımı, dikkat notları),
+   `Mahsuplasma` (muhasebeye giden dağıtım tablosu), `Kontrol` (fatura bazında
+   mutabakat), `Sirket Kirilimi` (tüzel kişi üstte, projeleri altında),
+   `Harita Onerileri` (tanımsız görev yerleri için hazır satırlar), `Sonuc`
+   (tüm satırlar, evrak numarasıyla), `Incele` (elle bakılacaklar), `Eslesmedi`
+   (kişi bulunamayanlar).
+7. **Klasör kendini toplar.** Masaüstü paketinde işlenen faturalar
+   `3_ISLENENLER\<tarih_saat>\` altına taşınır, her çalıştırma
+   `CALISTIRMA_GECMISI.txt` dosyasına kaydedilir. Gelecek ay aynı dosyalar
+   yanlışlıkla tekrar işlenmez.
 
 ## Çıktı nasıl görünür
 
@@ -176,8 +183,8 @@ işaret çelişkisi olarak ayrıca uyarı verilir.
 Eşleştirme kaba bir kova (belge tarihi + mutlak tutar + para birimi) içinde
 yapılır, sonra kova içinde isimler eşleştirilir. İsim anahtar olarak
 kullanılmaz çünkü iki dosya aynı kişiyi farklı yazar: ham döküm
-`OZAKAY MUSTAFAKEMAL`, elle dağıtılmış hal `MUSTAFA KEMAL OZAKAY`, bazen de
-kırpılmış (`OZAKAY MUSTAFAKEMA`) ya da yanlış (`YALCINKAYA ANIL` /
+`DEMIRALP AHMETCAN`, elle dağıtılmış hal `AHMET CAN DEMIRALP`, bazen de
+kırpılmış (`DEMIRALP AHMETCA`) ya da yanlış (`KARATAS ANIL` /
 `ALI YALCINKAYA`). Kişi adı olmayan kurumsal kalemler (cenaze çelengi,
 toplantı organizasyonu) da bu sayede yakalanır.
 
@@ -191,8 +198,18 @@ proje aynı kalır, tutar şirketler arasında bölünür. Etiket masraf merkezi
 haritasında gerçekten bir projeye karşılık geliyorsa o zaman proje de bölünür.
 
 Kişi listeleri (katılımcı listesi, sağlık kontrol listesi) dağılıma girmez;
-bunlar fatura değil kütüktür ve tutar taşımazlar. Temmuz 2026 mailinde 100
-satır bu gruptadır.
+bunlar fatura değil kütüktür ve tutar taşımazlar. Temmuz 2026 mailinde 106
+satır bu gruptadır. Aynı gruba tedarikçinin fatura başına gönderdiği
+`ASS... Fatura Detayı.xlsx` katılımcı listeleri de girer: tutar kolonu yoktur,
+tutar yansıtma dosyasındadır. Bu listeler atılmaz; kişileri aynı fatura
+numaralı yansıtma satırlarıyla çapraz kontrol edilir ve fark varsa
+(yansıtmada eksik ya da fazla kişi) `Kontrol` sayfasında ve kapakta uyarı
+olarak görünür.
+
+Arabuluculuk dosyasında kişi başı tutar şirket toplamının kişi sayısına
+bölünmesiyle bulunur. Bölme kuruşta yapılır ve artık kuruşlar ilk kişilere
+birer birer eklenir; böylece kişi tutarlarının toplamı faturanın kendi beyan
+ettiği toplama kuruşuna kadar eşittir (Temmuz 2026: 1.943,74 USD, fark 0,00).
 
 ## Desteklenen dosya tipleri
 
@@ -201,6 +218,7 @@ satır bu gruptadır.
 | Antik / Yüzyıl ham cari hareket dökümü (`.xls`) | "Cari Hareket Dökümü Detay" başlığı, `İşlem`/`Evrak No`/`Borç` kolonları | Kişi adı açıklama metnine gömülü | Yok, eşleştirmeden gelir |
 | Yüzyıl elle dağıtılmış (`.xlsx`) | `S.NO`, `AÇIKLAMA`, `ŞANTİYESİ` kolonları | Kişi adı açıklamada | Var (`ŞANTİYESİ`) — doğruluk referansı |
 | Energo assessment yansıtma (`.xlsx`) | `Fatura Detay` + `Kişi Listesi` sayfaları, `Katılımcı` kolonu | Ad Soyad | Yok |
+| Energo assessment fatura detay listesi (`ASS... Fatura Detayı.xlsx`) | `Katılımcı` + `Paket` kolonları var, tutar kolonu yok | Ad Soyad | Yok; kütük sayılır, yansıtma ile çapraz kontrol edilir |
 | Energo arabuluculuk (`.xlsx`) | `PERSONEL T.C.`, `PROJE` kolonları | **TC kimlik no** | Var (`PROJE`) |
 | Sağlık kontrol listesi (`.xlsx`) | `BORDROLU LİSTE` sayfası, `TCKN` + `ŞANTİYE` | **TC kimlik no** + doğum tarihi | Var (`ŞANTİYE`) |
 | Koç Üniversitesi katılımcı listesi (`.xlsx`) | `ID`, `Ad Soyad`, `Katılım Tarihi` | **Sicil numarası** (`ID` kolonu) | Yok |
@@ -218,7 +236,7 @@ faturaları en zorudur: kimlik alanı yoktur, sadece serbest metinde isim vardı
 | `tckn` | 0,99 | TC kimlik `veri/tckn_sicil.csv` köprüsünde tek bir sicile bağlanıyor |
 | `alias` | 0,98 | Bu ismi daha önce siz elle onaylamışsınız (`veri/aliases.csv`) |
 | `tam_isim` | 0,95 | Normalize isim personel verisinde **tek** kişiye denk geliyor |
-| `tam_isim` (bitişik ad) | 0,92 | `MUSTAFAKEMAL` sözlükle `MUSTAFA KEMAL` olarak açıldı, sonuç tek kişi |
+| `tam_isim` (bitişik ad) | 0,92 | `AHMETCAN` sözlükle `MUSTAFA KEMAL` olarak açıldı, sonuç tek kişi |
 | `alt_kume` | 0,90 | Fatura ismi personel isminin alt kümesi, tek aday (ikinci ad eksik) |
 | `transliterasyon` | 0,88 | Rusça transliterasyon geri çevrildi (`GEKHAN` -> `GOKHAN`), tek aday |
 | `prefix` | 0,85 | İsim bilet sisteminde kesilmiş, önek tek kişiye uyuyor |
@@ -392,15 +410,15 @@ Bu yüzden doğruluk üç ayrı okumayla raporlanır:
 
 ### Bulunan gerçek otomasyon hataları: 2 — ikisi de İNCELE bayrağıyla yakalandı
 
-- **#131 TURAN MEHMET** (ESB-LED, 31.07). Sicil 549718: Amursky'de çalışmış ama
+- **#131, adaş vakası** (ESB-LED, 31.07). Bulunan sicil Amursky'de çalışmış ama
   **06.04.2026'da çıkmış**. Aynı günün aynı partisindeki iki kişi için hem elle
-  hem otomasyon "GPP" diyor. Bu neredeyse kesinlikle yeni işe girmiş **başka bir
-  Mehmet Turan**. Elle dosya doğru, otomasyon yanlış — ama sistem iki uyarıyla
+  hem otomasyon "GPP" diyor. Bu neredeyse kesinlikle yeni işe girmiş **aynı adlı
+  başka bir kişi**. Elle dosya doğru, otomasyon yanlış; ama sistem iki uyarıyla
   ("gider ayında personel kaydı yok", "belge tarihinden önce ayrılmış") tam
   olarak doğru yeri işaret etti ve satırı otomatik kabul etmedi.
-- **#69 SERKAN KOCAK** — `aile` kuralı soyada değil **ada** takılıp Kocak Cem'e
-  0,45 güvenle bağlandı. Eşik altında kaldığı için `Eşleşmedi` sayfasına düştü,
-  yanlış mahsuplaşma üretmedi.
+- **#69, ad-soyad karışması.** `aile` kuralı soyada değil **ada** takılıp aynı adı
+  soyadı olarak taşıyan bir çalışana 0,45 güvenle bağlandı. Eşik altında kaldığı
+  için `Eşleşmedi` sayfasına düştü, yanlış mahsuplaşma üretmedi.
 
 Elle dosyada **düzeltilmesi gereken bir insan hatası bulunmadı.** Uyuşmazlıkların
 tamamı ya taksonomi farkı, ya veri kapsamı dışı kişi, ya da yukarıdaki iki
@@ -464,7 +482,7 @@ tanınmayan kolon adlarıyla sıfır satır dönen bir dosya, üç satır eklend
 sonra tam okundu.
 
 **4. Dosyanın şekli tamamen farklı.** Kişi adı serbest metnin içine gömülüyse
-(seyahat dökümündeki `TK4093099626 OZAKAY/MUSTAFAKEMAL MR IST-CDG BILET BEDELI`
+(seyahat dökümündeki `TK4093099626 DEMIRALP/AHMETCAN MR IST-CDG BILET BEDELI`
 gibi) kolon sözlüğü yetmez, o kalıp için kod yazmak gerekir. Yılda bir iki kez
 karşılaşılacak bir durumdur.
 
@@ -499,7 +517,7 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
   gönderir**. Soyadı 8'den fazla çalışanda geçiyorsa aile varsayımı hiç
   kurulmaz, çünkü aynı soyadın tesadüf olma ihtimali yüksektir.
 - **Aynı isimli çalışanlar otomatik seçilmez.** İsim çakışması genelde %3,6,
-  Hint uyruklu personelde %10,9'dur (Kumar Manoj gibi çok yaygın isimler).
+  Hint uyruklu personelde %10,9'dur (çok yaygın Hint ad-soyad çiftleri).
   Çakışan satır adaylarıyla birlikte incelemeye düşer.
 - **Bordrosuz taşeron kayıtları isim eşleştirmesine girmez.** Ana veride
   44.482 satırın adı boştur (sahte sicil numaralarıyla). Bunlar sicil
@@ -512,12 +530,12 @@ Bunları bilerek kullanın; araç bunları gizlemez, çıktıda uyarı olarak g�
   otomatiğe geçer. Projedeki tek en yüksek getirili iyileştirme budur ve kod
   değişikliği gerektirmez.
 - **`aile` kuralı ada da takılabiliyor.** Kural soyadı üzerinden çalışır ama
-  ölçümde bir vaka adı yakaladı: `SERKAN KOCAK` -> `Kocak Cem` (0,45).
+  ölçümde bir vaka adı yakaladı: kişinin ADI, başka bir çalışanın SOYADI (0,45).
   Güven eşiğinin çok altında kaldığı için yanlış mahsuplaşma üretmedi, satır
   `Eşleşmedi`'ye düştü. Yine de kuralın kesinliği soyad konumunun doğru
   belirlenmesine bağlıdır; iki uçlu isimlerde zayıflar.
 - **İşten ayrılmış kişinin adaşı ayırt edilemez.** Ölçümde bulunan tek gerçek
-  otomasyon hatası budur (#131 TURAN MEHMET): alias doğru sicile gidiyor ama
+  otomasyon hatası budur (#131, adaş vakası): alias doğru sicile gidiyor ama
   o sicil Nisan 2026'da çıkmış; fatura Temmuz'da yeni işe girmiş **aynı adlı
   başka birine** ait. Sistem bunu çözemez, ama iki uyarı üretip satırı
   incelemeye gönderir — yani hata sessizce geçmez.

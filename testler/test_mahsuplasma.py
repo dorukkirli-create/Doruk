@@ -296,8 +296,15 @@ class RaporlamaTest(unittest.TestCase):
         s = [sonuc(gider(satir_no=1), durum=DURUM_OTOMATIK),
              sonuc(gider(satir_no=2, kisi="B KISI"), durum=DURUM_INCELE),
              sonuc(gider(satir_no=3, kisi="C KISI"), durum=DURUM_ESLESMEDI)]
-        m = mahsuplasma_uret(s).satirlar[0]
-        self.assertEqual((m.otomatik, m.incele, m.eslesmedi), (1, 1, 1))
+        satirlar = mahsuplasma_uret(s).satirlar
+        # ESLESMEDI satir projeye yazilmaz; '(DAGITILAMAYAN)' satirina duser.
+        proje = [m for m in satirlar if m.masraf_merkezi == "GPP"]
+        acik = [m for m in satirlar if m.masraf_merkezi == DAGITILAMAYAN]
+        self.assertEqual(len(proje), 1)
+        self.assertEqual(len(acik), 1)
+        self.assertEqual((proje[0].otomatik, proje[0].incele, proje[0].eslesmedi), (1, 1, 0))
+        self.assertEqual((acik[0].otomatik, acik[0].incele, acik[0].eslesmedi), (0, 0, 1))
+        self.assertEqual(acik[0].tutar, 100.0)
 
     def test_bos_girdi_bos_tablo(self):
         t = mahsuplasma_uret([])
@@ -305,6 +312,67 @@ class RaporlamaTest(unittest.TestCase):
         self.assertEqual(t.kontrol, [])
         self.assertTrue(t.kapali_mi)
         self.assertEqual(t.toplamlar(), {})
+
+
+class FaturaDetayKontroluTest(unittest.TestCase):
+    """Tutarsiz fatura detay listesi kutuktur; yansitma satirlariyla capraz kontrol edilir."""
+
+    @staticmethod
+    def _detay(no, kisi, satir_no):
+        return sonuc(gider(kaynak=f"{no} ENERGO Fatura Detayi.xlsx", tip="energo_assessment_detay",
+                           satir_no=satir_no, kisi=kisi, tutar=None, ek={"fatura_no": no}))
+
+    @staticmethod
+    def _yansitma(no, kisi, satir_no, tutar=500.0):
+        return sonuc(gider(kaynak="Yansitma.xlsx", tip="energo_assessment", satir_no=satir_no,
+                           kisi=kisi, tutar=tutar, ek={"fatura_no": no}))
+
+    def test_birebir_eslesince_uyari_yok(self):
+        t = mahsuplasma_uret([
+            self._yansitma("ASS1", "AHMET YILMAZ", 1), self._yansitma("ASS1", "AYSE KAYA", 2),
+            self._detay("ASS1", "Ahmet Yılmaz", 1), self._detay("ASS1", "Ayşe Kaya", 2),
+        ])
+        self.assertEqual(t.kutuk_satir_sayisi, 2)
+        self.assertEqual(t.tutarsiz_satir_sayisi, 0)
+        (dk,) = t.detay_kontrolleri
+        self.assertTrue(dk.tutarli_mi)
+        self.assertEqual((dk.detay_kisi, dk.yansitma_kisi, dk.eslesen), (2, 2, 2))
+        self.assertEqual(t.uyarilar, [])
+        self.assertTrue(t.kapali_mi)
+
+    def test_detay_kisisi_yansitmada_yoksa_uyari(self):
+        t = mahsuplasma_uret([
+            self._yansitma("ASS1", "AHMET YILMAZ", 1),
+            self._detay("ASS1", "AHMET YILMAZ", 1), self._detay("ASS1", "MEHMET DEMIR", 2),
+        ])
+        (dk,) = t.detay_kontrolleri
+        self.assertFalse(dk.tutarli_mi)
+        self.assertEqual(dk.eksik, ["MEHMET DEMIR"])
+        self.assertEqual(dk.fazla, [])
+        self.assertEqual(len(t.uyarilar), 1)
+        self.assertIn("MEHMET DEMIR", t.uyarilar[0])
+        self.assertIn("ASS1", t.uyarilar[0])
+
+    def test_yansitmada_fazla_kisi_uyari(self):
+        t = mahsuplasma_uret([
+            self._yansitma("ASS1", "AHMET YILMAZ", 1), self._yansitma("ASS1", "ZEYNEP AK", 2),
+            self._detay("ASS1", "AHMET YILMAZ", 1),
+        ])
+        (dk,) = t.detay_kontrolleri
+        self.assertEqual(dk.fazla, ["ZEYNEP AK"])
+        self.assertIn("detay listesinde olmayan", dk.aciklama())
+
+    def test_yansitmada_fatura_hic_yoksa(self):
+        t = mahsuplasma_uret([self._yansitma("ASS9", "AHMET YILMAZ", 1),
+                              self._detay("ASS1", "AHMET YILMAZ", 1)])
+        (dk,) = t.detay_kontrolleri
+        self.assertEqual(dk.yansitma_kisi, 0)
+        self.assertIn("hic yok", dk.aciklama())
+
+    def test_detay_satiri_kontrol_tablosuna_girmez(self):
+        t = mahsuplasma_uret([self._yansitma("ASS1", "AHMET YILMAZ", 1),
+                              self._detay("ASS1", "AHMET YILMAZ", 1)])
+        self.assertEqual([k.kaynak for k in t.kontrol], ["Yansitma.xlsx"])
 
 
 class GercekMesajTest(unittest.TestCase):
@@ -355,8 +423,27 @@ class GercekMesajTest(unittest.TestCase):
         self.assertEqual(sorted(celiski.tutarlar), [-16.0, 16.0])
 
     def test_kisi_kutukleri_dagilima_girmiyor(self):
-        """Katilimci ve saglik listeleri fatura degildir."""
-        self.assertEqual(self.tablo.kutuk_satir_sayisi, 100)
+        """Katilimci (50), saglik (50) ve tutarsiz fatura detay (6) listeleri fatura degildir."""
+        self.assertEqual(self.tablo.kutuk_satir_sayisi, 106)
+        # ASS dosyalari artik Kontrol sayfasinda 'tutar okunamadi' diye acik durmaz.
+        self.assertFalse([k for k in self.tablo.kontrol if k.kaynak.startswith("ASS")])
+
+    def test_fatura_detay_listeleri_yansitmayla_birebir(self):
+        """4 ASS faturasinin detay listesi (1+1+1+3 kisi) yansitma satirlariyla ayni kisileri tasir."""
+        kontroller = self.tablo.detay_kontrolleri
+        self.assertEqual(len(kontroller), 4)
+        self.assertEqual(sum(dk.detay_kisi for dk in kontroller), 6)
+        for dk in kontroller:
+            with self.subTest(fatura=dk.fatura_no):
+                self.assertTrue(dk.tutarli_mi, dk.aciklama())
+        self.assertFalse(self.tablo.uyarilar)
+
+    def test_arabuluculuk_beyanla_kurusuna_kadar_kapaniyor(self):
+        """Kisi paylari toplami faturanin kendi beyan ettigi toplama esit (1.943,74 USD)."""
+        (k,) = [k for k in self.tablo.kontrol if k.kaynak.startswith("Arabuluculuk")]
+        self.assertIsNotNone(k.beyan_toplam)
+        self.assertEqual(k.beyan_farki, 0.0)
+        self.assertTrue(k.kapali_mi, k.acik_sebebi)
 
     def test_paylasimli_satir_iki_sirkete_bolunuyor(self):
         paylasimlilar = [m for m in self.tablo.satirlar if m.pay_notu]

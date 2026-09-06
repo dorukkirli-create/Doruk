@@ -64,7 +64,7 @@ class AsciiKatlaTest(unittest.TestCase):
                          "SCHUKA ZHUKOV CHAY YURIY YANA")
 
     def test_ascii_degismez(self):
-        self.assertEqual(ascii_katla("OZAKAY MUSTAFA KEMAL"), "OZAKAY MUSTAFA KEMAL")
+        self.assertEqual(ascii_katla("DEMIRALP AHMET CAN"), "DEMIRALP AHMET CAN")
 
     def test_bos_girdi(self):
         self.assertEqual(ascii_katla(""), "")
@@ -80,10 +80,10 @@ class IsimNormalizeTest(unittest.TestCase):
 
     def test_bolu_isareti_bosluga_doner(self):
         # PNR bicimi: SOYAD/AD
-        self.assertEqual(isim_normalize("OZAKAY/MUSTAFAKEMA"), "OZAKAY MUSTAFAKEMA")
+        self.assertEqual(isim_normalize("DEMIRALP/AHMETCA"), "DEMIRALP AHMETCA")
 
     def test_coklu_bosluk_teke_iner(self):
-        self.assertEqual(isim_normalize("Kumar   Manoj  "), "KUMAR MANOJ")
+        self.assertEqual(isim_normalize("Yilmaz   Mehmet  "), "YILMAZ MEHMET")
 
     def test_bos_girdi(self):
         self.assertEqual(isim_normalize(""), "")
@@ -118,7 +118,7 @@ class TranslitVaryantlariTest(unittest.TestCase):
     def test_varyant_sayisi_sinirli(self):
         # Kombinatoryal patlama olmamali; 130 satirlik dosya saniyeler icinde
         # eslesmeli.
-        self.assertLessEqual(len(translit_varyantlari("ABDULKADIR SEYHMUS KOCAK")), 128)
+        self.assertLessEqual(len(translit_varyantlari("ABDULKADIR SEYHMUS KARADENIZ")), 128)
 
     def test_bos_girdi(self):
         self.assertEqual(translit_varyantlari(""), set())
@@ -156,25 +156,25 @@ class KisiMetniniTemizleTest(unittest.TestCase):
     """
 
     def test_otel_satirindan_sadece_kisi_kalir(self):
-        ham = ("CIHAN BALABAN GRAND PLAZA HOTEL HANOI "
+        ham = ("CANER AKSU GRAND PLAZA HOTEL HANOI "
                "[11.07.2026] - [13.07.2026]  (2) KONAKLAMA YURTDISI")
-        self.assertEqual(kisi_metnini_temizle(ham), "CIHAN BALABAN")
+        self.assertEqual(kisi_metnini_temizle(ham), "CANER AKSU")
 
     def test_bilet_satirindan_bilet_no_ve_guzergah_atilir(self):
-        ham = "TK4093099626 OZAKAY/MUSTAFAKEMAL MR  IST-CDG BILET BEDELI"
-        self.assertEqual(kisi_metnini_temizle(ham), "OZAKAY MUSTAFAKEMAL")
+        ham = "TK4093099626 DEMIRALP/AHMETCAN MR  IST-CDG BILET BEDELI"
+        self.assertEqual(kisi_metnini_temizle(ham), "DEMIRALP AHMETCAN")
 
     def test_cinsiyet_isareti_ve_coklu_guzergah(self):
-        ham = "PC2255749381 TEMIR MEHMET\\M  KYA-SAW-LED BILET BEDELI"
-        self.assertEqual(kisi_metnini_temizle(ham), "TEMIR MEHMET")
+        ham = "PC2255749381 DEMIR MEHMET\\M  KYA-SAW-LED BILET BEDELI"
+        self.assertEqual(kisi_metnini_temizle(ham), "DEMIR MEHMET")
 
     def test_vize_metni_temizlenir(self):
-        ham = "TALIP KEREM KOCKESEN RUSYA FEDERASYONU TURISTIK E-VIZE"
-        self.assertEqual(kisi_metnini_temizle(ham), "TALIP KEREM KOCKESEN")
+        ham = "HALIT CAN KARADUMAN RUSYA FEDERASYONU TURISTIK E-VIZE"
+        self.assertEqual(kisi_metnini_temizle(ham), "HALIT CAN KARADUMAN")
 
     def test_bagaj_satirinda_kisi_ortada(self):
-        ham = "EKSTRA BAGAJ UCRETI ISA MUCAHIT SAHIN TARAFINDAN TASINDI"
-        self.assertEqual(kisi_metnini_temizle(ham), "ISA MUCAHIT SAHIN")
+        ham = "EKSTRA BAGAJ UCRETI ALI MURAT SAHIN TARAFINDAN TASINDI"
+        self.assertEqual(kisi_metnini_temizle(ham), "ALI MURAT SAHIN")
 
     def test_kisi_icermeyen_satir_bos_doner(self):
         # Cenaze celengi gibi satirlarda kisi yoktur; temizlikten sonra

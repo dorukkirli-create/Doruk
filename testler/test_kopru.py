@@ -1,8 +1,9 @@
 """TC kimlik koprusu ve dogum tarihi ile dogrulanmis alias turetme testleri.
 
-Altin ornekler gercek Temmuz 2026 verisinden alinmistir. Dort tanesi
-dogum tarihi kontrolu olmadan YANLIS eslesen vakalardir; testler bunlarin
-uretilmedigini dogrular.
+Altin ornekler gercek Temmuz 2026 verisinden alinmistir; adlar ve siciller
+depoya girmez, ``ornek_veri/altin.json``den okunur. Dort tanesi dogum tarihi
+kontrolu olmadan YANLIS eslesen vakalardir; testler bunlarin uretilmedigini
+dogrular.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ import datetime
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from testler.altin import altin, altin_veya_none
 
 try:
     from masraf.kopru import (
@@ -138,11 +141,7 @@ class GercekVeriTest(unittest.TestCase):
     def test_dogru_eslesmeler_uretilir(self):
         """Soyadi farkli yazilmis ama dogum tarihi tutan kisiler bulunmali."""
         uretilen = {a.ad_soyad_kaynak: a.sicil for a in alias_turet(self.satirlar, self.defter)}
-        beklenen = {
-            "ŞEHRİBAN ÖZKAN": "D20296",     # personelde Seriban Ozkan
-            "YAŞAR MERT YANAR": "642586",   # personelde Banar Yasar Mert
-            "MEHMET DALKILIÇ": "490707",    # personelde Dalkilinc Mehmet
-        }
+        beklenen = altin("kopru", "dogru")   # listedeki ad -> personeldeki sicil
         for ad, sicil in beklenen.items():
             self.assertIn(ad, uretilen, f"{ad} icin alias uretilmedi")
             self.assertEqual(uretilen[ad], sicil, f"{ad} yanlis sicile baglandi")
@@ -153,7 +152,7 @@ class GercekVeriTest(unittest.TestCase):
         Bu dort vaka dogum tarihi kontrolu olmadan yanlis eslesiyordu.
         """
         uretilen = {a.ad_soyad_kaynak for a in alias_turet(self.satirlar, self.defter)}
-        for ad in ("GÖKHAN GÜZEL", "MEHMET EKREM NERGİZ", "BARIŞ GÖÇEDEN", "OGÜN BİZ"):
+        for ad in altin("kopru", "yanlis"):
             self.assertNotIn(ad, uretilen,
                              f"{ad} icin yanlis alias uretildi, dogum tarihi tutmuyor")
 

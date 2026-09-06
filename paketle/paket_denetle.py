@@ -59,6 +59,7 @@ ZORUNLU_MODULLER = (
     "pandas", "numpy", "openpyxl", "xlrd", "rapidfuzz", "xlsxwriter",
     "extract_msg", "olefile", "oletools", "bs4", "RTFDE", "compressed_rtf",
     "ebcdic", "tzlocal", "tzdata", "dateutil", "red_black_dict_mod",
+    "lark",   # RTFDE -> extract_msg ice aktarma zinciri; eksikse .msg acilmaz
 )
 
 

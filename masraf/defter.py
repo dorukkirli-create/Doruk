@@ -67,6 +67,7 @@ BESLEYEN_KAYNAKLAR: frozenset[str] = frozenset({
     "energo_saglik",
     "energo_arabulucu",
     "energo_assessment",
+    "energo_assessment_detay",
     "koc_katilimci",
 })
 
@@ -121,7 +122,7 @@ class Defterler:
     Kullanim::
 
         defterler = Defterler(Path("veri"))
-        defterler.alias_ekle("KOCKESEN TALIP KEREM", "100003")
+        defterler.alias_ekle("KARADUMAN HALIT CAN", "123456")
         defterler.kaydet()
 
     Butun sozlukler bellekte tutulur; ``kaydet()`` cagrilana kadar diske

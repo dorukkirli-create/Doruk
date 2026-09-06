@@ -18,6 +18,8 @@ import datetime
 import unittest
 from pathlib import Path
 
+from testler.altin import altin, altin_veya_none
+
 try:
     from masraf.boru import _kaynak_proje_ozeti
     from masraf.kayit import PersonelDefteri
@@ -31,15 +33,17 @@ except ImportError:
 PERSONEL = Path("ornek_veri/personel/2025_2026_giris_cikis.xlsx")
 HARITA = Path("veri/masraf_merkezi_haritasi.csv")
 
-#: Ozakay Mustafa Kemal - RHI Russia Headquarter (Moscow), tum donemlerde aktif
-SICIL = "100003"
+#: RHI Russia Headquarter (Moscow), tum donemlerde aktif bir kisi (altin.json'dan;
+#: dosya yoksa testler atlanir).
+_AKTIF = altin_veya_none("aktif_sicil") or {}
+SICIL = _AKTIF.get("sicil")
 TARIH = datetime.date(2026, 7, 15)
 
 
 def _satir(kaynak_etiket: str | None) -> "GiderSatiri":
     return GiderSatiri(
         kaynak_dosya="test", kaynak_tip="yuzyil_dagitilmis", satir_no=1,
-        belge_tarihi=TARIH, aciklama="test", kisi_ham="Ozakay Mustafa Kemal",
+        belge_tarihi=TARIH, aciklama="test", kisi_ham=_AKTIF.get("ad_soyad", ""),
         sicil_ham=None, tckn_ham=None, tutar=100.0, para_birimi="USD",
         masraf_merkezi_kaynak=kaynak_etiket, gider_tipi="Bilet",
     )
@@ -54,7 +58,7 @@ def _eslesme() -> "Eslesme":
 class KaynakProjeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if not PERSONEL.is_file():
+        if not PERSONEL.is_file() or not SICIL:
             raise unittest.SkipTest("ornek_veri/personel bulunamadi")
         cls.defter = PersonelDefteri.yukle(PERSONEL)
         cls.harita = MasrafMerkeziHaritasi.yukle(HARITA)
