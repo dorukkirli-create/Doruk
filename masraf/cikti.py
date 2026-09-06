@@ -100,6 +100,11 @@ MAHSUP_KOLONLARI: tuple[tuple[str, str, int], ...] = (
     ("Incele", "tamsayi", 8),
     ("Eslesmedi", "tamsayi", 10),
     ("Gider Donemi", "metin", 18),
+    # Elle dagitilmis dosyada insanin yazdigi santiye/sirket etiketi. Dagitimda
+    # KULLANILMAZ (personel kaydi esastir); tablonun sirketiyle celisirse
+    # muhasebe burada gorur. Evrak no denetim izidir.
+    ("Elle Dagitim Etiketi", "metin", 20),
+    ("Evrak / Fatura No", "metin", 22),
     ("Durum", "metin", 34),
 )
 
@@ -299,6 +304,14 @@ def _tarih(deger: Any) -> date | None:
     return None
 
 
+def _kaynak_santiye(kaynak: Any, ek: dict) -> str:
+    """Satirin kendi santiye etiketi; yoksa yinelenen elle dosyadan devralinan."""
+    if kaynak not in (None, ""):
+        return _metin(kaynak)
+    devralinan = ek.get("kaynak_santiye_devralindi") if isinstance(ek, dict) else None
+    return f"{_metin(devralinan)} (elle dosyadan)" if devralinan not in (None, "") else ""
+
+
 def satir_degerleri(sonuc: Sonuc) -> list[Any]:
     """Bir ``Sonuc`` kaydini KOLONLAR sirasina gore degerlere cevirir."""
     satir = sonuc.satir
@@ -331,7 +344,7 @@ def satir_degerleri(sonuc: Sonuc) -> list[Any]:
         _tarih(sonuc.cikis_tarihi),
         round(satir.tutar, 2) if isinstance(satir.tutar, (int, float)) else satir.tutar,
         _metin(satir.para_birimi),
-        _metin(satir.masraf_merkezi_kaynak),
+        _kaynak_santiye(satir.masraf_merkezi_kaynak, ek),
         # Denetim izi: bir satir sorgulandiginda hangi belgeye ait oldugu
         # gorulsun. Eslestirmede KULLANILMAZ, sadece raporlanir.
         _metin(ek.get("evrak_no") or ek.get("fatura_no")),
@@ -486,6 +499,42 @@ def _sayfa_yaz(calisma: Any, ad: str, sonuclar: Sequence[Sonuc], bicimler: _Bici
         sayfa.write_string(1, 0, "(Bu sayfada satir yok)", bicimler.ozet_metin)
 
 
+def _kapak_dikkat_nedenleri(ozet: dict, mahsup: Any, oneriler: Any) -> list[str]:
+    """Mutabakat kapali olsa da onaydan once bakilmasi gereken seyler.
+
+    Kapak durumunu yesilden sariya ceviren nedenler. Her biri Kontrol ya da
+    Ozet sayfasinda ayrintili olarak yazilidir; burada yalnizca sayilir.
+    """
+    nedenler: list[str] = []
+    supheler = list(getattr(mahsup, "supheler", None) or [])
+    if supheler:
+        nedenler.append(f"{len(supheler)} kalemde yineleme şüphesi")
+    tarihsiz = sum(int(getattr(k, "tarihsiz_satir", 0) or 0) for k in (getattr(mahsup, "kontrol", None) or []))
+    if tarihsiz:
+        nedenler.append(f"{tarihsiz} satır tarihsiz (yineleme kontrolüne girmedi)")
+    if getattr(mahsup, "isaret_celiskileri", None):
+        nedenler.append(f"{len(mahsup.isaret_celiskileri)} işaret çelişkisi")
+    detay = [d for d in (getattr(mahsup, "detay_kontrolleri", None) or []) if not d.tutarli_mi]
+    if detay:
+        nedenler.append(f"{len(detay)} fatura detay listesiyle uyuşmuyor")
+    if getattr(mahsup, "tutarsiz_satir_sayisi", 0):
+        nedenler.append(f"{mahsup.tutarsiz_satir_sayisi} satırda tutar okunamadı")
+    if any(not m.get("haritada_var", True) for m in (mahsup.merkez_ozeti() if mahsup is not None else [])):
+        nedenler.append("haritada tanımsız masraf merkezi var")
+    if oneriler:
+        nedenler.append(f"{len(oneriler)} görev yeri haritada yok")
+    atlanan = [a for a in (ozet.get("atlanan_ekler") or []) if not getattr(a, "tekrar", False)]
+    if atlanan:
+        nedenler.append(f"{len(atlanan)} ek okunmadı")
+    onemli_uyari = [
+        u for u in (ozet.get("uyarilar") or [])
+        if "Ogrenildi" not in str(u) and "kisi kutugu" not in str(u)
+    ]
+    if onemli_uyari:
+        nedenler.append(f"{len(onemli_uyari)} uyarı")
+    return nedenler
+
+
 def _ozet_yaz(
     calisma: Any,
     ozet: dict,
@@ -562,11 +611,23 @@ def _ozet_yaz(
         sayfa.set_row(satir, 26)
         incele_sayisi = sum(1 for s in sonuclar if s.durum == DURUM_INCELE)
         eslesmedi_sayisi = sum(1 for s in sonuclar if s.durum == DURUM_ESLESMEDI)
-        if mahsup.kapali_mi and not incele_sayisi and not eslesmedi_sayisi:
+        hatalar = list(ozet.get("hatalar") or [])
+        dikkat_nedenleri = _kapak_dikkat_nedenleri(ozet, mahsup, oneriler)
+        if hatalar:
+            sayfa.merge_range(satir, 1, satir, 7,
+                              f"MUTABAKAT AÇIK   |   {len(hatalar)} dosya okunamadı veya işlenirken hata verdi; "
+                              "tutarları bu tabloda yok. Tablo muhasebeye GÖNDERİLMEMELİ. Liste 'Dikkat' bölümünde.",
+                              bicimler.durum_kotu)
+        elif mahsup.kapali_mi and not incele_sayisi and not eslesmedi_sayisi and not dikkat_nedenleri:
             sayfa.merge_range(satir, 1, satir, 7,
                               "MUTABAKAT KAPALI   |   Okunan = Yinelenen + Dağıtılan + Dağıtılamayan. "
-                              "Para kaybolmadı; inceleme bekleyen satır yok, tablo muhasebeye gönderilebilir.",
+                              "Para kaybolmadı; inceleme bekleyen satır yok. Tablo onaya hazır.",
                               bicimler.durum_iyi)
+        elif mahsup.kapali_mi and not incele_sayisi and not eslesmedi_sayisi:
+            sayfa.merge_range(satir, 1, satir, 7,
+                              "MUTABAKAT KAPALI, DİKKAT   |   Para kaybolmadı; inceleme bekleyen satır yok. "
+                              f"Onaydan önce bakılmalı: {'; '.join(dikkat_nedenleri)}.",
+                              bicimler.durum_uyari)
         elif mahsup.kapali_mi:
             # Para kaybolmadi ama kimlik/merkez karari bekleyen satirlar var:
             # bu bir TASLAKTIR. 'Gonderilebilir' demek onay akisini atlatir.
@@ -575,15 +636,24 @@ def _ozet_yaz(
                     f"{incele_sayisi} satır inceleme" if incele_sayisi else "",
                     f"{eslesmedi_sayisi} satır kişi bulunamadı ((DAGITILAMAYAN))" if eslesmedi_sayisi else "",
                 ) if p)
+            ek_not = f" Ayrıca: {'; '.join(dikkat_nedenleri)}." if dikkat_nedenleri else ""
             sayfa.merge_range(satir, 1, satir, 7,
                               f"MUTABAKAT KAPALI, TASLAK   |   Para kaybolmadı; {bekleyen} "
-                              "bekliyor. 'Incele' ve 'Eslesmedi' sayfaları görülmeden muhasebeye gönderilmemeli.",
+                              "bekliyor. 'Incele' ve 'Eslesmedi' sayfaları görülmeden onaya sunulmamalı." + ek_not,
                               bicimler.durum_uyari)
         else:
-            acik = ", ".join(f"{k.kaynak} ({k.fark:+.2f})" for k in mahsup.acik_kontroller)
+            acik = ", ".join(
+                f"{k.kaynak} ({k.acik_sebebi or f'{k.fark:+.2f}'})" for k in mahsup.acik_kontroller)
             sayfa.merge_range(satir, 1, satir, 7,
                               f"MUTABAKAT AÇIK   |   {acik}. Tablo muhasebeye GÖNDERİLMEMELİ.",
                               bicimler.durum_kotu)
+        satir += 1
+        # Onay akisi: durum satiri kimin ne yaptigini soylemez; bu satirlar
+        # elle doldurulur. Otomasyon 'hazirlar', insan 'kontrol eder' ve 'onaylar'.
+        sayfa.set_row(satir, 16)
+        sayfa.write_string(satir, 1, "Hazırlayan: otomasyon", bicimler.etiket)
+        sayfa.write_string(satir, 3, "Kontrol eden: ____________   tarih: ________", bicimler.etiket)
+        sayfa.write_string(satir, 6, "Onaylayan: ____________   tarih: ________", bicimler.etiket)
         satir += 2
 
     # --- Satir durumu ----------------------------------------------------
@@ -667,6 +737,15 @@ def _ozet_yaz(
             dikkat.append("İşaret çelişkisi: " + c.kisa_aciklama())
         if getattr(mahsup, "tutarsiz_satir_sayisi", 0):
             dikkat.append(f"{mahsup.tutarsiz_satir_sayisi} satırda tutar okunamadı; dağılıma girmedi.")
+    for pb, u in sorted((getattr(mahsup, "sirket_uyusmazligi", None) or {}).items()) if mahsup is not None else []:
+        ciftler = u.get("ciftler") or {}
+        en = next(iter(ciftler.items()), None)
+        ornek = f" En büyüğü {en[0]}: {en[1]['satir']} satır, {en[1]['tutar']:,.2f}." if en else ""
+        dikkat.append(
+            f"Kaynak dosyadaki şirket etiketi {u['satir']} satırda tablonun şirketinden farklı "
+            f"({pb} {u['tutar']:,.2f}).{ornek} Etiket faturanın kesildiği tarafsa bu beklenen "
+            "yansıtmadır; kişinin işvereniyse personel kaydıyla çelişir. Çiftler 'Kontrol' sayfasında."
+        )
     if oneriler:
         dikkat.append(f"{len(oneriler)} görev yeri masraf merkezi haritasında tanımlı değil. "
                       "'Harita Onerileri' sayfasında hazır satırlar var.")
@@ -836,6 +915,8 @@ def mahsup_satir_degerleri(satir: Any, fatura_toplami: float) -> list[Any]:
         satir.incele,
         satir.eslesmedi,
         satir.gider_donemi,
+        getattr(satir, "elle_etiket", None) or "",
+        getattr(satir, "evrak_no", None) or "",
         etiket,
     ]
 
@@ -857,8 +938,22 @@ def kontrol_satir_degerleri(kontrol: Any) -> list[Any]:
         kontrol.beyan_toplam,
         kontrol.beyan_farki,
         round(kontrol.dagitim_orani / 100.0, 4),
-        "KAPANDI" if kontrol.kapali_mi else f"ACIK - {kontrol.acik_sebebi}",
+        kontrol_durum_metni(kontrol),
     ]
+
+
+def kontrol_durum_metni(kontrol: Any) -> str:
+    """Mutabakat sutunu: KAPANDI / KAPANDI, DIKKAT - ... / ACIK - ..."""
+    if not kontrol.kapali_mi:
+        return f"ACIK - {kontrol.acik_sebebi}"
+    suphe = getattr(kontrol, "suphe_notu", "") or ""
+    return f"KAPANDI, DIKKAT - {suphe}" if suphe else "KAPANDI"
+
+
+def kontrol_rengi(kontrol: Any) -> str:
+    if not kontrol.kapali_mi:
+        return "engel"
+    return "uyari" if (getattr(kontrol, "suphe_notu", "") or "") else "tamam"
 
 
 def _tablo_yaz(
@@ -1021,7 +1116,7 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
     )
 
     k_degerler = [kontrol_satir_degerleri(k) for k in tablo.kontrol]
-    k_renkler = ["tamam" if k.kapali_mi else "engel" for k in tablo.kontrol]
+    k_renkler = [kontrol_rengi(k) for k in tablo.kontrol]
     sayfa = _tablo_yaz(
         calisma, "Kontrol", KONTROL_KOLONLARI, k_degerler, k_renkler, bicimler,
         bos_mesaj="(Kontrol edilecek fatura yok)",
@@ -1070,6 +1165,47 @@ def _mahsuplasma_yaz(calisma: Any, tablo: Any, bicimler: "_Bicimler") -> None:
             sayfa.write_string(satir, 0, "TAMAM" if dk.tutarli_mi else "UYUSMUYOR", bicim)
             sayfa.write_string(satir, 1, f"{dk.aciklama()}  [{dk.kaynak}]", bicimler.ozet_metin)
             satir += 1
+
+    supheler = list(getattr(tablo, "supheler", None) or [])
+    if supheler:
+        satir += 1
+        sayfa.write_string(satir, 0, "Yineleme suphesi (insan bakmali)", bicimler.bolum)
+        satir += 1
+        sayfa.write_string(
+            satir, 0,
+            "Otomatik karar verilemeyen kalemler. Uc tur: ayni kisi ve tarih ama tutar farkli "
+            "(ikisi de dagitima girdi, biri fazla olabilir); tarihsiz satir (yineleme kontrolune "
+            "giremedi); ayni gun ve tutar ama isimlerin tek kelimesi ortak (yinelenen sayilip elendi, "
+            "farkli kisiyse geri eklenmeli). Her satirda karar ve gerekce yazili.",
+            bicimler.ozet_metin)
+        satir += 1
+        for sp in supheler:
+            sayfa.write_string(satir, 0, sp.aciklama(), bicimler.ozet_metin)
+            satir += 1
+
+    uyusmazlik = dict(getattr(tablo, "sirket_uyusmazligi", None) or {})
+    if uyusmazlik:
+        satir += 1
+        sayfa.write_string(satir, 0, "Kaynak dosyadaki sirket etiketi ile tablo sirketi farkli olan satirlar",
+                           bicimler.bolum)
+        satir += 1
+        sayfa.write_string(
+            satir, 0,
+            "Acente cogu zaman faturanin KESILDIGI tarafi yazar (orn. RHI); tablo ise kisinin personel "
+            "kaydindaki tuzel kisiyi kullanir. Fark sirketler arasi yansitmanin kendisidir ve hata "
+            "degildir. Ama etiket kisinin isverenini kastediyorsa personel kaydi ile celisir; o zaman "
+            "1C listesi ya da kaynak dosya duzeltilmeli. Etiketler Mahsuplasma sayfasinda "
+            "'Elle Dagitim Etiketi' kolonunda.",
+            bicimler.ozet_metin)
+        satir += 1
+        for pb, u in sorted(uyusmazlik.items()):
+            sayfa.write_string(satir, 0, f"{pb}: toplam {u['satir']} satir, {u['tutar']:,.2f}", bicimler.kalin)
+            satir += 1
+            for ad, c in (u.get("ciftler") or {}).items():
+                sayfa.write_string(satir, 0, f"    {ad}", bicimler.ozet_metin)
+                sayfa.write_string(satir, 1, f"{c['satir']} satir", bicimler.ozet_metin)
+                sayfa.write_number(satir, 2, float(c["tutar"]), bicimler.ozet_tutar)
+                satir += 1
 
     if getattr(tablo, "isaret_celiskileri", None):
         satir += 1
