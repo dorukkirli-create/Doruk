@@ -331,8 +331,9 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
     kontrolu ve mahsuplasmadaki fatura anahtari maildeki adla calisir.
     """
     from masraf.envanter import (
-        ARSIV, ATLANDI, AYNI_ICERIK, MAIL, OKUNAMADI, DosyaKaydi, _boyut, satirlardan_kayit,
+        ARSIV, ATLANDI, AYNI_ICERIK, GOVDE, MAIL, OKUNAMADI, DosyaKaydi, _boyut, satirlardan_kayit,
     )
+    from masraf.okuyucular.govde import govde_satirlari
     from masraf.okuyucular.posta import msg_aciklarini_cikar
 
     def _kaydet(k: DosyaKaydi) -> None:
@@ -347,7 +348,9 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
     atlananlar_yerel: list = atlanan_ekler if atlanan_ekler is not None else []
     onceki_atlanan = len(atlananlar_yerel)
     kapsayicilar: list = []
-    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlananlar_yerel, kapsayicilar=kapsayicilar)
+    govdeler: list = []
+    ekler = msg_aciklarini_cikar(yol, hedef, atlananlar=atlananlar_yerel,
+                                 kapsayicilar=kapsayicilar, govdeler=govdeler)
     yeni_atlananlar = atlananlar_yerel[onceki_atlanan:]
     # Tablo olmayan ekler (PDF) mailler ARASINDA da tekillenir: ayni PDF iki
     # ayri mailde gelirse kapak/Kontrol 'okunmayan ek' sayisi farkli dosya
@@ -476,6 +479,38 @@ def _msg_oku_icerik(yol: Path, hedef: Path, gorulen_ozetler: set | None = None,
                 s.ek.setdefault("mail_tarihi", ek.mail_tarihi)
                 s.ek.setdefault("mail_zinciri", ek.kaynak_aciklamasi)
         satirlar.extend(ic_satirlar)
+
+    # Mail GOVDELERI: ozet tablo ve yesil katilim isaretleri. Ek degil,
+    # belge de degil; tasiyici satir olarak yukari tasinir ve envanterde
+    # 'MAIL GOVDESI' olarak gorunur. Sekiz kalemin besi yalnizca burada.
+    for govde in govdeler:
+        try:
+            govde_satirlar = govde_satirlari(govde, yol.name)
+        except Exception as hata:  # noqa: BLE001 - govde bozuksa mail dusmesin
+            govde_satirlar = []
+            _kaydet(DosyaKaydi(ad=f"(govde) {govde.konu}", kaynak=_kaynak(govde.zincir),
+                               tur="govde", durum=OKUNAMADI,
+                               sebep=f"govde okunamadi: {hata.__class__.__name__}: {hata}"))
+        if not govde_satirlar:
+            continue
+        kalemler = [g for g in govde_satirlar if g.kaynak_tip == "govde_kalemi"]
+        katilim = [g for g in govde_satirlar if g.kaynak_tip == "govde_katilim"]
+        parcalar_g = []
+        if kalemler:
+            ek0 = kalemler[0].ek
+            parcalar_g.append(f"ozet tablo: {len(kalemler)} kalem, toplam "
+                              f"{ek0.get('govde_toplam', 0):,.2f} {ek0.get('govde_para_birimi', '')}")
+        for g in katilim:
+            kisi = g.ek.get("katilimcilar") or []
+            parcalar_g.append(f"yesil isaretli katilim: {len(kisi)} kisi, "
+                              f"{sum(len(k.get('gunler') or []) for k in kisi)} kisi-gun")
+        _kaydet(DosyaKaydi(ad=f"(govde) {govde.konu}", kaynak=_kaynak(govde.zincir),
+                           tur="govde", durum=GOVDE,
+                           sebep="; ".join(parcalar_g) + "; belge degil, dagitima girmedi",
+                           satir=len(govde_satirlar)))
+        for g in govde_satirlar:
+            g.kaynak_dosya = f"{yol.name} > (govde) {govde.konu}"
+        satirlar.extend(govde_satirlar)
 
     if satirlar:
         return satirlar

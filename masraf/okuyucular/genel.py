@@ -1086,6 +1086,14 @@ def genel_oku(yol: str | Path, notlar: list[str] | None = None) -> list[GiderSat
                         **({tutar_notu: True} if tutar_notu else {}),
                         **({"sicil_kolonu_reddedildi": sicil_reddedilen}
                            if sicil_reddedilen else {}),
+                        # Cozulmemis kolonlarin ham degerleri: dagitim kurali
+                        # bir agirlik kolonu (or. sigorta primi) isteyebilir ve
+                        # dosya o an artik diskte olmayabilir (gecici dizin).
+                        "ham_kolonlar": {
+                            str(ham_ad): al(indeks) for ham_ad, indeks in harita.items()
+                            if indeks not in (i_isim, i_sicil, i_tckn, i_tutar, i_tarih)
+                            and al(indeks) not in (None, "")
+                        },
                     },
                 )
             )

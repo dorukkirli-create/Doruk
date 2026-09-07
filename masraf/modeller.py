@@ -26,6 +26,11 @@ KAYNAK_TIPLERI: frozenset[str] = frozenset({
     # PDF fatura basligi: tutari yerel para biriminde ek'te tasir, kisi
     # kirilimi tasimaz; dagitim kurali gelene kadar tutar alani None kalir.
     "fatura_pdf",
+    # Mail govdesi tasiyicilari: ozet tablo kalemi ve yesil isaretli katilim.
+    "govde_kalemi",
+    "govde_katilim",
+    # Dagitim kuralinin urettigi kisi/merkez satirlari (masraf.dagitim).
+    "dagitilmis",
 })
 
 # Gider tipleri.

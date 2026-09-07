@@ -63,6 +63,13 @@ AZAMI_DERINLIK = 6
 AZAMI_ACILMIS_BOYUT = 500 * 1024 * 1024  # 500 MB
 AZAMI_DOSYA_SAYISI = 2000
 
+#: Govdesi bu boyuttan buyuk (RTF olarak) mailler icin HTML cozumu YAPILMAZ,
+#: yalnizca duz metin okunur. Olculdu: extract_msg'in htmlBody'si RTF'ten
+#: uretiliyor ve 2,6 MB'lik bir tablo dokumu 35,7 saniye suruyor; ozet tablo
+#: ve katilim isaretleri tasiyan mailler 40-174 KB. Sinirin ustundeki govde
+#: 'html_atlandi' isaretiyle gecer, sessizce degil.
+GOVDE_AZAMI_RTF = 512 * 1024
+
 #: Diske yazilan dosya adinin azami uzunlugu (uzanti dahil). Klasor adlari
 #: 10 karakter ('m01_a1b2c3'); 7 seviye + 40 karakter dosya adi %TEMP% ile
 #: birlikte 260'in altinda kalir.
@@ -169,6 +176,29 @@ class Kapsayici:
 
 
 @dataclass
+class MailGovdesi:
+    """Bir mailin GOVDESI: ek degil, mesajin kendi metni.
+
+    Sekiz kalemlik yansitma ozeti ve egitim katilim isaretleri hicbir ekte
+    degil, mailin govdesindedir (olculdu: toplamin %78,8'i yalnizca orada).
+    Bu yuzden govde de yukari tasinir; masraf.okuyucular.govde onu okur.
+    """
+
+    konu: str
+    gonderen: str | None
+    tarih: object
+    zincir: list           # kok mailden bu mesaja kadar konu/arsiv adlari
+    derinlik: int
+    html: str = ""         # htmlBody (UTF-8'e cozulmus)
+    duz: str = ""          # body (duz metin)
+    html_atlandi: bool = False   # govde RTF cok buyuk, HTML cozulmedi
+
+    @property
+    def kaynak_aciklamasi(self) -> str:
+        return " > ".join(str(z) for z in (self.zincir + [self.konu]))
+
+
+@dataclass
 class _Yuruyus:
     """Bir mailin agaci yurunurken tasinan ortak durum.
 
@@ -180,6 +210,7 @@ class _Yuruyus:
     sonuc: list[CikarilanEk]
     atlananlar: list | None = None
     kapsayicilar: list | None = None
+    govdeler: list | None = None
     acilan_bayt: int = 0
     acilan_dosya: int = 0
     sayac: int = 0
@@ -253,6 +284,40 @@ def _gosterim_adi(ham: str | None, varsayilan: str = "ek") -> str:
         return varsayilan
     ad = re.sub(r"#U([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), str(ham)).strip()
     return ad or varsayilan
+
+
+def _govde_yakala(msg, konu, gonderen, tarih, zincir, derinlik) -> "MailGovdesi":
+    """Mesajin govdesini okur; RTF cok buyukse HTML'i atlar, duz metni alir."""
+    duz = ""
+    try:
+        duz = _govde_metni(getattr(msg, "body", None))
+    except Exception as hata:  # noqa: BLE001 - govde okunamadi diye mail dusmesin
+        _log.debug("govde duz metni okunamadi (%s): %s", konu, hata)
+    html, atlandi = "", False
+    try:
+        rtf = getattr(msg, "rtfBody", None)
+        if rtf is not None and len(rtf) > GOVDE_AZAMI_RTF:
+            atlandi = True
+        else:
+            html = _govde_metni(getattr(msg, "htmlBody", None))
+    except Exception as hata:  # noqa: BLE001
+        _log.debug("govde HTML okunamadi (%s): %s", konu, hata)
+    return MailGovdesi(konu=konu, gonderen=gonderen, tarih=tarih, zincir=list(zincir),
+                       derinlik=derinlik, html=html, duz=duz, html_atlandi=atlandi)
+
+
+def _govde_metni(v) -> str:
+    """extract_msg govdesini (bytes ya da str) UTF-8 metne cevirir; yoksa bos."""
+    if v is None:
+        return ""
+    if isinstance(v, bytes):
+        for kodlama in ("utf-8", "cp1254", "latin-1"):
+            try:
+                return v.decode(kodlama)
+            except UnicodeDecodeError:
+                continue
+        return v.decode("utf-8", "replace")
+    return str(v)
 
 
 def _tarihe_cevir(v) -> date | None:
@@ -528,6 +593,9 @@ def _msg_yuru(
     yeni_zincir = zincir + [konu]
     ekler = list(getattr(msg, "attachments", None) or [])
 
+    if y.govdeler is not None:
+        y.govdeler.append(_govde_yakala(msg, konu, gonderen, tarih, zincir, derinlik))
+
     if ek_adi is not None:
         y.kapsa(Kapsayici(
             ad=ek_adi, tur="mail", zincir=list(zincir), boyut=boyut, derinlik=derinlik,
@@ -679,7 +747,8 @@ def _tekrar_sebebi(ilk_ad: str, ad: str, tablo: bool) -> str:
 
 def msg_aciklarini_cikar(msg_yolu: str | Path, hedef_dizin: str | Path,
                          atlananlar: list | None = None,
-                         kapsayicilar: list | None = None) -> list[CikarilanEk]:
+                         kapsayicilar: list | None = None,
+                         govdeler: list | None = None) -> list[CikarilanEk]:
     """Bir .msg dosyasindaki butun tablo eklerini ic ice arsiv ve mesajlarla birlikte cikarir.
 
     Args:
@@ -721,7 +790,7 @@ def msg_aciklarini_cikar(msg_yolu: str | Path, hedef_dizin: str | Path,
     hedef = Path(hedef_dizin)
     hedef.mkdir(parents=True, exist_ok=True)
 
-    y = _Yuruyus(sonuc=[], atlananlar=atlananlar, kapsayicilar=kapsayicilar)
+    y = _Yuruyus(sonuc=[], atlananlar=atlananlar, kapsayicilar=kapsayicilar, govdeler=govdeler)
     _msg_ac_ve_yuru(msg_yolu, hedef, [], 0, y.sonuc, atlananlar, yuruyus=y)
 
     # Ayni dosyanin iki kez cikmasini onle (ayni mail iki kez forward edilmis

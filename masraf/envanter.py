@@ -19,6 +19,7 @@ DETAY_LISTESI = "DETAY LISTESI"  # tutarsiz fatura detay listesi; capraz kontrol
 ATLANDI = "ATLANDI"            # tablo degil (docx, resim...); acilmadi
 FATURA_PDF = "FATURA (PDF)"    # PDF fatura basligi okundu; tutar yerel para biriminde, dagitim kurali bekliyor
 TARANMIS = "TARANMIS PDF"      # PDF saf goruntu; metin katmani yok, cevrimdisi okunamaz (OCR gerekir)
+GOVDE = "MAIL GOVDESI"         # mailin kendi metninden okunan ozet tablo / katilim isaretleri; belge degil
 AYNI_ICERIK = "AYNI ICERIK"    # daha once okunan dosyayla birebir ayni; cift sayim olmasin diye atlandi
 OKUNAMADI = "OKUNAMADI"        # acilamadi / hata / parola
 SATIR_YOK = "SATIR YOK"        # acildi ama hicbir gider satiri cikmadi
@@ -38,7 +39,7 @@ DETAY_TIPLERI = frozenset({"energo_assessment_detay"})
 #: kisi kirilimi tasimazlar. Mahsuplasmaya gider satiri olarak GIRMEZLER;
 #: tutarlarini kisilere bolmek dagitim kuralinin isidir. Kutukten farklidirlar:
 #: kutuk bir KISI LISTESIDIR, belge bir TUTAR kaynagidir.
-BELGE_TIPLERI = frozenset({"fatura_pdf"})
+BELGE_TIPLERI = frozenset({"fatura_pdf", "govde_kalemi", "govde_katilim"})
 
 
 @dataclass
