@@ -42,6 +42,7 @@ from masraf.okuyucular.energo import (
     koc_katilimci_oku,
     saglik_oku,
 )
+from masraf.okuyucular.fatura_pdf import fatura_pdf_oku
 from masraf.okuyucular.genel import (
     baslik_satiri_bul,
     calisma_oku,
@@ -81,6 +82,7 @@ PARSERLAR: dict[str, Callable[[str | Path], list[GiderSatiri]]] = {
     "energo_saglik": saglik_oku,
     "koc_katilimci": koc_katilimci_oku,
     "referans_liste": genel_oku,
+    "fatura_pdf": fatura_pdf_oku,
     "genel": genel_oku,
 }
 
@@ -181,6 +183,13 @@ def dosya_tip_adaylari(yol: str | Path) -> list[str]:
     #    icindeki tablo dosyalari ayri ayri tespit edilir.
     if p.suffix.lower() == ".msg":
         return ["outlook_msg"]
+
+    # 0b) PDF fatura: yine icerik degil uzanti belirler. Kisa devre ZORUNLU;
+    #     olmazsa _ipuclarini_topla calisma_oku'yu cagirir, o .pdf icin
+    #     ValueError firlatir, asagidaki except onu ['genel']'e cevirir ve
+    #     genel_oku ayni hatayi bir daha firlatir - dosya OKUNAMADI olur.
+    if p.suffix.lower() == ".pdf":
+        return ["fatura_pdf"]
 
     try:
         metinler, blob, sayfalar = _ipuclarini_topla(p)

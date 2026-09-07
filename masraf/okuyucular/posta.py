@@ -47,6 +47,11 @@ _log = logging.getLogger(__name__)
 
 # Cikarilacak tablo uzantilari
 TABLO_UZANTILARI = {".xlsx", ".xls", ".xlsm", ".csv", ".tsv"}
+# PDF faturalar. TABLO_UZANTILARI'na KARISTIRILMAZ: o kume 'bu ek bir tablo
+# okuyucusuna gidecek' anlamini tasir, PDF ise fatura basligi cikarimina gider.
+PDF_UZANTILARI = {".pdf"}
+# Diske cikarilip okuyucuya verilecek uzantilarin tamami.
+CIKARILAN_UZANTILAR = TABLO_UZANTILARI | PDF_UZANTILARI
 # Isimize yaramayan, atlanacak uzantilar (mail imzasindaki logolar vb)
 GORSEL_UZANTILARI = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".emf", ".wmf", ".ico"}
 
@@ -458,7 +463,7 @@ def _zip_isle(
         y.atla(AtlananEk(ad=girdi_adi, zincir=ic_zincir, sebep=sebep, boyut=g_boyut), uyari=True)
     for g in acilan.cikanlar:
         uz = g.yol.suffix.lower()
-        if uz in TABLO_UZANTILARI:
+        if uz in CIKARILAN_UZANTILAR:
             y.sonuc.append(CikarilanEk(
                 yol=g.yol, ad=g.yol.name, mail_konusu=konu, mail_gonderen=gonderen,
                 mail_tarihi=tarih, zincir=ic_zincir, derinlik=derinlik + 1,
@@ -602,7 +607,7 @@ def _msg_yuru(
                             yuruyus=y, ek_adi=orijinal, boyut=len(veri))
             continue
 
-        if uzanti in TABLO_UZANTILARI:
+        if uzanti in CIKARILAN_UZANTILAR:
             y.sonuc.append(CikarilanEk(
                 yol=yol, ad=yol.name, mail_konusu=konu, mail_gonderen=gonderen,
                 mail_tarihi=tarih, zincir=list(yeni_zincir), derinlik=derinlik,

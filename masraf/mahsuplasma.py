@@ -81,7 +81,11 @@ _KAYNAK_ONCELIGI: dict[str, int] = {
 }
 
 #: Dagilima girmeyen kaynak tipleri: bunlar fatura degil kisi kutugudur.
-from masraf.envanter import DETAY_TIPLERI as _DETAY_TIPLERI, KUTUK_TIPLERI as _ENV_KUTUK
+from masraf.envanter import (
+    BELGE_TIPLERI as _BELGE_TIPLERI,
+    DETAY_TIPLERI as _DETAY_TIPLERI,
+    KUTUK_TIPLERI as _ENV_KUTUK,
+)
 #: Dagilima girmeyen satir tipleri: kisi kutukleri + fatura detay listeleri
 #: (tutar yansitma dosyasindadir; capraz kontrol edilir). Tek kaynak: envanter.
 _KUTUK_TIPLERI = _ENV_KUTUK | _DETAY_TIPLERI
@@ -358,6 +362,9 @@ class MahsupTablosu:
     uyarilar: list[str] = field(default_factory=list)
     yinelenen_sayisi: int = 0
     kutuk_satir_sayisi: int = 0
+    #: Fatura belgesi (PDF) satirlari. Tutar tasirlar ama YEREL para biriminde
+    #: ve kisi kirilimsiz; dagitim kurali gelene kadar mahsuba girmezler.
+    belge_satir_sayisi: int = 0
     tutarsiz_satir_sayisi: int = 0
 
     def merkez_ozeti(self) -> list[dict]:
@@ -946,6 +953,13 @@ def mahsuplasma_uret(
     detaylar: list[Any] = []
     for s in sonuclar:
         tip = getattr(s.satir, "kaynak_tip", "")
+        if tip in _BELGE_TIPLERI:
+            # Fatura belgesinin kendisi bir gider satiri DEGILDIR: tutari
+            # yerel para biriminde ve kisi kirilimsizdir. Mahsuba sokulsaydi
+            # her PDF kendi kontrol satirini acar ve zaten Excel ekinden
+            # okunmus tutarlar icin kalici yalanci alarm uretirdi.
+            tablo.belge_satir_sayisi += 1
+            continue
         if tip in _KUTUK_TIPLERI:
             tablo.kutuk_satir_sayisi += 1
             if tip == "energo_assessment_detay":

@@ -66,7 +66,7 @@ if errorlevel 1 (
 echo.
 
 echo --- 5. Gerekli kutuphaneler --------------------------------
-"program\python.exe" -c "import importlib.util,sys; [print(('   VAR   ' if importlib.util.find_spec(m) else '   EKSIK ') + m) for m in ('pandas','numpy','openpyxl','xlrd','rapidfuzz','xlsxwriter','extract_msg','olefile','oletools','bs4','RTFDE','compressed_rtf','ebcdic','dateutil','lark','tzlocal','tzdata','red_black_dict_mod')]"
+"program\python.exe" -c "import importlib.util,sys; [print(('   VAR   ' if importlib.util.find_spec(m) else '   EKSIK ') + m) for m in ('pandas','numpy','openpyxl','xlrd','rapidfuzz','xlsxwriter','extract_msg','olefile','oletools','bs4','RTFDE','compressed_rtf','ebcdic','dateutil','lark','tzlocal','tzdata','red_black_dict_mod','pypdf')]"
 echo.
 
 echo --- 6. Saat dilimi verisi (tzdata) -------------------------

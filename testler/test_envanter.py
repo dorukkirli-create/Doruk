@@ -10,6 +10,8 @@ from pathlib import Path
 from masraf.envanter import (
     ATLANDI, AYNI_ICERIK, DETAY_LISTESI, KUTUK, MAIL, OKUNDU, SATIR_YOK, DosyaKaydi,
     envanter_ozeti, satirlardan_kayit,
+    FATURA_PDF,
+    TARANMIS,
 )
 from masraf.modeller import GiderSatiri
 
@@ -67,7 +69,11 @@ class GercekMailEnvanteriTest(unittest.TestCase):
         # Kok mail tek; ic mailler (ekli .msg) de MAIL satiri olarak envantere girer.
         self.assertEqual(sum(1 for k in self.envanter if k.durum == MAIL and not k.kaynak), 1, sayim)
         self.assertGreaterEqual(sayim.get(MAIL, 0), 1, sayim)
-        self.assertGreaterEqual(sayim.get(ATLANDI, 0), 10, sayim)     # PDF'ler
+        # PDF'ler artik atlanmiyor: basligi okunanlar FATURA (PDF), metin
+        # katmani olmayanlar TARANMIS PDF olarak kayda giriyor.
+        self.assertGreaterEqual(sayim.get(FATURA_PDF, 0), 10, sayim)
+        self.assertGreaterEqual(sayim.get(TARANMIS, 0), 3, sayim)
+        self.assertEqual(sayim.get(ATLANDI, 0), 0, sayim)
         self.assertGreaterEqual(sayim.get(OKUNDU, 0), 4, sayim)       # tutarli tablolar
         self.assertGreaterEqual(sayim.get(KUTUK, 0), 3, sayim)        # katilimci, saglik, sigorta
         self.assertEqual(sayim.get(DETAY_LISTESI, 0), 4, sayim)       # ASS fatura detaylari
@@ -82,11 +88,31 @@ class GercekMailEnvanteriTest(unittest.TestCase):
             self.assertAlmostEqual(k.tutar, beklenen, places=2, msg=k.ad)
 
     def test_pdf_kayitlari_kaynak_zinciri_tasir(self):
-        pdfler = [k for k in self.envanter if k.durum == ATLANDI and k.ad.lower().endswith(".pdf")]
+        pdfler = [k for k in self.envanter
+                  if k.durum in (FATURA_PDF, TARANMIS) and k.ad.lower().endswith(".pdf")]
         self.assertTrue(pdfler)
         for k in pdfler:
             self.assertTrue(k.kaynak.startswith(self.MESAJ.name), k.kaynak)
             self.assertTrue(k.sebep)
+
+    def test_okunan_pdf_fatura_no_ve_tutar_tasir(self):
+        """Basligi okunan her PDF fatura no ve belge tutari yazmali.
+
+        Kanit zincirinin ilk halkasi: kullanici Excel'de bir tutari gorup
+        'hangi belgeden' diye sordugunda cevap bu kayittadir.
+        """
+        okunan = [k for k in self.envanter if k.durum == FATURA_PDF]
+        self.assertGreaterEqual(len(okunan), 10, [k.ad for k in okunan])
+        for k in okunan:
+            self.assertIn("fatura ", k.sebep, k.ad)
+            self.assertIn("belge tutari", k.sebep, k.ad)
+
+    def test_taranmis_pdf_durustce_isaretli(self):
+        """Metin katmani olmayan PDF sessizce okunmus sayilmamali."""
+        taranmis = [k for k in self.envanter if k.durum == TARANMIS]
+        self.assertEqual(len(taranmis), 3, [k.ad for k in taranmis])
+        for k in taranmis:
+            self.assertIn("OCR", k.sebep, k.ad)
 
 
 class BoruEnvanteriTest(unittest.TestCase):

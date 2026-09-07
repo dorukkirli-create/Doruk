@@ -16,7 +16,9 @@ from typing import Any, Iterable
 OKUNDU = "OKUNDU"              # gider satiri uretti, dagilima girdi
 KUTUK = "KUTUK"                # kisi listesi; defter beslemesine girdi, dagilima girmedi
 DETAY_LISTESI = "DETAY LISTESI"  # tutarsiz fatura detay listesi; capraz kontrol edildi
-ATLANDI = "ATLANDI"            # tablo degil (PDF, docx...); acilmadi
+ATLANDI = "ATLANDI"            # tablo degil (docx, resim...); acilmadi
+FATURA_PDF = "FATURA (PDF)"    # PDF fatura basligi okundu; tutar yerel para biriminde, dagitim kurali bekliyor
+TARANMIS = "TARANMIS PDF"      # PDF saf goruntu; metin katmani yok, cevrimdisi okunamaz (OCR gerekir)
 AYNI_ICERIK = "AYNI ICERIK"    # daha once okunan dosyayla birebir ayni; cift sayim olmasin diye atlandi
 OKUNAMADI = "OKUNAMADI"        # acilamadi / hata / parola
 SATIR_YOK = "SATIR YOK"        # acildi ama hicbir gider satiri cikmadi
@@ -32,6 +34,11 @@ _KUTUK_TIPLERI = frozenset({"referans_liste", "energo_saglik", "koc_katilimci"})
 #: (tutar tasimazlar); envanter onlari ayri durumla (DETAY LISTESI) gosterir.
 KUTUK_TIPLERI = _KUTUK_TIPLERI
 DETAY_TIPLERI = frozenset({"energo_assessment_detay"})
+#: Belge tipleri: bir FATURANIN kendisi. Tutari yerel para biriminde tasirlar,
+#: kisi kirilimi tasimazlar. Mahsuplasmaya gider satiri olarak GIRMEZLER;
+#: tutarlarini kisilere bolmek dagitim kuralinin isidir. Kutukten farklidirlar:
+#: kutuk bir KISI LISTESIDIR, belge bir TUTAR kaynagidir.
+BELGE_TIPLERI = frozenset({"fatura_pdf"})
 
 
 @dataclass
@@ -60,6 +67,29 @@ class DosyaKaydi:
         return d
 
 
+def _pdf_durumu(satir: Any) -> tuple[str, str]:
+    """PDF fatura tasiyicisinin envanter durumu ve sebebi.
+
+    Taranmis PDF OKUNAMADI sayilMAZ: boru hatti okunamayan bir eki sert
+    hataya cevirip maili arsivlemiyor (boru.py), oysa taranmis bir belgeyi
+    kullanici duzeltemez ve her ay ayni maili elde birakmak dogru degil.
+    Kendi durumu (TARANMIS PDF) ile gorunur kalir.
+    """
+    ek = getattr(satir, "ek", None) or {}
+    if ek.get("pdf_taranmis"):
+        return TARANMIS, "saf goruntu; metin katmani yok, cevrimdisi okunamaz (OCR gerekir)"
+    no = ek.get("fatura_no")
+    if not no:
+        eksik = ", ".join(ek.get("pdf_bulunamayan_alanlar") or []) or "alanlar"
+        return OKUNAMADI, f"PDF acildi ama fatura basligi okunamadi (eksik: {eksik})"
+    tutar = ek.get("fatura_toplam_yerel")
+    pb = ek.get("para_birimi_yerel") or ""
+    parca = f"fatura {no}"
+    if tutar is not None:
+        parca += f"; belge tutari {tutar:,.2f} {pb}".rstrip()
+    return FATURA_PDF, parca + "; kisi kirilimi yok, dagitim kurali bekleniyor"
+
+
 def satirlardan_kayit(ad: str, kaynak: str, tur: str, satirlar: Iterable[Any],
                       boyut: int | None = None, ozet: str | None = None) -> DosyaKaydi:
     """Okunan satirlardan dosya kaydi uretir; durumu satirlarin tipinden cikarir."""
@@ -74,6 +104,8 @@ def satirlardan_kayit(ad: str, kaynak: str, tur: str, satirlar: Iterable[Any],
         durum, sebep = DETAY_LISTESI, "tutar kolonu yok; kisiler yansitma dosyasiyla capraz kontrol edildi"
     elif tipler and set(tipler) <= _KUTUK_TIPLERI:
         durum, sebep = KUTUK, "kisi listesi; dagilima girmedi (defter beslemesi sonucu uyarilarda)"
+    elif tipler and set(tipler) <= {"fatura_pdf"}:
+        durum, sebep = _pdf_durumu(satirlar[0])
     else:
         durum = OKUNDU
         sebep = "" if len(tutarli) == len(satirlar) else f"{len(satirlar) - len(tutarli)} satirda tutar okunamadi"

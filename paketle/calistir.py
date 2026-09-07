@@ -31,7 +31,7 @@ AYAR_DIZINI = "veri"
 ISARET_DOSYALARI = frozenset({"BURAYA_FATURA_ATIN.txt"})
 
 #: Okumaya calisacagimiz uzantilar. Digerleri sessizce atlanir.
-UZANTILAR = frozenset({".msg", ".xlsx", ".xls", ".xlsm", ".csv"})
+UZANTILAR = frozenset({".msg", ".xlsx", ".xls", ".xlsm", ".csv", ".pdf"})
 
 #: Bu adlari tasiyan dosyalar fatura degil, yardimci personel listesidir.
 YARDIMCI_IPUCLARI = ("1c", "personnel_list", "personnel list", "personel_list")
@@ -144,7 +144,18 @@ def fatura_dosyalarini_topla(kok: Path, argumanlar: list[str]) -> tuple[list[Pat
             anahtar = str(yol.resolve()).lower()
         except OSError:
             anahtar = str(yol).lower()
-        if anahtar in gorulen or not _tablo_dosyasi_mi(yol):
+        if anahtar in gorulen:
+            return
+        if not _tablo_dosyasi_mi(yol):
+            # Sessiz dusme yok: taninmayan uzantili bir dosya da kullaniciya
+            # soylenir. Aksi halde 1_FATURALAR'a atilan bir belge hicbir iz
+            # birakmadan yok sayilir ve kimse fark etmez (olculdu).
+            gorulen.add(anahtar)
+            notlar.append(
+                f"{yol.name}: taninmayan uzanti ({yol.suffix.lower() or 'uzantisiz'}); "
+                f"islenmedi ve yerinden oynatilmadi. Okunan uzantilar: "
+                + " ".join(sorted(UZANTILAR))
+            )
             return
         gorulen.add(anahtar)
         if _personel_dosyasi_gibi(yol):

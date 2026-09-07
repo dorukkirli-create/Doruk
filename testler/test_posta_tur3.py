@@ -484,16 +484,16 @@ class BozukEkVeDerinlikTest(_Temel):
         """_msg_yuru(msg, hedef, zincir, derinlik, sonuc, atlananlar) eski cagri bicimi."""
         sonuc: list = []
         atl: list = []
-        posta._msg_yuru(SahteMesaj("k", [SahteEk("a.csv", A_CSV), SahteEk("b.pdf", b"x")]),
+        posta._msg_yuru(SahteMesaj("k", [SahteEk("a.csv", A_CSV), SahteEk("b.docx", b"x")]),
                         self.gecici, [], 0, sonuc, atl)
         self.assertEqual([e.gosterim_adi for e in sonuc], ["a.csv"])
-        self.assertEqual([a.ad for a in atl], ["b.pdf"])
+        self.assertEqual([a.ad for a in atl], ["b.docx"])
 
 
 class KapsayiciEnvanterTest(_Temel):
     def _mail(self):
         return SahteMesaj("ust", [
-            SahteEk("m1.msg", SahteMesaj("RE: 1", [SahteEk("Fatura Detayi.csv", A_CSV), SahteEk("f.pdf", b"x")])),
+            SahteEk("m1.msg", SahteMesaj("RE: 1", [SahteEk("Fatura Detayi.csv", A_CSV), SahteEk("f.docx", b"x")])),
             SahteEk("m2.msg", SahteMesaj("RE: 2", [SahteEk("Fatura Detayi.csv", B_CSV)])),
             SahteEk("dis.zip", zip_bayt([("ic.zip", zip_bayt([("gomulu.csv", X_CSV)])),
                                          ("logo.png", b"x"), ("liste.csv", X_CSV)])),
@@ -511,7 +511,7 @@ class KapsayiciEnvanterTest(_Temel):
             durumlar.setdefault(k.durum, []).append(k.ad)
         self.assertEqual(sorted(durumlar[MAIL]), ["m1.msg", "m2.msg", "sahte.msg"])
         self.assertEqual(sorted(durumlar[ARSIV]), ["dis.zip", "ic.zip"])
-        self.assertEqual(durumlar[ATLANDI], ["f.pdf"])                 # gorseller haric
+        self.assertEqual(durumlar[ATLANDI], ["f.docx"])                 # gorseller haric
         self.assertEqual(durumlar[AYNI_ICERIK], ["liste.csv"])          # gomulu.csv ile ayni icerik
         self.assertEqual(sorted(durumlar[OKUNDU]), ["Fatura Detayi.csv", "Fatura Detayi.csv", "gomulu.csv"])
         self.assertEqual(durumlar[OKUNAMADI], ["bos.xlsx"])
@@ -523,7 +523,7 @@ class KapsayiciEnvanterTest(_Temel):
         self.assertEqual(kaynaklar[(ARSIV, "dis.zip")], "sahte.msg > ust")
         self.assertEqual(kaynaklar[(ARSIV, "ic.zip")], "sahte.msg > ust > dis.zip")
         self.assertEqual(kaynaklar[(OKUNDU, "gomulu.csv")], "sahte.msg > ust > dis.zip > ic.zip")
-        self.assertEqual(kaynaklar[(ATLANDI, "f.pdf")], "sahte.msg > ust > RE_ 1")
+        self.assertEqual(kaynaklar[(ATLANDI, "f.docx")], "sahte.msg > ust > RE_ 1")
         # Kok mail satiri tam sayim verir
         kok = next(k for k in env if k.durum == MAIL and not k.kaynak)
         for parca in ("4 tablo eki", "1 okunmayan ek", "1 tekrar eden ek", "2 ekli mail", "2 arsiv"):
@@ -536,7 +536,7 @@ class KapsayiciEnvanterTest(_Temel):
         self.assertIn("3 girdi", dis.sebep)
         self.assertEqual(dis.tur, "zip")
         # Kapsayicilar 'okunmayan ek' listesine girmez (Kontrol sayfasi)
-        self.assertEqual([str(a).split("  [")[0] for a in atl if not a.tekrar], ["f.pdf"])
+        self.assertEqual([str(a).split("  [")[0] for a in atl if not a.tekrar], ["f.docx"])
 
     def test_kapsayicilar_atlananlara_karismaz(self):
         msg = SahteMesaj("k", [SahteEk("m1.msg", SahteMesaj("ic", [SahteEk("a.csv", A_CSV)])),
@@ -605,7 +605,7 @@ class OrijinalAdTest(_Temel):
         self.assertEqual([e.gosterim_adi for e in sonuc], ["Katılımcı Listesi.csv"])
 
     def test_atlanan_ek_orijinal_adi_tasir(self):
-        uzun_pdf = "ENERGO 2026 Temmuz Fatura Ekleri Toplu Liste Uzun Uzun Uzun Uzun Ad Dosyasi.pdf"
+        uzun_pdf = "ENERGO 2026 Temmuz Fatura Ekleri Toplu Liste Uzun Uzun Uzun Uzun Ad Dosyasi.docx"
         self.assertGreater(len(uzun_pdf), 60)
         sonuc, atl, kaps = self.yuru(SahteMesaj("k", [SahteEk(uzun_pdf, b"%PDF")]))
         self.assertEqual([a.ad for a in atl], [uzun_pdf])
@@ -613,7 +613,7 @@ class OrijinalAdTest(_Temel):
         self.assertIsInstance(atl[0], AtlananEk)
 
     def test_msg_aciklarini_cikar_imzasi_geriye_uyumlu(self):
-        msg = SahteMesaj("k", [SahteEk("a.csv", A_CSV), SahteEk("b.pdf", b"x")])
+        msg = SahteMesaj("k", [SahteEk("a.csv", A_CSV), SahteEk("b.docx", b"x")])
         self.assertEqual([e.gosterim_adi for e in self.cikar(msg)], ["a.csv"])
         atl: list = []
         if not EXTRACT_MSG_VAR:
@@ -622,7 +622,7 @@ class OrijinalAdTest(_Temel):
         with mock.patch.object(extract_msg, "openMsg", return_value=msg):
             ekler = msg_aciklarini_cikar(yol, self.gecici / "acilan2", atl)   # konumsal atlananlar
         self.assertEqual([e.gosterim_adi for e in ekler], ["a.csv"])
-        self.assertEqual([a.ad for a in atl], ["b.pdf"])
+        self.assertEqual([a.ad for a in atl], ["b.docx"])
 
 
 # ---------------------------------------------------------------------------
@@ -636,15 +636,15 @@ class TabloOlmayanTekrarTest(_Temel):
     def _mail(self, ic_mailde=PDF_A, zipte=PDF_A):
         """Ayni adli PDF hem ic mailde hem zip icinde."""
         return SahteMesaj("ust", [
-            SahteEk("m1.msg", SahteMesaj("RE: 1", [SahteEk("fatura.pdf", ic_mailde), SahteEk("a.csv", A_CSV)])),
-            SahteEk("ekler.zip", zip_bayt([("fatura.pdf", zipte), ("b.csv", B_CSV)])),
+            SahteEk("m1.msg", SahteMesaj("RE: 1", [SahteEk("fatura.docx", ic_mailde), SahteEk("a.csv", A_CSV)])),
+            SahteEk("ekler.zip", zip_bayt([("fatura.docx", zipte), ("b.csv", B_CSV)])),
         ])
 
     def test_ayni_pdf_ikincisi_tekrar(self):
         atl: list = []
         ekler = self.cikar(self._mail(), atlananlar=atl)
         self.assertEqual(sorted(e.gosterim_adi for e in ekler), ["a.csv", "b.csv"])
-        self.assertEqual([(a.ad, a.tekrar) for a in atl], [("fatura.pdf", False), ("fatura.pdf", True)])
+        self.assertEqual([(a.ad, a.tekrar) for a in atl], [("fatura.docx", False), ("fatura.docx", True)])
         self.assertTrue(atl[0].ozet)
         self.assertEqual(atl[0].ozet, atl[1].ozet)
         self.assertIn("birebir ayni", atl[1].sebep)
@@ -655,16 +655,16 @@ class TabloOlmayanTekrarTest(_Temel):
     def test_farkli_pdf_ikisi_de_sayilir(self):
         atl: list = []
         self.cikar(self._mail(self.PDF_A, self.PDF_B), atlananlar=atl)
-        self.assertEqual([(a.ad, a.tekrar) for a in atl], [("fatura.pdf", False), ("fatura.pdf", False)])
+        self.assertEqual([(a.ad, a.tekrar) for a in atl], [("fatura.docx", False), ("fatura.docx", False)])
         self.assertNotEqual(atl[0].ozet, atl[1].ozet)
 
     def test_kesif_envanterde_pdf_tekrari_ayni_icerik(self):
         env: list = []
         atl: list = []
         self.kesif_oku(self._mail(), env, atl, gorulen=set())
-        self.assertEqual([k.ad for k in env if k.durum == ATLANDI], ["fatura.pdf"])
+        self.assertEqual([k.ad for k in env if k.durum == ATLANDI], ["fatura.docx"])
         ayni = [k for k in env if k.durum == AYNI_ICERIK]
-        self.assertEqual([(k.ad, k.tur) for k in ayni], [("fatura.pdf", "pdf")])
+        self.assertEqual([(k.ad, k.tur) for k in ayni], [("fatura.docx", "docx")])
         self.assertTrue(ayni[0].ozet)
         kok = next(k for k in env if k.durum == MAIL and not k.kaynak)
         self.assertIn("1 okunmayan ek", kok.sebep)
@@ -674,24 +674,24 @@ class TabloOlmayanTekrarTest(_Temel):
         gorulen: set = set()
         env: list = []
         atl: list = []
-        m1 = SahteMesaj("k1", [SahteEk("fatura.pdf", self.PDF_A), SahteEk("a.csv", A_CSV)])
-        m2 = SahteMesaj("k2", [SahteEk("fatura.pdf", self.PDF_A), SahteEk("b.csv", B_CSV)])
+        m1 = SahteMesaj("k1", [SahteEk("fatura.docx", self.PDF_A), SahteEk("a.csv", A_CSV)])
+        m2 = SahteMesaj("k2", [SahteEk("fatura.docx", self.PDF_A), SahteEk("b.csv", B_CSV)])
         self.kesif_oku(m1, env, atl, gorulen)
         self.kesif_oku(m2, env, atl, gorulen)
-        self.assertEqual([(a.ad, a.tekrar) for a in atl], [("fatura.pdf", False), ("fatura.pdf", True)])
+        self.assertEqual([(a.ad, a.tekrar) for a in atl], [("fatura.docx", False), ("fatura.docx", True)])
         self.assertIn("baska bir mailde", atl[1].sebep)
-        self.assertEqual([k.ad for k in env if k.durum == ATLANDI], ["fatura.pdf"])
-        self.assertEqual([k.ad for k in env if k.durum == AYNI_ICERIK], ["fatura.pdf"])
+        self.assertEqual([k.ad for k in env if k.durum == ATLANDI], ["fatura.docx"])
+        self.assertEqual([k.ad for k in env if k.durum == AYNI_ICERIK], ["fatura.docx"])
         # Tablolar etkilenmedi: a.csv ve b.csv farkli, ikisi de okundu
         self.assertEqual(sorted(k.ad for k in env if k.durum == OKUNDU), ["a.csv", "b.csv"])
 
     def test_sifreli_girdinin_ozeti_yok_tekrar_sayilmaz(self):
-        z = sifreli_zip_bayt([("gizli.pdf", self.PDF_A)])
+        z = sifreli_zip_bayt([("gizli.docx", self.PDF_A)])
         msg = SahteMesaj("k", [SahteEk("s1.zip", z), SahteEk("s2.zip", z)])
         atl: list = []
         self.cikar(msg, atlananlar=atl)
         self.assertEqual([(a.ad, a.tekrar, a.ozet) for a in atl],
-                         [("gizli.pdf", False, None), ("gizli.pdf", False, None)])
+                         [("gizli.docx", False, None), ("gizli.docx", False, None)])
 
 
 # ---------------------------------------------------------------------------
@@ -752,11 +752,11 @@ class KisaDizinTest(_Temel):
                 raise OSError(206, "The filename or extension is too long")
             return gercek(self_, veri)
 
-        msg = SahteMesaj("k", [SahteEk("uzun.csv", A_CSV), SahteEk("kisa.csv", B_CSV), SahteEk("uzun.pdf", b"%PDF")])
+        msg = SahteMesaj("k", [SahteEk("uzun.csv", A_CSV), SahteEk("kisa.csv", B_CSV), SahteEk("uzun.docx", b"%PDF")])
         with mock.patch.object(Path, "write_bytes", sahte):
             sonuc, atl, kaps = self.yuru(msg)   # istisna yok
         self.assertEqual([e.gosterim_adi for e in sonuc], ["kisa.csv"])
-        self.assertEqual([a.ad for a in atl], ["uzun.csv", "uzun.pdf"])
+        self.assertEqual([a.ad for a in atl], ["uzun.csv", "uzun.docx"])
         for a in atl:
             self.assertIn("gecici dizine yazilamadi", a.sebep)
             self.assertIn("OSError", a.sebep)
@@ -868,10 +868,15 @@ class GercekMailTur3Test(unittest.TestCase):
         self.assertTrue(all(k.tur in ("mail", "arsiv") and k.aciklama for k in kaps))
         for a in atl:
             self.assertTrue(a.ad and a.sebep)
-        # Tablo olmayan tekrarlar: farkli PDF sayisi = farkli ozet sayisi
-        pdfler = [a for a in atl if a.ad.lower().endswith(".pdf")]
-        self.assertTrue(pdfler)
-        self.assertEqual(len({a.ozet for a in pdfler if a.ozet}), len([a for a in pdfler if not a.tekrar]))
+        # Tekrar isaretli her atlanan ekin ozeti, SAKLANAN bir kopyayla
+        # eslesmeli: yoksa bir icerik hem elenmis hem hic okunmamis olur.
+        # (PDF'ler artik okundugu icin saklanan kopya 'ekler' listesindedir.)
+        saklanan = {e.ozet for e in ekler}
+        for a in atl:
+            if a.tekrar and a.ozet:
+                self.assertIn(a.ozet, saklanan, a.ad)
+        tekrarsiz = [a for a in atl if a.ozet and not a.tekrar]
+        self.assertEqual(len({a.ozet for a in tekrarsiz}), len(tekrarsiz))
         # Windows yol siniri: kisa klasor adlari, kisa goreli yollar
         for p in self.gecici.rglob("*"):
             if p.is_dir():

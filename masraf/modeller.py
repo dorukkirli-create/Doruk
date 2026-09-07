@@ -23,6 +23,9 @@ KAYNAK_TIPLERI: frozenset[str] = frozenset({
     # ama envanter ve dosya tipi kararlarinda gecerler.
     "referans_liste",
     "outlook_msg",
+    # PDF fatura basligi: tutari yerel para biriminde ek'te tasir, kisi
+    # kirilimi tasimaz; dagitim kurali gelene kadar tutar alani None kalir.
+    "fatura_pdf",
 })
 
 # Gider tipleri.
