@@ -33,3 +33,15 @@ baglam paketinde tutulur (repo herkese aciktir).
 - Seyahat: iki loose Excel (+ acentenin carisi dokunulmadan).
 - Ankara ofisi: dagilim xlsx + "Первичные документы.7z" + "Invoices.7z".
 - Zip'ler UTF-8 bayrakli yazilir (Python zipfile); kabuk `zip` Kiril dosya adlarini Windows'ta bozar.
+
+## Finans ekibinin final duzeltmeleri (seyahat akisi, Agustos 2026)
+Finans ekibi hazirladigimiz iki Excel'i yapiyi degistirmeden acenteye gonderdi. Yaptigi kucuk duzeltmeler kural olarak koda alindi:
+1. %3 kolonu deger degil formul yazilir (`=+F2*1.03`).
+2. Ozet blokta o ay satiri olmayan firmalar ve bos EFT satiri yazilmaz; blok yalniz dolu firmalar + RHI NAKIT + TOPLAM.
+3. Ayri sozlesmesi olmayan istirak (BSA) calisanlari dogrudan merkez ofis podrazdeleniesine yazilir; ayri proje etiketi acilmaz.
+4. Gydan isleri "ALNG2-GBS" proje etiketiyle gider; sozlesme yine merkez sozlesmesi.
+5. Podrazdelenie kararinda finans ekibinin kisiye ozel gecmis kararlari 1C projesinin onune gecer (sicil bazli istisna listesi).
+6. Kiril yazimda Turkce s/i/o harfleri ш/ы/ё ile karsilanir; ucuncu ad (baba adi disinda) yazilmaz.
+7. Resmi dosyada otel adindan semt/mahalle eki atilir.
+Uretim kodu bu kurallarla finans ekibinin gonderdigi dosyayi hucre hucre yeniden uretir.
+
